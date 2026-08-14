@@ -1,0 +1,87 @@
+services:
+  database:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: local-freepbx-root
+      MARIADB_DATABASE: asterisk
+      MARIADB_USER: asterisk
+      MARIADB_PASSWORD: local-freepbx
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-plocal-freepbx-root"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  pbx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      FREEPBX_DB_HOST: database
+      FREEPBX_DB_USER: asterisk
+      FREEPBX_DB_PASSWORD: local-freepbx
+      FREEPBX_DB_NAME: asterisk
+      FREEPBX_CDR_DB_NAME: asteriskcdrdb
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ../:/srv/pendingchanges:ro
+      - asterisk-config:/etc/asterisk
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /etc/freepbx.conf && php /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  custom-watcher:
+    build: ./custom-watcher
+    depends_on:
+      pbx:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: asterisk
+      DB_PASSWORD: local-freepbx
+      DB_NAME: asterisk
+      WATCH_PATH: /etc/asterisk
+    volumes:
+      - asterisk-config:/etc/asterisk:ro
+      - watcher-data:/var/lib/pendingchanges-watcher
+
+  tripwire:
+    build: ./tripwire
+    depends_on:
+      pbx:
+        condition: service_healthy
+    volumes:
+      - asterisk-config:/etc/asterisk:ro
+      - tripwire-data:/var/lib/tripwire
+
+  smoke:
+    build: ./smoke
+    profiles: ["smoke"]
+    depends_on:
+      pbx:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_USER: asterisk
+      DB_PASSWORD: local-freepbx
+      DB_NAME: asterisk
+    volumes:
+      - ../:/srv/pendingchanges:ro
+      - asterisk-config:/etc/asterisk
+      - watcher-data:/var/lib/pendingchanges-watcher:ro
+      - tripwire-data:/var/lib/tripwire:ro
+
+volumes:
+  mariadb-data:
+  asterisk-config:
+  watcher-data:
+  tripwire-data:

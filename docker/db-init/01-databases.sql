@@ -1,0 +1,3 @@
+CREATE DATABASE IF NOT EXISTS asteriskcdrdb;
+GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asterisk'@'%';
+FLUSH PRIVILEGES;
