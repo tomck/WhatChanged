@@ -11,10 +11,12 @@ try:
         cursor.execute("INSERT INTO pc_smoke_fixture VALUES (1, 'before')")
         cursor.execute("UPDATE admin SET value = 'true' WHERE variable = 'need_reload'")
     time.sleep(7)
-    assert Path('/var/lib/pendingchanges-watcher/status.json').exists(), 'custom watcher produced no observation'
+    watcher = Path('/var/lib/pendingchanges-watcher/status.json')
+    assert watcher.exists(), 'custom watcher produced no observation'
+    assert 'pc_smoke_fixture' in watcher.read_text(), 'custom watcher did not report database drift'
     Path('/etc/asterisk/pc-smoke.conf').write_text('; local smoke file drift\n')
     time.sleep(7)
-    assert 'pc-smoke.conf' in Path('/var/lib/tripwire/files.sha256').read_text(), 'Tripwire prototype did not observe file drift'
+    assert 'pc-smoke.conf' in watcher.read_text(), 'custom watcher did not report file drift'
     with connection.cursor() as cursor:
         cursor.execute("UPDATE admin SET value = 'false' WHERE variable = 'need_reload'")
         cursor.execute('DELETE FROM pc_smoke_fixture')

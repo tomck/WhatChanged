@@ -1,4 +1,4 @@
-# Pending Changes Tripwire
+# WhatChanged
 
 `pendingchanges` is a FreePBX 17 diagnostic module. It explains the **Apply
 Changes** banner by comparing the current configuration state with one
@@ -16,28 +16,29 @@ The test environment is disposable and is intended only for local development:
 
 ```sh
 docker compose -f docker/docker-compose.yml up --build
+./docker/bootstrap-freepbx.sh
 docker compose -f docker/docker-compose.yml run --rm smoke
 docker compose -f docker/docker-compose.yml down -v
 ```
 
 The PBX is based on Debian 12 and FreePBX 17. It uses named, project-scoped
 volumes; do not point any environment variable or mount at a production PBX.
-After the PBX finishes installing, install the module from
-`/srv/pendingchanges`, then open **Admin → Pending Changes Tripwire** and use
-**Seed applied baseline**. The smoke suite is safe to re-run and removes only
-its own `pc_smoke_*` fixture rows.
+Copy `.env.lab.example` to `.env.lab` and set a test-only password before
+bootstrapping. The bootstrap script submits FreePBX's initial setup form with
+automatic module updates disabled; it is safe to rerun after setup is complete.
+The smoke suite is safe to re-run and removes only its own `pc_smoke_*` fixture
+rows.
 
-## Watcher evaluation
+## Watcher
 
-`docker/custom-watcher` is a small separate, read-only Python watcher. It
-polls the reload flag, configuration-table digest, and `/etc/asterisk` file
-hashes and writes structured observations to its own volume.
+`docker/custom-watcher` is the watcher used by the project. It is a small,
+separate, read-only Python service that automatically captures a configuration
+baseline while FreePBX is clean, then records added, removed, and updated
+database records while Apply Changes is pending. Password-, secret-, token-,
+and key-named fields are redacted. File drift remains a secondary signal only.
 
-`docker/tripwire` runs Open Source Tripwire with a policy restricted to
-`/etc/asterisk`. Its baseline and reports are also stored in a disposable
-volume. The smoke suite compares both watcher outputs: Tripwire should flag a
-direct file edit; the custom watcher should flag both config-database and file
-drift. Neither is used to decide whether FreePBX may reload.
+Open Source Tripwire is intentionally not part of this project: it can report
+that a file changed, but cannot explain a pending FreePBX change.
 
 ## Module commands
 
