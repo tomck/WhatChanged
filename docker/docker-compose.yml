@@ -32,7 +32,12 @@ services:
       - "127.0.0.1:8080:80"
     volumes:
       - ../:/srv/pendingchanges:ro
+      # Keep FreePBX's installed framework/modules across ordinary container
+      # recreation; `docker compose down -v` remains the explicit lab reset.
+      - freepbx-web:/var/www/html
       - asterisk-config:/etc/asterisk
+      - asterisk-var:/var/lib/asterisk
+      - watcher-data:/var/lib/asterisk/pendingchanges-watcher:ro
     healthcheck:
       test: ["CMD-SHELL", "test -f /etc/freepbx.conf && php /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
       interval: 10s
@@ -50,24 +55,22 @@ services:
       DB_PASSWORD: local-freepbx
       DB_NAME: asterisk
       WATCH_PATH: /etc/asterisk
+      MODULE_PATH: /var/www/html/admin/modules
     volumes:
       - asterisk-config:/etc/asterisk:ro
+      - freepbx-web:/var/www/html:ro
       - watcher-data:/var/lib/pendingchanges-watcher
-
-  tripwire:
-    build: ./tripwire
-    depends_on:
-      pbx:
-        condition: service_healthy
-    volumes:
-      - asterisk-config:/etc/asterisk:ro
-      - tripwire-data:/var/lib/tripwire
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /var/lib/pendingchanges-watcher/status.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   smoke:
     build: ./smoke
     profiles: ["smoke"]
     depends_on:
-      pbx:
+      custom-watcher:
         condition: service_healthy
     environment:
       DB_HOST: database
@@ -78,10 +81,10 @@ services:
       - ../:/srv/pendingchanges:ro
       - asterisk-config:/etc/asterisk
       - watcher-data:/var/lib/pendingchanges-watcher:ro
-      - tripwire-data:/var/lib/tripwire:ro
 
 volumes:
   mariadb-data:
+  freepbx-web:
   asterisk-config:
+  asterisk-var:
   watcher-data:
-  tripwire-data:
