@@ -1,12 +1,25 @@
 <?php
 namespace FreePBX\modules;
 
-class Pendingchanges extends \FreePBX_Helpers {
+class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     private const BASELINE_TABLE = 'pendingchanges_baseline';
     private const EXCLUDED_TABLES = [
         'admin', 'asteriskcdrdb', 'cdr', 'cel', 'cronmanager', 'kvstore',
         'notifications', 'pendingchanges_baseline', 'queue_log',
     ];
+
+    public function install() {
+        \FreePBX::Database()->exec('CREATE TABLE IF NOT EXISTS '.self::BASELINE_TABLE.' (
+            id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+            database_snapshot LONGTEXT NOT NULL,
+            file_snapshot LONGTEXT NOT NULL,
+            captured_at DATETIME NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+    }
+
+    public function uninstall() {
+        \FreePBX::Database()->exec('DROP TABLE IF EXISTS '.self::BASELINE_TABLE);
+    }
 
     public function getActionBar($request) {
         return [];
@@ -43,10 +56,23 @@ class Pendingchanges extends \FreePBX_Helpers {
     }
 
     public function status(): array {
+        $watcher = $this->watcherStatus();
+        if ($watcher !== null) {
+            return [
+                'pending' => $watcher['need_reload'],
+                'database' => $watcher['database_drift'],
+                'files' => $watcher['file_drift'],
+                'message' => $watcher['message'],
+                'baseline' => $watcher['baseline_available'],
+                'captured_at' => $watcher['baseline_captured_at'] ?? null,
+                'watcher_observed_at' => $watcher['observed_at'],
+                'watcher' => true,
+            ];
+        }
         $baseline = $this->baseline();
         $pending = $this->needReload();
         if (!$baseline) {
-            return ['pending' => $pending, 'baseline' => false, 'message' => 'No applied baseline has been seeded.'];
+            return ['pending' => $pending, 'baseline' => false, 'message' => 'No applied baseline has been seeded.', 'watcher' => false];
         }
         $database = $this->databaseDiff($baseline['database'], $this->databaseSnapshot());
         $files = $this->fileDiff($baseline['files'], $this->fileSnapshot());
@@ -54,7 +80,19 @@ class Pendingchanges extends \FreePBX_Helpers {
         $message = $pending && !$hasDrift
             ? 'Reload requested; origin unavailable.'
             : ($pending ? 'Configuration drift detected since the applied baseline.' : 'No pending reload.');
-        return compact('pending', 'database', 'files', 'message') + ['baseline' => true, 'captured_at' => $baseline['captured_at']];
+        return compact('pending', 'database', 'files', 'message') + ['baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false];
+    }
+
+    private function watcherStatus(): ?array {
+        $path = '/var/lib/asterisk/pendingchanges-watcher/status.json';
+        if (!is_readable($path)) {
+            return null;
+        }
+        $status = json_decode((string) file_get_contents($path), true);
+        if (!is_array($status) || !isset($status['need_reload'], $status['database_drift'], $status['file_drift'], $status['message'])) {
+            return null;
+        }
+        return $status;
     }
 
     private function databaseSnapshot(): array {
