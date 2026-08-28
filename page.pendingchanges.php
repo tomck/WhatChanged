@@ -16,13 +16,18 @@ $status = $tripwire->status();
 ?>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
-  <p class="text-muted">Read-only comparison against the last applied baseline. This tool cannot recover who set FreePBX’s global reload flag.</p>
+  <p class="text-muted">Read-only comparison against the last applied baseline. The watcher records current configuration drift, not the page or user that set FreePBX’s global reload flag.</p>
   <?= $notice ?>
   <div class="alert <?= $status['pending'] ? 'alert-warning' : 'alert-success' ?>"><?= htmlentities($status['message']) ?></div>
   <?php if (!$status['baseline']): ?>
-    <form method="post"><button class="btn btn-primary" name="seed_baseline" value="1">Seed applied baseline</button></form>
+    <?php if ($status['watcher']): ?>
+      <p>The watcher will seed its baseline automatically when no reload is pending.</p>
+    <?php else: ?>
+      <form method="post"><button class="btn btn-primary" name="seed_baseline" value="1">Seed applied baseline</button></form>
+    <?php endif; ?>
   <?php else: ?>
     <p>Baseline captured: <?= htmlentities($status['captured_at']) ?></p>
+    <?php if (isset($status['watcher_observed_at'])): ?><p>Watcher observed: <?= htmlentities($status['watcher_observed_at']) ?></p><?php endif; ?>
     <h3>Database drift</h3>
     <pre><?= htmlentities(json_encode($status['database'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
     <h3>Generated-file drift</h3>
