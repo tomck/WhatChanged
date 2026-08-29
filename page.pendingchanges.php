@@ -34,7 +34,44 @@ function pendingchanges_identity(string $table, array $row): string {
 }
 
 function pendingchanges_table_label(string $table): string {
-    return $table === 'users' ? 'Extensions' : ucwords(str_replace('_', ' ', $table));
+    return ucwords(str_replace('_', ' ', $table));
+}
+
+function pendingchanges_record_id(string $kind, array $item): string {
+    if ($kind === 'updated') {
+        return (string) ($item['key'] ?? 'record');
+    }
+    foreach (['extension', 'id'] as $field) {
+        if (isset($item[$field]) && $item[$field] !== '') {
+            return (string) $item[$field];
+        }
+    }
+    return 'record';
+}
+
+function pendingchanges_extension_changes(array $database): array {
+    $merged = [];
+    foreach (['users' => 'Extension', 'devices' => 'Endpoint device'] as $table => $label) {
+        foreach (['added', 'removed', 'updated'] as $kind) {
+            foreach (($database[$table][$kind] ?? []) as $item) {
+                $id = pendingchanges_record_id($kind, $item);
+                if (!isset($merged[$kind][$id])) {
+                    $merged[$kind][$id] = ['id' => $id, 'name' => '', 'evidence' => []];
+                }
+                $row = $kind === 'updated' ? [] : $item;
+                $name = $row['name'] ?? $row['description'] ?? '';
+                if ($name !== '' && $merged[$kind][$id]['name'] === '') {
+                    $merged[$kind][$id]['name'] = (string) $name;
+                }
+                $merged[$kind][$id]['evidence'][$label] = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
+            }
+        }
+    }
+    foreach ($merged as $kind => $items) {
+        ksort($items, SORT_NATURAL);
+        $merged[$kind] = array_values($items);
+    }
+    return $merged;
 }
 
 function pendingchanges_render_record(string $kind, string $table, array $item): void {
@@ -51,6 +88,23 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     </div>
     <?php
 }
+
+function pendingchanges_render_extension(string $kind, array $item): void {
+    $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
+    $title = $item['id'].($item['name'] !== '' ? ' — '.$item['name'] : '');
+    ?>
+    <div class="pendingchanges-change pendingchanges-<?= pendingchanges_h($kind) ?>">
+      <span class="pendingchanges-symbol" aria-hidden="true"><?= $symbols[$kind] ?></span>
+      <strong><?= pendingchanges_h($title) ?></strong>
+      <span class="pendingchanges-kind"><?= pendingchanges_h(ucfirst($kind)) ?></span>
+      <details><summary>Extension and endpoint evidence</summary><pre><?= pendingchanges_h(json_encode($item['evidence'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
+    </div>
+    <?php
+}
+
+$extensionChanges = pendingchanges_extension_changes($status['database']);
+$otherDatabaseChanges = $status['database'];
+unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -89,7 +143,15 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     <?php if (empty($status['database']) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
     <?php endif; ?>
-    <?php foreach ($status['database'] as $table => $changes): ?>
+    <?php if (!empty($extensionChanges)): ?>
+      <section class="pendingchanges-card">
+        <h3>Extensions</h3>
+        <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
+          <?php foreach ($extensionChanges[$kind] ?? [] as $item) pendingchanges_render_extension($kind, $item); ?>
+        <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+    <?php foreach ($otherDatabaseChanges as $table => $changes): ?>
       <?php if (empty($changes['added']) && empty($changes['removed']) && empty($changes['updated'])) continue; ?>
       <section class="pendingchanges-card">
         <h3><?= pendingchanges_h(pendingchanges_table_label($table)) ?></h3>
