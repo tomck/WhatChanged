@@ -17,6 +17,8 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     ];
     private const MAX_TABLE_ROWS = 5000;
 
+    public function doConfigPageInit($page) {}
+
     public function install() {
         \FreePBX::Database()->exec('CREATE TABLE IF NOT EXISTS '.self::BASELINE_TABLE.' (
             id TINYINT UNSIGNED NOT NULL PRIMARY KEY,

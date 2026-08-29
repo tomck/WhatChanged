@@ -1,7 +1,7 @@
 <module>
   <rawname>pendingchanges</rawname>
   <name>Pending Changes Tripwire</name>
-  <version>17.0.0.2</version>
+  <version>17.0.0.3</version>
   <publisher>Local</publisher>
   <license>GPLv3+</license>
   <licenselink>https://www.gnu.org/licenses/gpl-3.0.html</licenselink>
