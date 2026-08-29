@@ -233,6 +233,25 @@ def file_diff(before, after):
     return {name: {'before': before.get(name), 'after': after.get(name)}
             for name in sorted(set(before).union(after)) if before.get(name) != after.get(name)}
 
+def comparable_tables(baseline, current, scope_changed, pending_reload):
+    """Avoid calling newly enabled coverage a pending administrator change.
+
+    A watcher upgrade may add tables while FreePBX already has Apply Config
+    pending.  Those rows have no old baseline, so a normal comparison would
+    misleadingly show the entire existing table as newly added.  Keep the
+    proven old scope comparable until the pending work is applied; the next
+    clean baseline then begins coverage for the new tables.
+    """
+    if not (scope_changed and pending_reload):
+        return baseline, current, []
+    shared = set(baseline).intersection(current)
+    added_coverage = sorted(set(current).difference(baseline))
+    return (
+        {table: baseline[table] for table in shared},
+        {table: current[table] for table in shared},
+        added_coverage,
+    )
+
 def publish(payload):
     # The polling service may be joined by a one-shot diagnostic invocation.
     # A shared `status.tmp` name lets one writer rename the other writer's
@@ -272,9 +291,22 @@ def main():
         elif previous_reload and not database['need_reload']:
             save_baseline(state)
         baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
-        database_drift = database_diff(baseline['tables'], state['tables']) if baseline else {}
+        scope_changed = bool(baseline and baseline.get('scope') != scope)
+        if baseline:
+            before_tables, after_tables, deferred_coverage = comparable_tables(
+                baseline['tables'], state['tables'], scope_changed, database['need_reload'])
+            database_drift = database_diff(before_tables, after_tables)
+        else:
+            deferred_coverage = []
+            database_drift = {}
         file_drift = file_diff(baseline['files'], state['files']) if baseline else {}
         has_drift = bool(database_drift or file_drift)
+        limitations = list(database['limitations'])
+        if deferred_coverage:
+            limitations.append({
+                'reason': 'scope_expanded_while_pending',
+                'tables': deferred_coverage,
+            })
         observation = {
             'observed_at': int(time.time()),
             'need_reload': database['need_reload'],
@@ -282,7 +314,7 @@ def main():
             'baseline_captured_at': int(BASELINE.stat().st_mtime) if baseline else None,
             'database_drift': database_drift,
             'file_drift': file_drift,
-            'coverage_limitations': database['limitations'],
+            'coverage_limitations': limitations,
             'message': 'Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else 'No pending reload.'),
         }
