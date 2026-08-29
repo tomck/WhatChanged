@@ -45,6 +45,17 @@ class NaturalKeyCursor:
         return [] if self.calls == 1 else [{'Field': 'trunkid'}, {'Field': 'name'}]
 assert watcher.primary_key(NaturalKeyCursor(), 'trunks') == ['trunkid']
 
+old_scope = {'users': {'rows': {'1': {'name': 'Before'}}}}
+expanded_scope = {
+    'users': {'rows': {'1': {'name': 'After'}}},
+    'outbound_routes': {'rows': {'7': {'name': 'Existing route'}}},
+}
+before_scope, after_scope, deferred = watcher.comparable_tables(
+    old_scope, expanded_scope, scope_changed=True, pending_reload=True)
+assert set(before_scope) == {'users'} and set(after_scope) == {'users'}
+assert deferred == ['outbound_routes']
+assert watcher.database_diff(before_scope, after_scope)['users']['updated']
+
 # The historic `sip` table remains fully explainable: an update names the
 # peer option and its before/after value, while sensitive values stay private.
 sip_before = {'sip': {'keys': ['id', 'keyword'], 'rows': {
