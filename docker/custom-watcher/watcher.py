@@ -151,8 +151,16 @@ def main():
     while True:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         database = database_snapshot()
-        state = {'tables': database['tables'], 'files': digest_files()}
+        # A baseline created under a different scope cannot be compared
+        # honestly: switching from the pre-0.1 broad scan to the bounded
+        # allowlist would otherwise look like hundreds of removals.  Replace
+        # such a baseline only while FreePBX is clean.
+        scope = {'watch_tables': list(WATCH_TABLES), 'max_table_rows': MAX_TABLE_ROWS}
+        state = {'scope': scope, 'tables': database['tables'], 'files': digest_files()}
+        existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:
+            save_baseline(state)
+        elif existing and existing.get('scope') != scope and not database['need_reload']:
             save_baseline(state)
         elif previous_reload and not database['need_reload']:
             save_baseline(state)
