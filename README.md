@@ -51,3 +51,28 @@ php /var/lib/asterisk/bin/pendingchanges seed
 
 `seed` refuses to replace the baseline while a reload is pending. Capture a
 new baseline only after Apply Changes has completed successfully.
+
+## Production-readiness checklist
+
+Do not deploy the Docker image or its FreePBX/PHP compatibility shims to a
+production PBX. Build and sign a module archive from a reviewed Git revision,
+then perform a read-only pilot on one noncritical PBX.
+
+Before that pilot, verify in the Docker lab that:
+
+- module installation succeeds through Module Admin;
+- extension creation, edit, and deletion appear as added, updated, and
+  removed database records before Apply Changes;
+- generated Asterisk files and Module Admin changes appear under separate file
+  categories; Module Admin inventory bookkeeping is excluded from
+  configuration-record changes;
+- a normal Apply Changes clears the reload flag and refreshes the baseline;
+- a reload flag with no detected state difference reports origin unavailable.
+
+For a production pilot, use a dedicated database account with read-only access
+to the FreePBX configuration database, mount watched paths read-only, restrict
+the watcher state directory to the Asterisk service account, and retain only
+the current baseline/status document. Start by recording a clean baseline after
+a known Apply Changes, then compare the report with deliberate, documented
+admin changes. Keep the module read-only; it must never apply, reload, or
+repair PBX configuration.

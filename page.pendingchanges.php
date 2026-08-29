@@ -30,7 +30,10 @@ $status = $tripwire->status();
     <?php if (isset($status['watcher_observed_at'])): ?><p>Watcher observed: <?= htmlentities($status['watcher_observed_at']) ?></p><?php endif; ?>
     <h3>Database drift</h3>
     <pre><?= htmlentities(json_encode($status['database'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
-    <h3>Generated-file drift</h3>
-    <pre><?= htmlentities(json_encode($status['files'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+    <h3>Generated Asterisk-file drift</h3>
+    <pre><?= htmlentities(json_encode($status['generated_files'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+    <h3>Module/file drift</h3>
+    <p class="text-muted">Module updates are reported separately from FreePBX configuration records. A module tree digest signals that files in that module changed.</p>
+    <pre><?= htmlentities(json_encode($status['module_files'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
   <?php endif; ?>
 </div>
