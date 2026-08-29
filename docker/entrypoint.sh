@@ -104,6 +104,30 @@ PY
 
 patch_moduleadmin_php82_compatibility
 
+# Find Me/Follow's legacy helper returns `$users` without initializing it when
+# no user survives its range filter. PHP 8.2 promotes that notice to the
+# exception page, which prevents every normal full-form extension edit in this
+# disposable lab. Initialize the local accumulator without altering FreePBX's
+# query, filtering, or saved configuration behavior. Keep this lab-only, just
+# like the Module Admin compatibility shim above.
+patch_findmefollow_php82_compatibility() {
+  target=/var/www/html/admin/modules/findmefollow/functions.inc.php
+  [ -f "$target" ] || return 0
+  python3 - "$target" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "function findmefollow_allusers() {\n\tglobal $db;"
+replacement = "function findmefollow_allusers() {\n\t$users = [];\n\tglobal $db;"
+if needle in text:
+    path.write_text(text.replace(needle, replacement, 1))
+PY
+}
+
+patch_findmefollow_php82_compatibility
+
 # Apache serves the local FreePBX UI as www-data.  Give it the minimal access
 # needed to read the generated FreePBX config and maintain PHP sessions.
 usermod -a -G asterisk www-data

@@ -22,9 +22,43 @@ assert diff['extensions']['updated'][0]['fields']['name'] == {'before': 'Desk', 
 assert diff['extensions']['updated'][0]['fields']['secret'] == {'before': '[redacted]', 'after': '[redacted]'}
 assert diff['extensions']['removed'][0]['secret'] == '[redacted]'
 assert watcher.file_diff({'a.conf': 'old'}, {'a.conf': 'new', 'b.conf': 'added'})['a.conf']['after'] == 'new'
-assert not watcher.should_watch_table('sip', True, {'pjsip'})
-assert watcher.should_watch_table('sip', True, {'sip', 'pjsip'})
-assert watcher.should_watch_table('sip', False, set())
+assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
+assert {
+    'outbound_routes', 'outbound_route_patterns',
+    'outbound_route_sequence', 'outbound_route_trunks',
+}.issubset(watcher.WATCH_TABLES)
+assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
+    'key': 'pjsip_debug', 'api_key': '[redacted]'
+}
+assert watcher.redact_row({'keyword': 'RINGTIMER', 'value': '16'})['value'] == '16'
+assert watcher.redact_row({'keyword': 'API_TOKEN', 'value': 'private'})['value'] == '[redacted]'
+class KeyCursor:
+    def execute(self, *_): pass
+    def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
+assert watcher.primary_key(KeyCursor(), 'kvstore_Sipsettings') == ['key']
+assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
+assert watcher.NULL_EQUIVALENT_ZERO_COLUMNS['outbound_routes'] == {'time_group_id'}
+class NaturalKeyCursor:
+    def __init__(self): self.calls = 0
+    def execute(self, *_): self.calls += 1
+    def fetchall(self):
+        return [] if self.calls == 1 else [{'Field': 'trunkid'}, {'Field': 'name'}]
+assert watcher.primary_key(NaturalKeyCursor(), 'trunks') == ['trunkid']
+
+# The historic `sip` table remains fully explainable: an update names the
+# peer option and its before/after value, while sensitive values stay private.
+sip_before = {'sip': {'keys': ['id', 'keyword'], 'rows': {
+    '7001|callerid': {'id': '7001', 'keyword': 'callerid', 'data': 'Desk <7001>'},
+    '7001|secret': {'id': '7001', 'keyword': 'secret', 'data': 'private'},
+}}}
+sip_after = {'sip': {'keys': ['id', 'keyword'], 'rows': {
+    '7001|callerid': {'id': '7001', 'keyword': 'callerid', 'data': 'Lobby <7001>'},
+    '7001|secret': {'id': '7001', 'keyword': 'secret', 'data': 'changed-private'},
+}}}
+sip_diff = watcher.database_diff(sip_before, sip_after)['sip']['updated']
+sip_changes = {entry['key']: entry['fields']['data'] for entry in sip_diff}
+assert sip_changes['7001|callerid'] == {'before': 'Desk <7001>', 'after': 'Lobby <7001>'}
+assert sip_changes['7001|secret'] == {'before': '[redacted]', 'after': '[redacted]'}
 
 # The file-hash cache must not change existing module digest values; otherwise
 # a watcher update would obscure live pending database evidence with noise.

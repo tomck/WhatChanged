@@ -7,7 +7,8 @@ restart Asterisk, or modify FreePBX configuration.
 
 ## Release preparation
 
-1. Start from a reviewed, tagged Git revision and run `scripts/package-module.sh`.
+1. Start from a reviewed, tagged Git revision, run `scripts/package-module.sh`,
+   and run `./docker/validate-module-archive.sh dist/pendingchanges-<version>.tgz`.
 2. Optionally use FreePBX local signing on the target PBX to add tamper
    evidence. It is PBX-specific and is not required for functional validation.
    Do not copy the Docker lab's PHP compatibility shim or any lab credentials
@@ -34,7 +35,10 @@ restart Asterisk, or modify FreePBX configuration.
 
 ## Installation and validation
 
-1. Install the signed module through Module Admin and start the watcher.
+1. Copy the reviewed archive to the pilot PBX, install it through Module Admin,
+   and start the watcher service. Confirm Module Admin lists it as either
+   signed or explicitly **Unsigned** (the expected status for an intentionally
+   unsigned local archive); do not mistake the warning for an install failure.
 2. Perform a known, normal Apply Changes. Wait for the watcher to record a
    clean baseline; retain only that baseline and its current status document.
 3. Make one documented, reversible test change without Apply Changes. Verify
