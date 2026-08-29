@@ -3,11 +3,19 @@ namespace FreePBX\modules;
 
 class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     private const BASELINE_TABLE = 'pendingchanges_baseline';
-    private const EXCLUDED_TABLES = [
-        'admin', 'asteriskcdrdb', 'cdr', 'cel', 'cronmanager', 'kvstore',
-        'module_xml', 'modules', 'notifications', 'pendingchanges_baseline',
-        'queue_log',
+    // Keep the framework-only fallback bounded too. The external watcher is
+    // preferred in production, but an unreadable watcher status must never
+    // turn this page into an unbounded scan of CDR/CEL/add-on tables.
+    private const WATCH_TABLES = [
+        'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
+        'did', 'extension_routes', 'extensions', 'featurecodes', 'globals',
+        'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests',
+        'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
+        'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
+        'timeconditions', 'timegroups', 'timegroups_details',
+        'trunk_dialpatterns', 'trunks', 'users', 'zap',
     ];
+    private const MAX_TABLE_ROWS = 5000;
 
     public function install() {
         \FreePBX::Database()->exec('CREATE TABLE IF NOT EXISTS '.self::BASELINE_TABLE.' (
@@ -66,6 +74,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'files' => $files,
                 'generated_files' => $this->fileScope($files, 'generated/'),
                 'module_files' => $this->fileScope($files, 'module/'),
+                'coverage_limitations' => $watcher['coverage_limitations'] ?? [],
                 'message' => $watcher['message'],
                 'baseline' => $watcher['baseline_available'],
                 'captured_at' => $watcher['baseline_captured_at'] ?? null,
@@ -87,6 +96,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return compact('pending', 'database', 'files', 'message') + [
             'generated_files' => $this->fileScope($files, 'generated/'),
             'module_files' => $this->fileScope($files, 'module/'),
+            'coverage_limitations' => [],
             'baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false,
         ];
     }
@@ -104,14 +114,18 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     private function databaseSnapshot(): array {
-        $tables = \FreePBX::Database()->query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"')->fetchAll(\PDO::FETCH_NUM);
+        $available = array_column(\FreePBX::Database()->query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"')->fetchAll(\PDO::FETCH_NUM), 0);
         $snapshot = [];
-        foreach ($tables as $entry) {
-            $table = $entry[0];
-            if (in_array($table, self::EXCLUDED_TABLES, true) || strpos($table, 'pendingchanges_') === 0) {
+        foreach (self::WATCH_TABLES as $table) {
+            if (!in_array($table, $available, true)) {
                 continue;
             }
-            $rows = \FreePBX::Database()->query('SELECT * FROM `'.str_replace('`', '``', $table).'`')->fetchAll(\PDO::FETCH_ASSOC);
+            $quoted = '`'.str_replace('`', '``', $table).'`';
+            $count = (int) \FreePBX::Database()->query('SELECT COUNT(*) FROM '.$quoted)->fetchColumn();
+            if ($count > self::MAX_TABLE_ROWS) {
+                continue;
+            }
+            $rows = \FreePBX::Database()->query('SELECT * FROM '.$quoted)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
                 ksort($row);

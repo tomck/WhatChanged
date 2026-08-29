@@ -1,0 +1,26 @@
+[Unit]
+Description=WhatChanged FreePBX pending-change watcher
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asterisk
+Group=asterisk
+EnvironmentFile=/etc/what-changed-watcher.env
+Environment=WATCH_PATH=/etc/asterisk
+Environment=MODULE_PATH=/var/www/html/admin/modules
+Environment=STATE_DIR=/var/lib/asterisk/pendingchanges-watcher
+Environment=PYTHONPATH=/usr/local/lib/what-changed-watcher/vendor
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /usr/local/lib/what-changed-watcher/watcher.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ReadWritePaths=/var/lib/asterisk/pendingchanges-watcher
+ReadOnlyPaths=/etc/asterisk /var/www/html/admin/modules
+
+[Install]
+WantedBy=multi-user.target

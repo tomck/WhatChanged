@@ -56,6 +56,12 @@ services:
       DB_NAME: asterisk
       WATCH_PATH: /etc/asterisk
       MODULE_PATH: /var/www/html/admin/modules
+      # Safety boundary: only named configuration tables are eligible and no
+      # table above this size is read into a baseline.
+      # The final entry is a disposable smoke-only fixture, not a production
+      # table name.
+      WATCH_TABLES: "announcement,callbacks,conferences,customappsreg,devices,did,extension_routes,extensions,featurecodes,globals,iax,injected,ivr_details,ivr_entries,miscapps,miscdests,outbound_route_sequences,outbound_routes,parkinglot,pjsip,queues_config,queues_details,queues_members,ringgroups,sip,timeconditions,timegroups,timegroups_details,trunk_dialpatterns,trunks,users,zap,pc_smoke_fixture"
+      MAX_TABLE_ROWS: "5000"
     volumes:
       - asterisk-config:/etc/asterisk:ro
       - freepbx-web:/var/www/html:ro
