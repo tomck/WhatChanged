@@ -80,7 +80,8 @@ services:
     volumes:
       - ../:/srv/pendingchanges:ro
       - asterisk-config:/etc/asterisk
-      - watcher-data:/var/lib/pendingchanges-watcher:ro
+      - freepbx-web:/var/www/html
+      - watcher-data:/var/lib/pendingchanges-watcher
 
 volumes:
   mariadb-data:

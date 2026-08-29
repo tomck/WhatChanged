@@ -8,11 +8,12 @@ restart Asterisk, or modify FreePBX configuration.
 ## Release preparation
 
 1. Start from a reviewed, tagged Git revision and run `scripts/package-module.sh`.
-2. Sign the resulting archive with the organization's approved FreePBX Module
-   Admin signing process. Do not copy the Docker lab's PHP compatibility shim
-   or any lab credentials to the PBX.
-3. Validate the signed archive in a fresh disposable Docker volume using
-   Module Admin before placing it on a PBX.
+2. Optionally use FreePBX local signing on the target PBX to add tamper
+   evidence. It is PBX-specific and is not required for functional validation.
+   Do not copy the Docker lab's PHP compatibility shim or any lab credentials
+   to the PBX.
+3. Validate the archive in a fresh disposable Docker volume using Module Admin
+   before placing it on a PBX.
 
 ## Pilot prerequisites
 
