@@ -95,6 +95,12 @@ def row_key(row, fields):
         return '|'.join(str(row.get(field, '')) for field in fields)
     return json.dumps(row, sort_keys=True, separators=(',', ':'))
 
+def should_watch_table(table, active_technologies_known, active_technologies):
+    # `sip` is the legacy chan_sip peer-settings table. On a PJSIP-only PBX it
+    # often holds thousands of retained settings but affects no active device
+    # or trunk, so treating its row cap as an operator warning is misleading.
+    return not (table == 'sip' and active_technologies_known and 'sip' not in active_technologies)
+
 def database_snapshot():
     connection = pymysql.connect(host=os.environ['DB_HOST'], user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'], cursorclass=pymysql.cursors.DictCursor)
     with connection.cursor() as cursor:
@@ -104,8 +110,18 @@ def database_snapshot():
         tables = {column(item, next(iter(item)) if isinstance(item, dict) else '', 0) for item in cursor.fetchall()}
         snapshot = {}
         limitations = []
+        active_technologies = set()
+        active_technologies_known = False
+        for table in ('devices', 'trunks'):
+            if table not in tables:
+                continue
+            cursor.execute(f"SELECT DISTINCT tech FROM `{table}`")
+            active_technologies.update(str(column(item, 'tech', 0)).lower() for item in cursor.fetchall())
+            active_technologies_known = True
         for table in WATCH_TABLES:
             if table not in tables:
+                continue
+            if not should_watch_table(table, active_technologies_known, active_technologies):
                 continue
             cursor.execute(f"SELECT COUNT(*) AS row_count FROM `{table}`")
             row_count = int(column(cursor.fetchone(), 'row_count', 0))

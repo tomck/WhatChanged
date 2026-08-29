@@ -22,6 +22,9 @@ assert diff['extensions']['updated'][0]['fields']['name'] == {'before': 'Desk', 
 assert diff['extensions']['updated'][0]['fields']['secret'] == {'before': '[redacted]', 'after': '[redacted]'}
 assert diff['extensions']['removed'][0]['secret'] == '[redacted]'
 assert watcher.file_diff({'a.conf': 'old'}, {'a.conf': 'new', 'b.conf': 'added'})['a.conf']['after'] == 'new'
+assert not watcher.should_watch_table('sip', True, {'pjsip'})
+assert watcher.should_watch_table('sip', True, {'sip', 'pjsip'})
+assert watcher.should_watch_table('sip', False, set())
 
 # The file-hash cache must not change existing module digest values; otherwise
 # a watcher update would obscure live pending database evidence with noise.
