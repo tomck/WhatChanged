@@ -22,6 +22,13 @@ docker compose -f docker/docker-compose.yml run --rm smoke
 docker compose -f docker/docker-compose.yml down -v
 ```
 
+For the complete release gate (all watcher, authenticated FreePBX, breaker,
+route, and trunk smoke coverage), use:
+
+```sh
+./docker/lab-gate.sh
+```
+
 The PBX is based on Debian 12 and FreePBX 17. It uses named, project-scoped
 volumes; do not point any environment variable or mount at a production PBX.
 Copy `.env.lab.example` to `.env.lab` and set a test-only password before
@@ -35,6 +42,33 @@ watcher baseline.
 `smoke-freepbx-http.sh` separately exercises the authenticated extension, ring
 group, and queue fixture requests, confirms that FreePBX sets `need_reload`,
 then confirms a normal Apply Changes returns the watcher to a clean baseline.
+
+`smoke-breakers.sh` uses real authenticated SIP Settings and Advanced Settings
+requests. It stages **Allow Transports Reload** and the non-secret global
+`RINGTIMER` setting, verifies readable before/after watcher evidence, applies
+each change, restores the original lab value, and applies again. Run it only
+against this local lab:
+
+```sh
+./docker/smoke-breakers.sh
+```
+
+`smoke-outbound-route.sh` creates an isolated route through FreePBX's real
+form handler, applies it as a baseline, then stages a readable route-name and
+dial-pattern edit. It verifies the route, order, and pattern records before
+removing only its own fixture and returning the lab to a clean applied state:
+
+```sh
+./docker/smoke-outbound-route.sh
+```
+
+`smoke-trunk.sh` similarly exercises a disabled Custom trunk with an
+intentionally unusable dial string and no assigned route. It validates create,
+name edit, and removal evidence without ever placing a call:
+
+```sh
+./docker/smoke-trunk.sh
+```
 
 ## Watcher
 
@@ -67,6 +101,14 @@ perform a read-only pilot on one noncritical PBX. A FreePBX local signature is
 optional tamper-evidence for that individual PBX; it is not a Docker or release
 gate.
 
+Build and validate the Module Admin archive in the lab before handing it to a
+pilot operator:
+
+```sh
+scripts/package-module.sh
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.4.tgz
+```
+
 Before that pilot, verify in the Docker lab that:
 
 - module installation succeeds through Module Admin;
@@ -86,7 +128,16 @@ a known Apply Changes, then compare the report with deliberate, documented
 admin changes. Keep the module read-only; it must never apply, reload, or
 repair PBX configuration.
 
-The watcher reads only an explicit FreePBX configuration-table allowlist. A
-watched table with more than 5,000 rows is not read into a baseline; the page
-reports this as a coverage limitation. CDR, CEL, queue-log, and unknown add-on
-tables are never eligible for watching.
+The watcher reads only an explicit FreePBX configuration-table allowlist. Its
+general cap is 5,000 rows, with explicit per-table ceilings for understood
+configuration tables. The legacy-named `sip` table holds endpoint setting
+records and is covered up to 20,000 rows; its setting values are retained in
+the watcher-owned 0600 baseline and redacted from the web-readable report when
+sensitive. Outbound-route coverage includes the route record, its ordered
+position, dial patterns, and assigned trunk sequence. CDR, CEL, queue-log, and
+unknown add-on tables are never eligible for watching.
+
+FreePBX rewrites `sip.flags` as display/order metadata whenever an endpoint
+form is saved. The watcher deliberately excludes that volatile column so an
+extension edit reports the meaningful endpoint settings instead of a long list
+of false updates.

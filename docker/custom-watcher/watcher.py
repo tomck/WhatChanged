@@ -17,10 +17,15 @@ MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
 # tables, and the watcher must never read them just because they exist.
 DEFAULT_WATCH_TABLES = (
     'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-    'did', 'extension_routes', 'extensions', 'featurecodes', 'globals',
+    'did', 'extension_routes', 'extensions', 'featurecodes', 'freepbx_settings', 'globals',
     'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests',
-    'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
-    'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
+    # FreePBX 17 uses the singular `outbound_route_sequence` table. Retain
+    # the historic plural entry for compatibility with older/restored PBXs,
+    # and cover the separate pattern and route-to-trunk records as well.
+    'outbound_route_patterns', 'outbound_route_sequence',
+    'outbound_route_sequences', 'outbound_route_trunks', 'outbound_routes',
+    'parkinglot', 'pjsip',
+    'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip', 'sipsettings', 'kvstore_Sipsettings',
     'timeconditions', 'timegroups', 'timegroups_details',
     'trunk_dialpatterns', 'trunks', 'users', 'zap',
 )
@@ -29,9 +34,34 @@ WATCH_TABLES = tuple(
     if re.fullmatch(r'[A-Za-z0-9_]+', table.strip())
 )
 MAX_TABLE_ROWS = int(os.environ.get('MAX_TABLE_ROWS', '5000'))
+# A named override permits a configuration table whose shape is understood to
+# exceed the conservative general cap.  Keep this explicit: unknown tables
+# must never become eligible simply because they are large.
+def table_row_limits():
+    limits = {}
+    for item in os.environ.get('TABLE_ROW_LIMITS', 'sip=20000').split(','):
+        name, separator, value = item.partition('=')
+        if separator and re.fullmatch(r'[A-Za-z0-9_]+', name.strip()) and value.strip().isdigit():
+            limits[name.strip()] = int(value.strip())
+    return limits
+
+TABLE_ROW_LIMITS = table_row_limits()
 EXCLUDED_MODULES = {'pendingchanges'}
-SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'key')
-NATURAL_KEY_FIELDS = ('extension', 'id', 'account', 'grpnum', 'device', 'user')
+SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'value_digest')
+# Some older Core tables lack a declared primary key.  These identifiers are
+# stable logical keys used only as a fallback, so updates remain updates rather
+# than misleading remove/add pairs.
+NATURAL_KEY_FIELDS = ('extension', 'id', 'trunkid', 'route_id', 'account', 'grpnum', 'device', 'user', 'key')
+# The legacy `sip.flags` column is an internal display/order ordinal. FreePBX
+# rewrites it when an endpoint form is saved even when the option's value is
+# unchanged, so including it turns a one-field edit into dozens of false
+# updates. It is deliberately excluded as volatile metadata.
+VOLATILE_COLUMNS = {'sip': {'flags'}}
+# FreePBX represents an unset outbound-route time group as either SQL NULL or
+# 0, depending on whether the route was created or later edited.  Both mean
+# "no time group"; canonicalize that presentation detail so a reviewer sees
+# the route change they made rather than a spurious companion update.
+NULL_EQUIVALENT_ZERO_COLUMNS = {'outbound_routes': {'time_group_id'}}
 CONTENT_HASH_CACHE = {}
 
 def content_digest(path):
@@ -79,6 +109,14 @@ def column(item, name, index):
     return item[name] if isinstance(item, dict) else item[index]
 
 def primary_key(cursor, table):
+    # FreePBX kvstore rows have an `id` column that is commonly blank.  Their
+    # meaningful identity is the setting key; using the blank id would merge
+    # unrelated SIP/PJSIP settings into one false update.
+    if table.startswith('kvstore_'):
+        cursor.execute(f"SHOW COLUMNS FROM `{table}`")
+        columns = {column(item, 'Field', 0) for item in cursor.fetchall()}
+        if 'key' in columns:
+            return ['key']
     cursor.execute(f"SHOW KEYS FROM `{table}` WHERE Key_name = 'PRIMARY'")
     fields = sorted(cursor.fetchall(), key=lambda item: column(item, 'Seq_in_index', 3))
     if fields:
@@ -95,11 +133,23 @@ def row_key(row, fields):
         return '|'.join(str(row.get(field, '')) for field in fields)
     return json.dumps(row, sort_keys=True, separators=(',', ':'))
 
-def should_watch_table(table, active_technologies_known, active_technologies):
-    # `sip` is the legacy chan_sip peer-settings table. On a PJSIP-only PBX it
-    # often holds thousands of retained settings but affects no active device
-    # or trunk, so treating its row cap as an operator warning is misleading.
-    return not (table == 'sip' and active_technologies_known and 'sip' not in active_technologies)
+def snapshot_rows(cursor, table):
+    # `sip` is a normal FreePBX configuration table despite its historic
+    # name.  Its rows identify an endpoint, option, and option value.  Capture
+    # that structure so a review can explain *which* setting changed.  The
+    # public status document is redacted below; only the 0600 baseline retains
+    # raw values needed for an accurate comparison.
+    cursor.execute(f"SELECT * FROM `{table}`")
+    volatile = VOLATILE_COLUMNS.get(table, set())
+    normalized = []
+    zero_columns = NULL_EQUIVALENT_ZERO_COLUMNS.get(table, set())
+    for item in cursor.fetchall():
+        row = {key: clean(value) for key, value in item.items() if key not in volatile}
+        for key in zero_columns:
+            if row.get(key) in (None, 0, '0'):
+                row[key] = None
+        normalized.append(row)
+    return normalized
 
 def database_snapshot():
     connection = pymysql.connect(host=os.environ['DB_HOST'], user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'], cursorclass=pymysql.cursors.DictCursor)
@@ -110,42 +160,54 @@ def database_snapshot():
         tables = {column(item, next(iter(item)) if isinstance(item, dict) else '', 0) for item in cursor.fetchall()}
         snapshot = {}
         limitations = []
-        active_technologies = set()
-        active_technologies_known = False
-        for table in ('devices', 'trunks'):
-            if table not in tables:
-                continue
-            cursor.execute(f"SELECT DISTINCT tech FROM `{table}`")
-            active_technologies.update(str(column(item, 'tech', 0)).lower() for item in cursor.fetchall())
-            active_technologies_known = True
         for table in WATCH_TABLES:
             if table not in tables:
                 continue
-            if not should_watch_table(table, active_technologies_known, active_technologies):
-                continue
             cursor.execute(f"SELECT COUNT(*) AS row_count FROM `{table}`")
             row_count = int(column(cursor.fetchone(), 'row_count', 0))
-            if row_count > MAX_TABLE_ROWS:
+            row_limit = TABLE_ROW_LIMITS.get(table, MAX_TABLE_ROWS)
+            if row_count > row_limit:
                 limitations.append({
                     'table': table,
-                    'reason': 'row_limit',
+                    'reason': 'table_row_limit' if table in TABLE_ROW_LIMITS else 'row_limit',
                     'rows': row_count,
-                    'limit': MAX_TABLE_ROWS,
+                    'limit': row_limit,
                 })
                 continue
-            cursor.execute(f"SELECT * FROM `{table}`")
-            rows = [{key: clean(value) for key, value in item.items()} for item in cursor.fetchall()]
+            rows = snapshot_rows(cursor, table)
             keys = primary_key(cursor, table)
             snapshot[table] = {'keys': keys, 'rows': {row_key(item, keys): item for item in rows}}
     connection.close()
     value = column(row, 'value', 0) if row else None
     return {'need_reload': bool(value == 'true'), 'tables': snapshot, 'limitations': limitations}
 
-def redact(field, value):
-    return '[redacted]' if any(marker in field.lower() for marker in SENSITIVE_FIELD_MARKERS) else value
+def sensitive_field(field, row=None):
+    name = field.lower()
+    if any(marker in name for marker in SENSITIVE_FIELD_MARKERS):
+        return True
+    # Avoid treating innocent field names such as `keyword` as a secret while
+    # still protecting conventional API/private-key columns.
+    if name.endswith('_key') or name.startswith('key_'):
+        return True
+    # FreePBX's endpoint-option schema places the sensitive option name in
+    # `keyword` and its material in `data`.
+    if name == 'data' and row:
+        option = str(row.get('keyword', '')).lower()
+        return any(marker in option for marker in SENSITIVE_FIELD_MARKERS) or option == 'key' or option.endswith('_key')
+    # The FreePBX settings table stores the setting name separately from its
+    # value.  Preserve ordinary setting values (so a breaker is reviewable),
+    # but do not disclose a password/token setting merely because its column
+    # is generically named `value`.
+    if name == 'value' and row:
+        setting = str(row.get('keyword', '')).lower()
+        return any(marker in setting for marker in SENSITIVE_FIELD_MARKERS) or setting == 'key' or setting.endswith('_key')
+    return False
+
+def redact(field, value, row=None):
+    return '[redacted]' if sensitive_field(field, row) else value
 
 def redact_row(row):
-    return {field: redact(field, value) for field, value in row.items()}
+    return {field: redact(field, value, row) for field, value in row.items()}
 
 def database_diff(before, after):
     diff = {}
@@ -158,7 +220,7 @@ def database_diff(before, after):
         removed = [redact_row(old_rows[key]) for key in old_rows.keys() - new_rows.keys()]
         updated = []
         for key in old_rows.keys() & new_rows.keys():
-            changed = {field: {'before': redact(field, old_rows[key].get(field)), 'after': redact(field, new_rows[key].get(field))}
+            changed = {field: {'before': redact(field, old_rows[key].get(field), old_rows[key]), 'after': redact(field, new_rows[key].get(field), new_rows[key])}
                        for field in old_rows[key].keys() | new_rows[key].keys()
                        if old_rows[key].get(field) != new_rows[key].get(field)}
             if changed:
@@ -172,7 +234,11 @@ def file_diff(before, after):
             for name in sorted(set(before).union(after)) if before.get(name) != after.get(name)}
 
 def publish(payload):
-    temporary = OUTPUT.with_suffix('.tmp')
+    # The polling service may be joined by a one-shot diagnostic invocation.
+    # A shared `status.tmp` name lets one writer rename the other writer's
+    # temporary file away, crashing the loser. PID-scoped siblings retain the
+    # atomic-replace property without that collision.
+    temporary = OUTPUT.with_name(f'.{OUTPUT.name}.{os.getpid()}.tmp')
     temporary.write_text(json.dumps(payload, sort_keys=True))
     os.chmod(temporary, 0o644)
     temporary.replace(OUTPUT)
@@ -192,7 +258,11 @@ def main():
         # honestly: switching from the pre-0.1 broad scan to the bounded
         # allowlist would otherwise look like hundreds of removals.  Replace
         # such a baseline only while FreePBX is clean.
-        scope = {'watch_tables': list(WATCH_TABLES), 'max_table_rows': MAX_TABLE_ROWS}
+        scope = {
+            'watch_tables': list(WATCH_TABLES),
+            'max_table_rows': MAX_TABLE_ROWS,
+            'table_row_limits': TABLE_ROW_LIMITS,
+        }
         state = {'scope': scope, 'tables': database['tables'], 'files': digest_files()}
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:
