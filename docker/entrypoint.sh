@@ -177,6 +177,10 @@ fi
 # directory group-inheriting and repair any existing log so both www-data and
 # asterisk can append through their common asterisk group.
 find /var/log/asterisk -type d -exec chmod g+rws {} +
-[ -f /var/log/asterisk/freepbx.log ] && chgrp asterisk /var/log/asterisk/freepbx.log && chmod g+rw /var/log/asterisk/freepbx.log
+# Create this before Apache can create it with a restrictive umask.  Both web
+# requests and CLI reloads log here; the CLI runs as asterisk.
+touch /var/log/asterisk/freepbx.log
+chown asterisk:asterisk /var/log/asterisk/freepbx.log
+chmod 664 /var/log/asterisk/freepbx.log
 
 exec apachectl -D FOREGROUND

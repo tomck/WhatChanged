@@ -5,7 +5,8 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     private const BASELINE_TABLE = 'pendingchanges_baseline';
     private const EXCLUDED_TABLES = [
         'admin', 'asteriskcdrdb', 'cdr', 'cel', 'cronmanager', 'kvstore',
-        'notifications', 'pendingchanges_baseline', 'queue_log',
+        'module_xml', 'modules', 'notifications', 'pendingchanges_baseline',
+        'queue_log',
     ];
 
     public function install() {
@@ -58,10 +59,13 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     public function status(): array {
         $watcher = $this->watcherStatus();
         if ($watcher !== null) {
+            $files = $watcher['file_drift'];
             return [
                 'pending' => $watcher['need_reload'],
                 'database' => $watcher['database_drift'],
-                'files' => $watcher['file_drift'],
+                'files' => $files,
+                'generated_files' => $this->fileScope($files, 'generated/'),
+                'module_files' => $this->fileScope($files, 'module/'),
                 'message' => $watcher['message'],
                 'baseline' => $watcher['baseline_available'],
                 'captured_at' => $watcher['baseline_captured_at'] ?? null,
@@ -80,7 +84,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         $message = $pending && !$hasDrift
             ? 'Reload requested; origin unavailable.'
             : ($pending ? 'Configuration drift detected since the applied baseline.' : 'No pending reload.');
-        return compact('pending', 'database', 'files', 'message') + ['baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false];
+        return compact('pending', 'database', 'files', 'message') + [
+            'generated_files' => $this->fileScope($files, 'generated/'),
+            'module_files' => $this->fileScope($files, 'module/'),
+            'baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false,
+        ];
     }
 
     private function watcherStatus(): ?array {
@@ -121,11 +129,32 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         $snapshot = [];
         foreach (glob($root.'/*.conf') ?: [] as $path) {
             if (is_file($path) && is_readable($path)) {
-                $snapshot[substr($path, strlen($root) + 1)] = hash_file('sha256', $path);
+                $snapshot['generated/'.substr($path, strlen($root) + 1)] = hash_file('sha256', $path);
             }
+        }
+        $moduleRoot = '/var/www/html/admin/modules';
+        foreach (glob($moduleRoot.'/*', GLOB_ONLYDIR) ?: [] as $module) {
+            if (basename($module) === 'pendingchanges') {
+                continue;
+            }
+            $digest = hash_init('sha256');
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($module, \FilesystemIterator::SKIP_DOTS));
+            $paths = iterator_to_array($iterator);
+            ksort($paths, SORT_STRING);
+            foreach ($paths as $path) {
+                if ($path->isFile()) {
+                    hash_update($digest, $path->getRelativePathname());
+                    hash_update_file($digest, $path->getPathname());
+                }
+            }
+            $snapshot['module/'.basename($module)] = hash_final($digest);
         }
         ksort($snapshot);
         return $snapshot;
+    }
+
+    private function fileScope(array $files, string $prefix): array {
+        return array_filter($files, static fn($name) => str_starts_with((string) $name, $prefix), ARRAY_FILTER_USE_KEY);
     }
 
     private function databaseDiff(array $before, array $after): array {

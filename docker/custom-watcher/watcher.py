@@ -10,7 +10,13 @@ OUTPUT = Path('/var/lib/pendingchanges-watcher/status.json')
 BASELINE = Path('/var/lib/pendingchanges-watcher/baseline.json')
 ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
-EXCLUDED_TABLES = {'admin', 'cdr', 'cel', 'cronmanager', 'kvstore', 'notifications', 'queue_log'}
+# Module Admin records package inventory in these tables.  Module package
+# changes are reported from the read-only module-tree digests instead of being
+# presented as PBX configuration-record changes.
+EXCLUDED_TABLES = {
+    'admin', 'cdr', 'cel', 'cronmanager', 'kvstore', 'module_xml', 'modules',
+    'notifications', 'queue_log',
+}
 EXCLUDED_MODULES = {'pendingchanges'}
 SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'key')
 NATURAL_KEY_FIELDS = ('extension', 'id', 'account', 'grpnum', 'device', 'user')
