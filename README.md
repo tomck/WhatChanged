@@ -18,6 +18,7 @@ The test environment is disposable and is intended only for local development:
 docker compose -f docker/docker-compose.yml up --build
 ./docker/bootstrap-freepbx.sh
 docker compose -f docker/docker-compose.yml run --rm smoke
+./docker/smoke-freepbx-http.sh
 docker compose -f docker/docker-compose.yml down -v
 ```
 
@@ -27,7 +28,13 @@ Copy `.env.lab.example` to `.env.lab` and set a test-only password before
 bootstrapping. The bootstrap script submits FreePBX's initial setup form with
 automatic module updates disabled; it is safe to rerun after setup is complete.
 The smoke suite is safe to re-run and removes only its own `pc_smoke_*` fixture
-rows.
+rows/files. It asserts added, updated, removed, unknown-origin, generated-file,
+module-file, and module-owned exclusion behavior before restoring a clean
+watcher baseline.
+
+`smoke-freepbx-http.sh` separately exercises the authenticated extension, ring
+group, and queue fixture requests, confirms that FreePBX sets `need_reload`,
+then confirms a normal Apply Changes returns the watcher to a clean baseline.
 
 ## Watcher
 
@@ -55,8 +62,10 @@ new baseline only after Apply Changes has completed successfully.
 ## Production-readiness checklist
 
 Do not deploy the Docker image or its FreePBX/PHP compatibility shims to a
-production PBX. Build and sign a module archive from a reviewed Git revision,
-then perform a read-only pilot on one noncritical PBX.
+production PBX. Build a module archive from a reviewed Git revision, then
+perform a read-only pilot on one noncritical PBX. A FreePBX local signature is
+optional tamper-evidence for that individual PBX; it is not a Docker or release
+gate.
 
 Before that pilot, verify in the Docker lab that:
 

@@ -1,25 +1,115 @@
+"""End-to-end assertions for the disposable WhatChanged lab only."""
+import json
 import os
 import time
 from pathlib import Path
+
 import pymysql
 
-connection = pymysql.connect(host=os.environ['DB_HOST'], user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'], autocommit=True)
+STATUS = Path('/var/lib/pendingchanges-watcher/status.json')
+BASELINE = Path('/var/lib/pendingchanges-watcher/baseline.json')
+GENERATED_FIXTURE = Path('/etc/asterisk/pc-smoke.conf')
+MODULE_FIXTURE = Path('/var/www/html/admin/modules/core/pc-smoke-module-drift.txt')
+OWN_MODULE_FIXTURE = Path('/var/www/html/admin/modules/pendingchanges/pc-smoke-owned.txt')
+TABLE = 'pc_smoke_fixture'
+
+
+def observation():
+    return json.loads(STATUS.read_text())
+
+
+def wait_for(description, predicate, timeout=35):
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        if STATUS.exists():
+            last = observation()
+            if predicate(last):
+                return last
+        time.sleep(1)
+    raise AssertionError(f'{description}; last observation: {last}')
+
+
+def set_reload(cursor, pending):
+    cursor.execute("UPDATE admin SET value = %s WHERE variable = 'need_reload'", ('true' if pending else 'false',))
+
+
+def table_changes(state, kind):
+    return state['database_drift'].get(TABLE, {}).get(kind, [])
+
+
+def reset_baseline(cursor):
+    """Remove test-only state and wait for a fresh clean watcher baseline."""
+    set_reload(cursor, False)
+    cursor.execute(f'DROP TABLE IF EXISTS `{TABLE}`')
+    for path in (GENERATED_FIXTURE, MODULE_FIXTURE, OWN_MODULE_FIXTURE, BASELINE):
+        path.unlink(missing_ok=True)
+    return wait_for('clean baseline was not captured', lambda state:
+                    state['baseline_available'] and not state['need_reload'] and
+                    not state['database_drift'] and not state['file_drift'])
+
+
+connection = pymysql.connect(
+    host=os.environ['DB_HOST'], user=os.environ['DB_USER'],
+    password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
+    autocommit=True,
+)
 try:
     with connection.cursor() as cursor:
-        cursor.execute('CREATE TABLE IF NOT EXISTS pc_smoke_fixture (id INT PRIMARY KEY, value VARCHAR(50))')
-        cursor.execute('DELETE FROM pc_smoke_fixture')
-        cursor.execute("INSERT INTO pc_smoke_fixture VALUES (1, 'before')")
-        cursor.execute("UPDATE admin SET value = 'true' WHERE variable = 'need_reload'")
-    time.sleep(7)
-    watcher = Path('/var/lib/pendingchanges-watcher/status.json')
-    assert watcher.exists(), 'custom watcher produced no observation'
-    assert 'pc_smoke_fixture' in watcher.read_text(), 'custom watcher did not report database drift'
-    Path('/etc/asterisk/pc-smoke.conf').write_text('; local smoke file drift\n')
-    time.sleep(7)
-    assert 'pc-smoke.conf' in watcher.read_text(), 'custom watcher did not report file drift'
-    with connection.cursor() as cursor:
-        cursor.execute("UPDATE admin SET value = 'false' WHERE variable = 'need_reload'")
-        cursor.execute('DELETE FROM pc_smoke_fixture')
-    print('watcher smoke checks passed')
+        # Added record.
+        reset_baseline(cursor)
+        cursor.execute(f'CREATE TABLE `{TABLE}` (id INT PRIMARY KEY, value VARCHAR(50))')
+        cursor.execute(f"INSERT INTO `{TABLE}` VALUES (1, 'before')")
+        set_reload(cursor, True)
+        state = wait_for('added record was not reported', lambda item:
+                         item['need_reload'] and len(table_changes(item, 'added')) == 1)
+        assert not table_changes(state, 'updated') and not table_changes(state, 'removed')
+
+        # Update the same logical row after applying the first staged change.
+        set_reload(cursor, False)
+        wait_for('baseline did not refresh after apply', lambda item:
+                 not item['need_reload'] and not item['database_drift'])
+        cursor.execute(f"UPDATE `{TABLE}` SET value = 'after' WHERE id = 1")
+        set_reload(cursor, True)
+        state = wait_for('updated record was not reported', lambda item:
+                         item['need_reload'] and len(table_changes(item, 'updated')) == 1)
+        assert not table_changes(state, 'added') and not table_changes(state, 'removed')
+
+        # Remove the baseline row.
+        set_reload(cursor, False)
+        wait_for('baseline did not refresh before deletion', lambda item:
+                 not item['need_reload'] and not item['database_drift'])
+        cursor.execute(f'DELETE FROM `{TABLE}` WHERE id = 1')
+        set_reload(cursor, True)
+        state = wait_for('removed record was not reported', lambda item:
+                         item['need_reload'] and len(table_changes(item, 'removed')) == 1)
+        assert not table_changes(state, 'added') and not table_changes(state, 'updated')
+
+        # A bare FreePBX reload request has no attributable provenance.
+        set_reload(cursor, False)
+        wait_for('baseline did not refresh before unknown-origin test', lambda item:
+                 not item['need_reload'] and not item['database_drift'])
+        set_reload(cursor, True)
+        wait_for('unknown-origin reload was not reported', lambda item:
+                 item['need_reload'] and not item['database_drift'] and not item['file_drift'] and
+                 item['message'] == 'Reload requested; origin unavailable.')
+
+        # Generated/module file drift remains separate from configuration data.
+        reset_baseline(cursor)
+        GENERATED_FIXTURE.write_text('; disposable generated-file fixture\n')
+        state = wait_for('generated file drift was not reported', lambda item:
+                         'generated/pc-smoke.conf' in item['file_drift'])
+        assert not state['database_drift'] and not state['need_reload']
+
+        reset_baseline(cursor)
+        MODULE_FIXTURE.write_text('disposable module-file fixture\n')
+        OWN_MODULE_FIXTURE.write_text('must be excluded\n')
+        state = wait_for('module file drift was not reported', lambda item:
+                         'module/core' in item['file_drift'])
+        assert 'module/pendingchanges' not in state['file_drift']
+        assert not state['database_drift'] and not state['need_reload']
+
+        reset_baseline(cursor)
+    print('watcher smoke lifecycle passed')
 finally:
     connection.close()
