@@ -62,7 +62,10 @@ def digest_files():
             for path in sorted(module.rglob('*')):
                 if path.is_file():
                     digest.update(str(path.relative_to(module)).encode())
-                    digest.update(content_digest(path).encode())
+                    # Preserve the original module-tree digest format (raw
+                    # SHA-256 bytes) so introducing the cache does not make
+                    # every existing baseline look like file drift.
+                    digest.update(bytes.fromhex(content_digest(path)))
             files[f'module/{module.name}'] = digest.hexdigest()
     return files
 
@@ -173,11 +176,7 @@ def main():
         # honestly: switching from the pre-0.1 broad scan to the bounded
         # allowlist would otherwise look like hundreds of removals.  Replace
         # such a baseline only while FreePBX is clean.
-        scope = {
-            'watch_tables': list(WATCH_TABLES),
-            'max_table_rows': MAX_TABLE_ROWS,
-            'file_digest_format': 2,
-        }
+        scope = {'watch_tables': list(WATCH_TABLES), 'max_table_rows': MAX_TABLE_ROWS}
         state = {'scope': scope, 'tables': database['tables'], 'files': digest_files()}
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:
