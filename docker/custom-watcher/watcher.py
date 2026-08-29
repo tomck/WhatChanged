@@ -1,22 +1,34 @@
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 
 import pymysql
 
-OUTPUT = Path('/var/lib/pendingchanges-watcher/status.json')
-BASELINE = Path('/var/lib/pendingchanges-watcher/baseline.json')
+STATE_DIR = Path(os.environ.get('STATE_DIR', '/var/lib/pendingchanges-watcher'))
+OUTPUT = STATE_DIR / 'status.json'
+BASELINE = STATE_DIR / 'baseline.json'
 ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
-# Module Admin records package inventory in these tables.  Module package
-# changes are reported from the read-only module-tree digests instead of being
-# presented as PBX configuration-record changes.
-EXCLUDED_TABLES = {
-    'admin', 'cdr', 'cel', 'cronmanager', 'kvstore', 'module_xml', 'modules',
-    'notifications', 'queue_log',
-}
+# This deliberately is an allowlist, not a "scan every table except..."
+# policy.  A production PBX can contain multi-gigabyte CDR/CEL or add-on
+# tables, and the watcher must never read them just because they exist.
+DEFAULT_WATCH_TABLES = (
+    'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
+    'did', 'extension_routes', 'extensions', 'featurecodes', 'globals',
+    'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests',
+    'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
+    'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
+    'timeconditions', 'timegroups', 'timegroups_details',
+    'trunk_dialpatterns', 'trunks', 'users', 'zap',
+)
+WATCH_TABLES = tuple(
+    table.strip() for table in os.environ.get('WATCH_TABLES', ','.join(DEFAULT_WATCH_TABLES)).split(',')
+    if re.fullmatch(r'[A-Za-z0-9_]+', table.strip())
+)
+MAX_TABLE_ROWS = int(os.environ.get('MAX_TABLE_ROWS', '5000'))
 EXCLUDED_MODULES = {'pendingchanges'}
 SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'key')
 NATURAL_KEY_FIELDS = ('extension', 'id', 'account', 'grpnum', 'device', 'user')
@@ -73,17 +85,29 @@ def database_snapshot():
         cursor.execute("SELECT value FROM admin WHERE variable = 'need_reload'")
         row = cursor.fetchone()
         cursor.execute("SHOW TABLES")
-        tables = [column(item, next(iter(item)) if isinstance(item, dict) else '', 0) for item in cursor.fetchall()]
-        tables = [table for table in tables if not table.startswith('pendingchanges_') and table not in EXCLUDED_TABLES]
+        tables = {column(item, next(iter(item)) if isinstance(item, dict) else '', 0) for item in cursor.fetchall()}
         snapshot = {}
-        for table in tables:
+        limitations = []
+        for table in WATCH_TABLES:
+            if table not in tables:
+                continue
+            cursor.execute(f"SELECT COUNT(*) AS row_count FROM `{table}`")
+            row_count = int(column(cursor.fetchone(), 'row_count', 0))
+            if row_count > MAX_TABLE_ROWS:
+                limitations.append({
+                    'table': table,
+                    'reason': 'row_limit',
+                    'rows': row_count,
+                    'limit': MAX_TABLE_ROWS,
+                })
+                continue
             cursor.execute(f"SELECT * FROM `{table}`")
             rows = [{key: clean(value) for key, value in item.items()} for item in cursor.fetchall()]
             keys = primary_key(cursor, table)
             snapshot[table] = {'keys': keys, 'rows': {row_key(item, keys): item for item in rows}}
     connection.close()
     value = column(row, 'value', 0) if row else None
-    return {'need_reload': bool(value == 'true'), 'tables': snapshot}
+    return {'need_reload': bool(value == 'true'), 'tables': snapshot, 'limitations': limitations}
 
 def redact(field, value):
     return '[redacted]' if any(marker in field.lower() for marker in SENSITIVE_FIELD_MARKERS) else value
@@ -113,7 +137,14 @@ def file_diff(before, after):
 def publish(payload):
     temporary = OUTPUT.with_suffix('.tmp')
     temporary.write_text(json.dumps(payload, sort_keys=True))
+    os.chmod(temporary, 0o644)
     temporary.replace(OUTPUT)
+
+def save_baseline(state):
+    BASELINE.write_text(json.dumps(state, sort_keys=True))
+    # Baselines include raw configuration values; only the watcher service
+    # account may read them. The separate status document is redacted.
+    os.chmod(BASELINE, 0o600)
 
 def main():
     previous_reload = None
@@ -122,9 +153,9 @@ def main():
         database = database_snapshot()
         state = {'tables': database['tables'], 'files': digest_files()}
         if not BASELINE.exists() and not database['need_reload']:
-            BASELINE.write_text(json.dumps(state, sort_keys=True))
+            save_baseline(state)
         elif previous_reload and not database['need_reload']:
-            BASELINE.write_text(json.dumps(state, sort_keys=True))
+            save_baseline(state)
         baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         database_drift = database_diff(baseline['tables'], state['tables']) if baseline else {}
         file_drift = file_diff(baseline['files'], state['files']) if baseline else {}
@@ -136,6 +167,7 @@ def main():
             'baseline_captured_at': int(BASELINE.stat().st_mtime) if baseline else None,
             'database_drift': database_drift,
             'file_drift': file_drift,
+            'coverage_limitations': database['limitations'],
             'message': 'Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else 'No pending reload.'),
         }

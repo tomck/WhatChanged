@@ -26,9 +26,11 @@ restart Asterisk, or modify FreePBX configuration.
   service account.
 - The module uses the same status document read-only. Keep it unavailable if
   its permissions cannot be made safe.
-- Baseline scope is reviewed for PBX size: configuration tables are expected
-  to be modest. Exclude call-detail/log/volatile tables; do not snapshot very
-  large operational tables until a bounded strategy is implemented.
+- The watcher uses an explicit FreePBX configuration-table allowlist and a
+  5,000-row cap per watched table. It never reads CDR, CEL, queue-log, or
+  unknown add-on tables. A table above the cap is displayed as a coverage
+  limitation, not as a pending change; review that notice before relying on
+  the report as complete.
 
 ## Installation and validation
 

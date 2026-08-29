@@ -28,6 +28,10 @@ $status = $tripwire->status();
   <?php else: ?>
     <p>Baseline captured: <?= htmlentities($status['captured_at']) ?></p>
     <?php if (isset($status['watcher_observed_at'])): ?><p>Watcher observed: <?= htmlentities($status['watcher_observed_at']) ?></p><?php endif; ?>
+    <?php if (!empty($status['coverage_limitations'])): ?>
+      <div class="alert alert-info">Some configured tables were not read because they exceeded the safety row limit. These are coverage limitations, not pending changes.</div>
+      <pre><?= htmlentities(json_encode($status['coverage_limitations'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+    <?php endif; ?>
     <h3>Database drift</h3>
     <pre><?= htmlentities(json_encode($status['database'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
     <h3>Generated Asterisk-file drift</h3>

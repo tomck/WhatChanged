@@ -52,8 +52,8 @@ that a file changed, but cannot explain a pending FreePBX change.
 Run within a FreePBX installation as the Asterisk user:
 
 ```sh
-php /var/lib/asterisk/bin/pendingchanges status
-php /var/lib/asterisk/bin/pendingchanges seed
+php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges status
+php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges seed
 ```
 
 `seed` refuses to replace the baseline while a reload is pending. Capture a
@@ -85,3 +85,8 @@ the current baseline/status document. Start by recording a clean baseline after
 a known Apply Changes, then compare the report with deliberate, documented
 admin changes. Keep the module read-only; it must never apply, reload, or
 repair PBX configuration.
+
+The watcher reads only an explicit FreePBX configuration-table allowlist. A
+watched table with more than 5,000 rows is not read into a baseline; the page
+reports this as a coverage limitation. CDR, CEL, queue-log, and unknown add-on
+tables are never eligible for watching.
