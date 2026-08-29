@@ -32,10 +32,23 @@ MAX_TABLE_ROWS = int(os.environ.get('MAX_TABLE_ROWS', '5000'))
 EXCLUDED_MODULES = {'pendingchanges'}
 SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'key')
 NATURAL_KEY_FIELDS = ('extension', 'id', 'account', 'grpnum', 'device', 'user')
+CONTENT_HASH_CACHE = {}
+
+def content_digest(path):
+    """Hash changed file content once; unchanged files are not re-read each poll."""
+    stat = path.stat()
+    cache_key = str(path)
+    fingerprint = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+    cached = CONTENT_HASH_CACHE.get(cache_key)
+    if cached and cached[0] == fingerprint:
+        return cached[1]
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    CONTENT_HASH_CACHE[cache_key] = (fingerprint, digest)
+    return digest
 
 def digest_files():
     files = {
-        f'generated/{p.name}': hashlib.sha256(p.read_bytes()).hexdigest()
+        f'generated/{p.name}': content_digest(p)
         for p in sorted(ROOT.glob('*.conf')) if p.is_file()
     }
     # Module Admin changes many files per package. A module-level tree digest
@@ -49,7 +62,7 @@ def digest_files():
             for path in sorted(module.rglob('*')):
                 if path.is_file():
                     digest.update(str(path.relative_to(module)).encode())
-                    digest.update(hashlib.sha256(path.read_bytes()).digest())
+                    digest.update(content_digest(path).encode())
             files[f'module/{module.name}'] = digest.hexdigest()
     return files
 
@@ -112,13 +125,18 @@ def database_snapshot():
 def redact(field, value):
     return '[redacted]' if any(marker in field.lower() for marker in SENSITIVE_FIELD_MARKERS) else value
 
+def redact_row(row):
+    return {field: redact(field, value) for field, value in row.items()}
+
 def database_diff(before, after):
     diff = {}
     for table in sorted(set(before).union(after)):
         old_rows = before.get(table, {'rows': {}})['rows']
         new_rows = after.get(table, {'rows': {}})['rows']
-        added = [new_rows[key] for key in new_rows.keys() - old_rows.keys()]
-        removed = [old_rows[key] for key in old_rows.keys() - new_rows.keys()]
+        # `status.json` is intentionally readable by the FreePBX web user;
+        # never publish raw credentials from the private baseline there.
+        added = [redact_row(new_rows[key]) for key in new_rows.keys() - old_rows.keys()]
+        removed = [redact_row(old_rows[key]) for key in old_rows.keys() - new_rows.keys()]
         updated = []
         for key in old_rows.keys() & new_rows.keys():
             changed = {field: {'before': redact(field, old_rows[key].get(field)), 'after': redact(field, new_rows[key].get(field))}
@@ -155,7 +173,11 @@ def main():
         # honestly: switching from the pre-0.1 broad scan to the bounded
         # allowlist would otherwise look like hundreds of removals.  Replace
         # such a baseline only while FreePBX is clean.
-        scope = {'watch_tables': list(WATCH_TABLES), 'max_table_rows': MAX_TABLE_ROWS}
+        scope = {
+            'watch_tables': list(WATCH_TABLES),
+            'max_table_rows': MAX_TABLE_ROWS,
+            'file_digest_format': 2,
+        }
         state = {'scope': scope, 'tables': database['tables'], 'files': digest_files()}
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:

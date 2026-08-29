@@ -13,7 +13,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['seed_baseline'])) {
     }
 }
 $status = $tripwire->status();
+
+function pendingchanges_h($value): string {
+    return htmlentities((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function pendingchanges_identity(string $table, array $row): string {
+    foreach (['extension', 'id', 'account', 'grpnum', 'device', 'user'] as $field) {
+        if (array_key_exists($field, $row) && $row[$field] !== '') {
+            $label = (string) $row[$field];
+            if (!empty($row['name'])) {
+                $label .= ' — '.(string) $row['name'];
+            } elseif (!empty($row['description'])) {
+                $label .= ' — '.(string) $row['description'];
+            }
+            return $label;
+        }
+    }
+    return $table.' record';
+}
+
+function pendingchanges_table_label(string $table): string {
+    return $table === 'users' ? 'Extensions' : ucwords(str_replace('_', ' ', $table));
+}
+
+function pendingchanges_render_record(string $kind, string $table, array $item): void {
+    $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
+    $row = $kind === 'updated' ? ['id' => $item['key'] ?? 'record'] : $item;
+    $details = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
+    $title = $kind === 'updated' ? (string) ($item['key'] ?? 'record') : pendingchanges_identity($table, $row);
+    ?>
+    <div class="pendingchanges-change pendingchanges-<?= pendingchanges_h($kind) ?>">
+      <span class="pendingchanges-symbol" aria-hidden="true"><?= $symbols[$kind] ?></span>
+      <strong><?= pendingchanges_h($title) ?></strong>
+      <span class="pendingchanges-kind"><?= pendingchanges_h(ucfirst($kind)) ?></span>
+      <details><summary>Evidence</summary><pre><?= pendingchanges_h(json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
+    </div>
+    <?php
+}
 ?>
+<style>
+  .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
+  .pendingchanges-card { border:1px solid #b9d6cd; border-radius:4px; margin:12px 0; overflow:hidden; }
+  .pendingchanges-card h3 { margin:0; padding:10px 14px; background:#e7f3ef; font-size:18px; }
+  .pendingchanges-change { display:grid; grid-template-columns:28px minmax(200px, 1fr) auto; gap:10px; align-items:center; padding:9px 14px; border-top:1px solid #e4ece9; }
+  .pendingchanges-change details { grid-column:2 / 4; }
+  .pendingchanges-symbol { font-size:22px; font-weight:bold; text-align:center; }
+  .pendingchanges-added .pendingchanges-symbol { color:#218739; }
+  .pendingchanges-removed .pendingchanges-symbol { color:#bb2d3b; }
+  .pendingchanges-updated .pendingchanges-symbol { color:#a86d00; }
+  .pendingchanges-kind { color:#65756f; font-size:12px; text-transform:uppercase; }
+  .pendingchanges-change pre { max-height:260px; margin:8px 0 0; }
+  .pendingchanges-file { padding:9px 14px; border-top:1px solid #e4ece9; }
+</style>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
   <p class="text-muted">Read-only comparison against the last applied baseline. The watcher records current configuration drift, not the page or user that set FreePBX’s global reload flag.</p>
@@ -30,14 +82,31 @@ $status = $tripwire->status();
     <?php if (isset($status['watcher_observed_at'])): ?><p>Watcher observed: <?= htmlentities($status['watcher_observed_at']) ?></p><?php endif; ?>
     <?php if (!empty($status['coverage_limitations'])): ?>
       <div class="alert alert-info">Some configured tables were not read because they exceeded the safety row limit. These are coverage limitations, not pending changes.</div>
-      <pre><?= htmlentities(json_encode($status['coverage_limitations'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+      <?php foreach ($status['coverage_limitations'] as $limitation): ?>
+        <div class="pendingchanges-file"><?= pendingchanges_h($limitation['table']) ?>: <?= (int) $limitation['rows'] ?> rows exceeds the <?= (int) $limitation['limit'] ?>-row cap.</div>
+      <?php endforeach; ?>
     <?php endif; ?>
-    <h3>Database drift</h3>
-    <pre><?= htmlentities(json_encode($status['database'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
-    <h3>Generated Asterisk-file drift</h3>
-    <pre><?= htmlentities(json_encode($status['generated_files'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
-    <h3>Module/file drift</h3>
-    <p class="text-muted">Module updates are reported separately from FreePBX configuration records. A module tree digest signals that files in that module changed.</p>
-    <pre><?= htmlentities(json_encode($status['module_files'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+    <?php if (empty($status['database']) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+      <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
+    <?php endif; ?>
+    <?php foreach ($status['database'] as $table => $changes): ?>
+      <?php if (empty($changes['added']) && empty($changes['removed']) && empty($changes['updated'])) continue; ?>
+      <section class="pendingchanges-card">
+        <h3><?= pendingchanges_h(pendingchanges_table_label($table)) ?></h3>
+        <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
+          <?php foreach ($changes[$kind] ?? [] as $item) pendingchanges_render_record($kind, $table, $item); ?>
+        <?php endforeach; ?>
+      </section>
+    <?php endforeach; ?>
+    <?php if (!empty($status['generated_files'])): ?>
+      <section class="pendingchanges-card"><h3>Generated Asterisk files</h3>
+        <?php foreach ($status['generated_files'] as $name => $change): ?><div class="pendingchanges-file">~ <?= pendingchanges_h($name) ?></div><?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+    <?php if (!empty($status['module_files'])): ?>
+      <section class="pendingchanges-card"><h3>Module/file drift</h3>
+        <?php foreach ($status['module_files'] as $name => $change): ?><div class="pendingchanges-file">~ <?= pendingchanges_h($name) ?></div><?php endforeach; ?>
+      </section>
+    <?php endif; ?>
   <?php endif; ?>
 </div>
