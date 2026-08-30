@@ -88,10 +88,27 @@ Run within a FreePBX installation as the Asterisk user:
 ```sh
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges status
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges seed
+php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges feedback
 ```
 
 `seed` refuses to replace the baseline while a reload is pending. Capture a
 new baseline only after Apply Changes has completed successfully.
+
+## Private-alpha feedback export
+
+The watcher never sends telemetry. For a private-alpha participant who chooses
+to share what the watcher recognized, export its local bounded event ledger:
+
+```sh
+sudo -u asterisk /var/lib/asterisk/bin/pendingchanges feedback > whatchanged-feedback.json
+```
+
+The export contains only timestamps, source categories, added/removed/updated
+counts, changed **field names**, and coverage-limit reasons. It intentionally
+excludes configuration values, extension/device identifiers, AstDB keys and
+values, filenames, module names, hostnames, credentials, and call data. The
+local ledger retains at most 500 distinct change-type events; participants
+choose whether to send the exported file to the project.
 
 ## Production-readiness checklist
 
@@ -137,7 +154,27 @@ sensitive. Outbound-route coverage includes the route record, its ordered
 position, dial patterns, and assigned trunk sequence. CDR, CEL, queue-log, and
 unknown add-on tables are never eligible for watching.
 
+## Coverage contract
+
+WhatChanged is a bounded drift reporter, not a universal preview or reversal
+engine. A clean report means no drift was found **within the explicitly listed
+coverage**, not that no FreePBX, Asterisk, or third-party state changed.
+
+The watcher separately records these named immediate-state AstDB families:
+`AMPUSER`, `DEVICE`, `CF`, `CFB`, `CFU`, `CFNA`, `DND`, `CW`, `FOLLOWME`, and
+`BLKVM`. Those values may already be effective when a form is submitted, so
+they are displayed as **Immediate Asterisk state**, never represented as a
+pending Apply Config record. Arbitrary AstDB keys, runtime state, custom
+module data, and any source not explicitly named by the report’s Coverage
+contract may not be detected.
+
 FreePBX rewrites `sip.flags` as display/order metadata whenever an endpoint
 form is saved. The watcher deliberately excludes that volatile column so an
 extension edit reports the meaningful endpoint settings instead of a long list
 of false updates.
+
+## License
+
+Pending Changes Tripwire is licensed under the GNU General Public License,
+version 3 or later (GPL-3.0-or-later). The module metadata and the distributable
+module archive carry the same license declaration.

@@ -73,10 +73,12 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             return [
                 'pending' => $watcher['need_reload'],
                 'database' => $watcher['database_drift'],
+                'astdb' => $watcher['astdb_drift'] ?? [],
                 'files' => $files,
                 'generated_files' => $this->fileScope($files, 'generated/'),
                 'module_files' => $this->fileScope($files, 'module/'),
                 'coverage_limitations' => $watcher['coverage_limitations'] ?? [],
+                'coverage' => $watcher['coverage'] ?? [],
                 'message' => $watcher['message'],
                 'baseline' => $watcher['baseline_available'],
                 'captured_at' => $watcher['baseline_captured_at'] ?? null,
@@ -99,7 +101,33 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             'generated_files' => $this->fileScope($files, 'generated/'),
             'module_files' => $this->fileScope($files, 'module/'),
             'coverage_limitations' => [],
+            'astdb' => [],
+            'coverage' => [
+                'database_tables' => self::WATCH_TABLES,
+                'astdb_families' => [],
+                'generated_files' => '/etc/asterisk/*.conf',
+                'module_tree_digests' => 'all modules except pendingchanges',
+            ],
             'baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false,
+        ];
+    }
+
+    public function feedback(): array {
+        $path = '/var/lib/asterisk/pendingchanges-watcher/feedback.jsonl';
+        if (!is_readable($path)) {
+            return ['schema' => 1, 'events' => [], 'message' => 'No local watcher feedback ledger is available.'];
+        }
+        $events = [];
+        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $event = json_decode($line, true);
+            if (is_array($event) && ($event['schema'] ?? null) === 1) {
+                $events[] = $event;
+            }
+        }
+        return [
+            'schema' => 1,
+            'privacy' => 'Types, counts, field names, coverage-limit reasons, and timestamps only. No configuration values, identifiers, hostnames, credentials, or call data.',
+            'events' => $events,
         ];
     }
 

@@ -1,5 +1,6 @@
 import importlib.util
 import hashlib
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -32,6 +33,7 @@ assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
 }
 assert watcher.redact_row({'keyword': 'RINGTIMER', 'value': '16'})['value'] == '16'
 assert watcher.redact_row({'keyword': 'API_TOKEN', 'value': 'private'})['value'] == '[redacted]'
+assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
 class KeyCursor:
     def execute(self, *_): pass
     def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
@@ -89,4 +91,55 @@ with tempfile.TemporaryDirectory() as temporary:
     watcher.MODULE_ROOT = root
     watcher.CONTENT_HASH_CACHE.clear()
     assert watcher.digest_files()['module/core'] == old.hexdigest()
+
+# Immediate FreePBX state is deliberately bounded to named AstDB families.
+# A recording preference is visible, while an unrelated application family is
+# absent and a sensitive value remains redacted in the public diff.
+with tempfile.TemporaryDirectory() as temporary:
+    astdb_path = Path(temporary) / 'astdb.sqlite3'
+    connection = sqlite3.connect(astdb_path)
+    connection.execute('CREATE TABLE astdb(key TEXT, value TEXT, PRIMARY KEY(key))')
+    connection.executemany('INSERT INTO astdb VALUES (?, ?)', [
+        ('/AMPUSER/100/recording', 'in'),
+        ('/AMPUSER/100/voicemail_pin', '1234'),
+        ('/unrelated/application', 'do-not-watch'),
+    ])
+    connection.commit()
+    connection.close()
+    watcher.ASTDB_PATH = astdb_path
+    watcher.ASTDB_FAMILIES = ('AMPUSER',)
+    watcher.ASTDB_MAX_ROWS = 10
+    astdb_before = watcher.astdb_snapshot()
+    assert set(astdb_before['rows']) == {'/AMPUSER/100/recording', '/AMPUSER/100/voicemail_pin'}
+    connection = sqlite3.connect(astdb_path)
+    connection.execute("UPDATE astdb SET value = 'out' WHERE key = '/AMPUSER/100/recording'")
+    connection.commit()
+    connection.close()
+    astdb_changes = watcher.astdb_diff(astdb_before, watcher.astdb_snapshot())['updated']
+    assert astdb_changes[0]['fields']['value'] == {'before': 'in', 'after': 'out'}
+    astdb_private = watcher.database_diff({'astdb': astdb_before}, {'astdb': watcher.astdb_snapshot()})
+    assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
+
+# Private-alpha feedback is a bounded local event ledger of types/counts only.
+# It must never contain an extension, an AstDB key/value, or a file/module name.
+with tempfile.TemporaryDirectory() as temporary:
+    watcher.FEEDBACK = Path(temporary) / 'feedback.jsonl'
+    watcher.FEEDBACK_MAX_EVENTS = 2
+    observation = {
+        'observed_at': 1, 'need_reload': True,
+        'database_drift': {'users': {'added': [{'extension': '7001'}], 'removed': [], 'updated': [
+            {'key': '7001', 'fields': {'name': {'before': 'Old', 'after': 'New'}}},
+        ]}},
+        'astdb_drift': {'added': [{'key': '/AMPUSER/7001/recording', 'value': 'in'}], 'removed': [], 'updated': []},
+        'file_drift': {'generated/voicemail.conf': {'before': 'a', 'after': 'b'}},
+        'coverage_limitations': [{'reason': 'row_limit', 'table': 'sip'}],
+    }
+    signature = watcher.append_feedback(observation, None)
+    assert watcher.append_feedback(observation, signature) == signature
+    events = watcher.FEEDBACK.read_text().splitlines()
+    assert len(events) == 1
+    assert '7001' not in events[0] and 'voicemail.conf' not in events[0] and 'recording' not in events[0]
+    event = __import__('json').loads(events[0])
+    assert event['database']['users']['added'] == 1 and event['database']['users']['updated_fields'] == ['name']
+    assert event['astdb']['added'] == 1 and event['files']['generated_count'] == 1
 print('watcher unit checks passed')

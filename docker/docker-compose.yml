@@ -56,6 +56,11 @@ services:
       DB_NAME: asterisk
       WATCH_PATH: /etc/asterisk
       MODULE_PATH: /var/www/html/admin/modules
+      # Immediate FreePBX state is scoped to these named AstDB families; this
+      # deliberately excludes arbitrary application and runtime keys.
+      ASTDB_PATH: /var/lib/asterisk/astdb.sqlite3
+      ASTDB_FAMILIES: "AMPUSER,DEVICE,CF,CFB,CFU,CFNA,DND,CW,FOLLOWME,BLKVM"
+      ASTDB_MAX_ROWS: "10000"
       # Safety boundary: only named configuration tables are eligible and no
       # table above this size is read into a baseline.
       # The final entry is a disposable smoke-only fixture, not a production
@@ -68,6 +73,7 @@ services:
       TABLE_ROW_LIMITS: "sip=20000"
     volumes:
       - asterisk-config:/etc/asterisk:ro
+      - asterisk-var:/var/lib/asterisk:ro
       - freepbx-web:/var/www/html:ro
       - watcher-data:/var/lib/pendingchanges-watcher
     healthcheck:

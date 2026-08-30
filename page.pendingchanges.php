@@ -105,6 +105,7 @@ function pendingchanges_render_extension(string $kind, array $item): void {
 $extensionChanges = pendingchanges_extension_changes($status['database']);
 $otherDatabaseChanges = $status['database'];
 unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
+$astdbChanges = $status['astdb'] ?? [];
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -134,13 +135,33 @@ unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
   <?php else: ?>
     <p>Baseline captured: <?= htmlentities($status['captured_at']) ?></p>
     <?php if (isset($status['watcher_observed_at'])): ?><p>Watcher observed: <?= htmlentities($status['watcher_observed_at']) ?></p><?php endif; ?>
+    <?php if (!empty($status['coverage'])): ?>
+      <details class="pendingchanges-card"><summary style="padding:10px 14px; font-weight:bold;">Coverage contract</summary>
+        <div class="pendingchanges-file">Only explicitly listed sources are observed. Anything not listed may not be detected.</div>
+        <pre><?= pendingchanges_h(json_encode($status['coverage'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre>
+      </details>
+    <?php endif; ?>
     <?php if (!empty($status['coverage_limitations'])): ?>
-      <div class="alert alert-info">Some configured tables were not read because they exceeded the safety row limit. These are coverage limitations, not pending changes.</div>
+      <div class="alert alert-info">Some configuration coverage is limited. These are coverage limitations, not pending changes.</div>
       <?php foreach ($status['coverage_limitations'] as $limitation): ?>
-        <div class="pendingchanges-file"><?= pendingchanges_h($limitation['table']) ?>: <?= (int) $limitation['rows'] ?> rows exceeds the <?= (int) $limitation['limit'] ?>-row cap.</div>
+        <div class="pendingchanges-file">
+          <?php if (($limitation['reason'] ?? '') === 'row_limit'): ?>
+            <?= pendingchanges_h($limitation['table'] ?? 'unknown table') ?>: <?= (int) ($limitation['rows'] ?? 0) ?> rows exceeds the <?= (int) ($limitation['limit'] ?? 0) ?>-row cap.
+          <?php elseif (($limitation['reason'] ?? '') === 'scope_expanded_while_pending'): ?>
+            Additional watcher coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', $limitation['tables'] ?? [])) ?>.
+          <?php elseif (($limitation['reason'] ?? '') === 'astdb_scope_expanded_while_pending'): ?>
+            Immediate Asterisk-state coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', $limitation['families'] ?? [])) ?>.
+          <?php elseif (($limitation['reason'] ?? '') === 'astdb_row_limit'): ?>
+            AstDB coverage was not read because <?= (int) ($limitation['rows'] ?? 0) ?> rows exceeds the <?= (int) ($limitation['limit'] ?? 0) ?>-row cap.
+          <?php elseif (($limitation['reason'] ?? '') === 'astdb_unavailable'): ?>
+            AstDB immediate-state coverage is unavailable on this host.
+          <?php else: ?>
+            <?= pendingchanges_h(json_encode($limitation, JSON_UNESCAPED_SLASHES)) ?>
+          <?php endif; ?>
+        </div>
       <?php endforeach; ?>
     <?php endif; ?>
-    <?php if (empty($status['database']) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+    <?php if (empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
     <?php endif; ?>
     <?php if (!empty($extensionChanges)): ?>
@@ -160,6 +181,15 @@ unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
         <?php endforeach; ?>
       </section>
     <?php endforeach; ?>
+    <?php if (!empty($astdbChanges['added']) || !empty($astdbChanges['removed']) || !empty($astdbChanges['updated'])): ?>
+      <section class="pendingchanges-card">
+        <h3>Immediate Asterisk state (AstDB)</h3>
+        <p class="pendingchanges-file">These named FreePBX state families may already be effective; they are not necessarily waiting for Apply Config.</p>
+        <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
+          <?php foreach ($astdbChanges[$kind] ?? [] as $item) pendingchanges_render_record($kind, 'AstDB', $item); ?>
+        <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
     <?php if (!empty($status['generated_files'])): ?>
       <section class="pendingchanges-card"><h3>Generated Asterisk files</h3>
         <?php foreach ($status['generated_files'] as $name => $change): ?><div class="pendingchanges-file">~ <?= pendingchanges_h($name) ?></div><?php endforeach; ?>
