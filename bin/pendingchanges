@@ -8,8 +8,10 @@ try {
         $result = $service->seedBaseline();
     } elseif ($command === 'status') {
         $result = $service->status();
+    } elseif ($command === 'feedback') {
+        $result = $service->feedback();
     } else {
-        throw new RuntimeException('Usage: pendingchanges [status|seed]');
+        throw new RuntimeException('Usage: pendingchanges [status|seed|feedback]');
     }
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL;
 } catch (Throwable $e) {

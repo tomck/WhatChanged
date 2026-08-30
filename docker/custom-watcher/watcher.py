@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import time
 from pathlib import Path
 
@@ -10,8 +11,20 @@ import pymysql
 STATE_DIR = Path(os.environ.get('STATE_DIR', '/var/lib/pendingchanges-watcher'))
 OUTPUT = STATE_DIR / 'status.json'
 BASELINE = STATE_DIR / 'baseline.json'
+FEEDBACK = STATE_DIR / 'feedback.jsonl'
+FEEDBACK_MAX_EVENTS = int(os.environ.get('FEEDBACK_MAX_EVENTS', '500'))
 ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
+ASTDB_PATH = Path(os.environ.get('ASTDB_PATH', '/var/lib/asterisk/astdb.sqlite3'))
+# AstDB contains both FreePBX configuration-adjacent state and arbitrary
+# application/runtime data.  Observe only named FreePBX families; never use a
+# broad `database show` scrape as evidence that *everything* changed.
+DEFAULT_ASTDB_FAMILIES = ('AMPUSER', 'DEVICE', 'CF', 'CFB', 'CFU', 'CFNA', 'DND', 'CW', 'FOLLOWME', 'BLKVM')
+ASTDB_FAMILIES = tuple(
+    family.strip() for family in os.environ.get('ASTDB_FAMILIES', ','.join(DEFAULT_ASTDB_FAMILIES)).split(',')
+    if re.fullmatch(r'[A-Za-z0-9_]+', family.strip())
+)
+ASTDB_MAX_ROWS = int(os.environ.get('ASTDB_MAX_ROWS', '10000'))
 # This deliberately is an allowlist, not a "scan every table except..."
 # policy.  A production PBX can contain multi-gigabyte CDR/CEL or add-on
 # tables, and the watcher must never read them just because they exist.
@@ -47,7 +60,7 @@ def table_row_limits():
 
 TABLE_ROW_LIMITS = table_row_limits()
 EXCLUDED_MODULES = {'pendingchanges'}
-SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'value_digest')
+SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'value_digest', 'pin')
 # Some older Core tables lack a declared primary key.  These identifiers are
 # stable logical keys used only as a fallback, so updates remain updates rather
 # than misleading remove/add pairs.
@@ -63,6 +76,45 @@ VOLATILE_COLUMNS = {'sip': {'flags'}}
 # the route change they made rather than a spurious companion update.
 NULL_EQUIVALENT_ZERO_COLUMNS = {'outbound_routes': {'time_group_id'}}
 CONTENT_HASH_CACHE = {}
+
+def change_counts(changes):
+    """Return a privacy-preserving change-type summary, never row values."""
+    result = {}
+    for source, change in sorted(changes.items()):
+        counts = {kind: len(change.get(kind, [])) for kind in ('added', 'removed', 'updated')}
+        fields = sorted({field for item in change.get('updated', []) for field in item.get('fields', {})})
+        if any(counts.values()):
+            result[source] = {**counts, 'updated_fields': fields}
+    return result
+
+def feedback_summary(observation):
+    generated = sum(1 for name in observation['file_drift'] if name.startswith('generated/'))
+    modules = sum(1 for name in observation['file_drift'] if name.startswith('module/'))
+    return {
+        'schema': 1,
+        'pending_reload': observation['need_reload'],
+        'database': change_counts(observation['database_drift']),
+        'astdb': {
+            kind: len(observation['astdb_drift'].get(kind, []))
+            for kind in ('added', 'removed', 'updated')
+        } if observation['astdb_drift'] else {},
+        'files': {'generated_count': generated, 'module_count': modules},
+        'coverage_limitations': sorted({item.get('reason', 'unknown') for item in observation['coverage_limitations']}),
+    }
+
+def append_feedback(observation, previous_signature):
+    """Append bounded local alpha telemetry; it is never transmitted by us."""
+    summary = feedback_summary(observation)
+    has_signal = bool(summary['database'] or summary['astdb'] or any(summary['files'].values()) or summary['coverage_limitations'])
+    signature = json.dumps(summary, sort_keys=True, separators=(',', ':'))
+    if not has_signal or signature == previous_signature:
+        return previous_signature
+    event = {'observed_at': observation['observed_at'], **summary}
+    existing = FEEDBACK.read_text().splitlines() if FEEDBACK.exists() else []
+    existing.append(json.dumps(event, sort_keys=True, separators=(',', ':')))
+    FEEDBACK.write_text('\n'.join(existing[-FEEDBACK_MAX_EVENTS:]) + '\n')
+    os.chmod(FEEDBACK, 0o600)
+    return signature
 
 def content_digest(path):
     """Hash changed file content once; unchanged files are not re-read each poll."""
@@ -181,6 +233,36 @@ def database_snapshot():
     value = column(row, 'value', 0) if row else None
     return {'need_reload': bool(value == 'true'), 'tables': snapshot, 'limitations': limitations}
 
+def astdb_snapshot():
+    """Capture bounded, named AstDB families without asking Asterisk to mutate state.
+
+    A number of FreePBX settings are written immediately on form submit rather
+    than on Apply Config.  AstDB is SQLite on current Asterisk, so opening it
+    read-only gives the watcher a separate, explicitly scoped evidence stream.
+    """
+    if not ASTDB_PATH.is_file():
+        return {'keys': ['key'], 'rows': {}, 'limitations': [{'reason': 'astdb_unavailable'}]}
+    connection = sqlite3.connect(f'{ASTDB_PATH.resolve().as_uri()}?mode=ro', uri=True)
+    try:
+        clauses = ' OR '.join('key LIKE ?' for _ in ASTDB_FAMILIES)
+        if not clauses:
+            return {'keys': ['key'], 'rows': {}, 'limitations': [{'reason': 'astdb_no_families'}]}
+        rows = connection.execute(
+            f'SELECT key, value FROM astdb WHERE {clauses} ORDER BY key LIMIT ?',
+            tuple(f'/{family}/%' for family in ASTDB_FAMILIES) + (ASTDB_MAX_ROWS + 1,),
+        ).fetchall()
+    except sqlite3.Error as error:
+        return {'keys': ['key'], 'rows': {}, 'limitations': [{'reason': 'astdb_read_error', 'detail': str(error)}]}
+    finally:
+        connection.close()
+    if len(rows) > ASTDB_MAX_ROWS:
+        return {
+            'keys': ['key'], 'rows': {},
+            'limitations': [{'reason': 'astdb_row_limit', 'rows': len(rows) - 1, 'limit': ASTDB_MAX_ROWS}],
+        }
+    values = {key: {'key': key, 'value': value} for key, value in rows}
+    return {'keys': ['key'], 'rows': values, 'limitations': []}
+
 def sensitive_field(field, row=None):
     name = field.lower()
     if any(marker in name for marker in SENSITIVE_FIELD_MARKERS):
@@ -199,7 +281,7 @@ def sensitive_field(field, row=None):
     # but do not disclose a password/token setting merely because its column
     # is generically named `value`.
     if name == 'value' and row:
-        setting = str(row.get('keyword', '')).lower()
+        setting = str(row.get('keyword', row.get('key', ''))).lower()
         return any(marker in setting for marker in SENSITIVE_FIELD_MARKERS) or setting == 'key' or setting.endswith('_key')
     return False
 
@@ -228,6 +310,9 @@ def database_diff(before, after):
         if added or removed or updated:
             diff[table] = {'added': added, 'removed': removed, 'updated': updated}
     return diff
+
+def astdb_diff(before, after):
+    return database_diff({'astdb': before}, {'astdb': after}).get('astdb', {})
 
 def file_diff(before, after):
     return {name: {'before': before.get(name), 'after': after.get(name)}
@@ -270,9 +355,11 @@ def save_baseline(state):
 
 def main():
     previous_reload = None
+    previous_feedback_signature = None
     while True:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         database = database_snapshot()
+        astdb = astdb_snapshot()
         # A baseline created under a different scope cannot be compared
         # honestly: switching from the pre-0.1 broad scan to the bounded
         # allowlist would otherwise look like hundreds of removals.  Replace
@@ -281,8 +368,10 @@ def main():
             'watch_tables': list(WATCH_TABLES),
             'max_table_rows': MAX_TABLE_ROWS,
             'table_row_limits': TABLE_ROW_LIMITS,
+            'astdb_families': list(ASTDB_FAMILIES),
+            'astdb_max_rows': ASTDB_MAX_ROWS,
         }
-        state = {'scope': scope, 'tables': database['tables'], 'files': digest_files()}
+        state = {'scope': scope, 'tables': database['tables'], 'astdb': astdb, 'files': digest_files()}
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:
             save_baseline(state)
@@ -296,29 +385,44 @@ def main():
             before_tables, after_tables, deferred_coverage = comparable_tables(
                 baseline['tables'], state['tables'], scope_changed, database['need_reload'])
             database_drift = database_diff(before_tables, after_tables)
+            astdb_deferred = scope_changed and database['need_reload'] and 'astdb' not in baseline
+            astdb_drift = {} if astdb_deferred else astdb_diff(baseline.get('astdb', {'keys': ['key'], 'rows': {}}), astdb)
         else:
             deferred_coverage = []
             database_drift = {}
+            astdb_deferred = False
+            astdb_drift = {}
         file_drift = file_diff(baseline['files'], state['files']) if baseline else {}
-        has_drift = bool(database_drift or file_drift)
-        limitations = list(database['limitations'])
+        has_drift = bool(database_drift or astdb_drift or file_drift)
+        limitations = list(database['limitations']) + list(astdb['limitations'])
         if deferred_coverage:
             limitations.append({
                 'reason': 'scope_expanded_while_pending',
                 'tables': deferred_coverage,
             })
+        if astdb_deferred:
+            limitations.append({'reason': 'astdb_scope_expanded_while_pending', 'families': list(ASTDB_FAMILIES)})
         observation = {
             'observed_at': int(time.time()),
             'need_reload': database['need_reload'],
             'baseline_available': baseline is not None,
             'baseline_captured_at': int(BASELINE.stat().st_mtime) if baseline else None,
             'database_drift': database_drift,
+            'astdb_drift': astdb_drift,
             'file_drift': file_drift,
             'coverage_limitations': limitations,
+            'coverage': {
+                'database_tables': list(WATCH_TABLES),
+                'astdb_families': list(ASTDB_FAMILIES),
+                'generated_files': '/etc/asterisk/*.conf',
+                'module_tree_digests': 'all modules except pendingchanges',
+            },
             'message': 'Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
-                       ('Configuration drift detected since the applied baseline.' if database['need_reload'] else 'No pending reload.'),
+                       ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
+                        ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.')),
         }
         publish(observation)
+        previous_feedback_signature = append_feedback(observation, previous_feedback_signature)
         previous_reload = database['need_reload']
         time.sleep(5)
 

@@ -10,6 +10,7 @@ Group=asterisk
 EnvironmentFile=/etc/what-changed-watcher.env
 Environment=WATCH_PATH=/etc/asterisk
 Environment=MODULE_PATH=/var/www/html/admin/modules
+Environment=ASTDB_PATH=/var/lib/asterisk/astdb.sqlite3
 Environment=STATE_DIR=/var/lib/asterisk/pendingchanges-watcher
 Environment=PYTHONPATH=/usr/local/lib/what-changed-watcher/vendor
 Environment=PYTHONUNBUFFERED=1
@@ -20,7 +21,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
 ReadWritePaths=/var/lib/asterisk/pendingchanges-watcher
-ReadOnlyPaths=/etc/asterisk /var/www/html/admin/modules
+ReadOnlyPaths=/etc/asterisk /var/lib/asterisk /var/www/html/admin/modules
 
 [Install]
 WantedBy=multi-user.target

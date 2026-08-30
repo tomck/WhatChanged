@@ -21,7 +21,7 @@ trap 'rm -rf "$temp_dir"' EXIT
 module_dir="$temp_dir/$version"
 mkdir -p "$module_dir"
 
-for path in module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
+for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
   cp -R "$root_dir/$path" "$module_dir/"
 done
 
