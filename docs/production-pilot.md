@@ -66,3 +66,8 @@ explicit AstDB families: `AMPUSER`, `DEVICE`, `CF`, `CFB`, `CFU`, `CFNA`,
 `DND`, `CW`, `FOLLOWME`, and `BLKVM`. Other AstDB data, arbitrary custom
 modules, and runtime state are out of scope unless deliberately added and
 smoke-tested.
+
+The database allowlist includes FreePBX's `modules` activation records, so an
+enable or disable operation is reported by module name. Module file digests
+remain a separate signal for installed code changes; cached module-signature
+verification metadata is not treated as pending configuration.

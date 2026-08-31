@@ -31,7 +31,7 @@ ASTDB_MAX_ROWS = int(os.environ.get('ASTDB_MAX_ROWS', '10000'))
 DEFAULT_WATCH_TABLES = (
     'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
     'did', 'extension_routes', 'extensions', 'featurecodes', 'freepbx_settings', 'globals',
-    'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests',
+    'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
     # FreePBX 17 uses the singular `outbound_route_sequence` table. Retain
     # the historic plural entry for compatibility with older/restored PBXs,
     # and cover the separate pattern and route-to-trunk records as well.
@@ -69,7 +69,14 @@ NATURAL_KEY_FIELDS = ('extension', 'id', 'trunkid', 'route_id', 'account', 'grpn
 # rewrites it when an endpoint form is saved even when the option's value is
 # unchanged, so including it turns a one-field edit into dozens of false
 # updates. It is deliberately excluded as volatile metadata.
-VOLATILE_COLUMNS = {'sip': {'flags'}}
+VOLATILE_COLUMNS = {
+    'sip': {'flags'},
+    # FreePBX caches signature-verification details in this blob.  Module
+    # enable/disable and version are the reviewable administrative state; the
+    # blob is bulky and may be refreshed without an administrator changing a
+    # module's activation state.
+    'modules': {'signature'},
+}
 # FreePBX represents an unset outbound-route time group as either SQL NULL or
 # 0, depending on whether the route was created or later edited.  Both mean
 # "no time group"; canonicalize that presentation detail so a reviewer sees
@@ -169,6 +176,10 @@ def primary_key(cursor, table):
         columns = {column(item, 'Field', 0) for item in cursor.fetchall()}
         if 'key' in columns:
             return ['key']
+    # The numeric row id is an implementation detail.  Using the stable module
+    # name makes an enable/disable change read as `parkpro`, not `120`.
+    if table == 'modules':
+        return ['modulename']
     cursor.execute(f"SHOW KEYS FROM `{table}` WHERE Key_name = 'PRIMARY'")
     fields = sorted(cursor.fetchall(), key=lambda item: column(item, 'Seq_in_index', 3))
     if fields:
