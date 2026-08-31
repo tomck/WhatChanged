@@ -1,8 +1,17 @@
 import importlib.util
 import hashlib
 import sqlite3
+import sys
 import tempfile
+import types
 from pathlib import Path
+
+# Database access is exercised in the container smoke suite. Keep these pure
+# unit checks runnable on a workstation that does not have PyMySQL installed.
+try:
+    import pymysql  # noqa: F401
+except ModuleNotFoundError:
+    sys.modules['pymysql'] = types.SimpleNamespace()
 
 spec = importlib.util.spec_from_file_location('watcher', Path(__file__).with_name('watcher.py'))
 watcher = importlib.util.module_from_spec(spec)
@@ -26,7 +35,7 @@ assert watcher.file_diff({'a.conf': 'old'}, {'a.conf': 'new', 'b.conf': 'added'}
 assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
 assert {
     'outbound_routes', 'outbound_route_patterns',
-    'outbound_route_sequence', 'outbound_route_trunks',
+    'outbound_route_sequence', 'outbound_route_trunks', 'modules',
 }.issubset(watcher.WATCH_TABLES)
 assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
     'key': 'pjsip_debug', 'api_key': '[redacted]'
@@ -39,7 +48,21 @@ class KeyCursor:
     def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
 assert watcher.primary_key(KeyCursor(), 'kvstore_Sipsettings') == ['key']
 assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
+assert watcher.VOLATILE_COLUMNS['modules'] == {'signature'}
+assert watcher.primary_key(KeyCursor(), 'modules') == ['modulename']
 assert watcher.NULL_EQUIVALENT_ZERO_COLUMNS['outbound_routes'] == {'time_group_id'}
+
+# Module activation changes must be named and readable while signature-cache
+# churn remains outside the pending configuration evidence.
+modules_before = {'modules': {'keys': ['modulename'], 'rows': {
+    'parkpro': {'id': 120, 'modulename': 'parkpro', 'version': '17.0.1.4', 'enabled': 1},
+}}}
+modules_after = {'modules': {'keys': ['modulename'], 'rows': {
+    'parkpro': {'id': 120, 'modulename': 'parkpro', 'version': '17.0.1.4', 'enabled': 0},
+}}}
+module_update = watcher.database_diff(modules_before, modules_after)['modules']['updated'][0]
+assert module_update['key'] == 'parkpro'
+assert module_update['fields'] == {'enabled': {'before': 1, 'after': 0}}
 class NaturalKeyCursor:
     def __init__(self): self.calls = 0
     def execute(self, *_): self.calls += 1

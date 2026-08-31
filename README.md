@@ -123,7 +123,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.4.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.5.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
@@ -153,6 +153,11 @@ the watcher-owned 0600 baseline and redacted from the web-readable report when
 sensitive. Outbound-route coverage includes the route record, its ordered
 position, dial patterns, and assigned trunk sequence. CDR, CEL, queue-log, and
 unknown add-on tables are never eligible for watching.
+
+FreePBX Module Admin activation state is covered through the `modules` table.
+Enabling or disabling a module is reported by its module name and version;
+cached signature-verification metadata is excluded from this configuration
+signal because it can be refreshed without changing module activation.
 
 ## Coverage contract
 

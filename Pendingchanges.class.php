@@ -9,7 +9,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     private const WATCH_TABLES = [
         'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
         'did', 'extension_routes', 'extensions', 'featurecodes', 'globals',
-        'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests',
+        'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
         'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
         'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
         'timeconditions', 'timegroups', 'timegroups_details',
@@ -155,7 +155,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             if ($count > self::MAX_TABLE_ROWS) {
                 continue;
             }
-            $rows = \FreePBX::Database()->query('SELECT * FROM '.$quoted)->fetchAll(\PDO::FETCH_ASSOC);
+            // The signature column is a bulky verification cache, not module
+            // activation state, and may contain non-UTF-8 blob data. Keep the
+            // framework fallback aligned with the external watcher.
+            $columns = $table === 'modules' ? '`id`, `modulename`, `version`, `enabled`' : '*';
+            $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
                 ksort($row);
