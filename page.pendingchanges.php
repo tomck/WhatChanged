@@ -19,6 +19,10 @@ function pendingchanges_h($value): string {
 }
 
 function pendingchanges_identity(string $table, array $row): string {
+    if ($table === 'userman_users_settings') {
+        $user = (string) ($row['username'] ?? ('User '.($row['uid'] ?? 'record')));
+        return $user.' — '.(string) ($row['module'] ?? 'setting').' / '.(string) ($row['key'] ?? 'value');
+    }
     foreach (['extension', 'id', 'account', 'grpnum', 'device', 'user'] as $field) {
         if (array_key_exists($field, $row) && $row[$field] !== '') {
             $label = (string) $row[$field];
@@ -34,6 +38,12 @@ function pendingchanges_identity(string $table, array $row): string {
 }
 
 function pendingchanges_table_label(string $table): string {
+    if ($table === 'userman_users') {
+        return 'User Management users';
+    }
+    if ($table === 'userman_users_settings') {
+        return 'User Management / UCP settings';
+    }
     return ucwords(str_replace('_', ' ', $table));
 }
 
@@ -78,7 +88,11 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
     $row = $kind === 'updated' ? ['id' => $item['key'] ?? 'record'] : $item;
     $details = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
-    $title = $kind === 'updated' ? (string) ($item['key'] ?? 'record') : pendingchanges_identity($table, $row);
+    if ($kind === 'updated' && $table === 'userman_users_settings') {
+        $title = pendingchanges_identity($table, $item['identity'] ?? []);
+    } else {
+        $title = $kind === 'updated' ? (string) ($item['key'] ?? 'record') : pendingchanges_identity($table, $row);
+    }
     ?>
     <div class="pendingchanges-change pendingchanges-<?= pendingchanges_h($kind) ?>">
       <span class="pendingchanges-symbol" aria-hidden="true"><?= $symbols[$kind] ?></span>

@@ -123,7 +123,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.5.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.6.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
@@ -158,6 +158,11 @@ FreePBX Module Admin activation state is covered through the `modules` table.
 Enabling or disabling a module is reported by its module name and version;
 cached signature-verification metadata is excluded from this configuration
 signal because it can be refreshed without changing module activation.
+
+User Management profile records and per-user module/UCP settings are covered
+through `userman_users` and `userman_users_settings`. UCP assignments are
+identified by username, module, and setting name; password/token/PIN-like
+values are redacted while their field-level change remains visible.
 
 ## Coverage contract
 

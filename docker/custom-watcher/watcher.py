@@ -40,7 +40,7 @@ DEFAULT_WATCH_TABLES = (
     'parkinglot', 'pjsip',
     'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip', 'sipsettings', 'kvstore_Sipsettings',
     'timeconditions', 'timegroups', 'timegroups_details',
-    'trunk_dialpatterns', 'trunks', 'users', 'zap',
+    'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
 )
 WATCH_TABLES = tuple(
     table.strip() for table in os.environ.get('WATCH_TABLES', ','.join(DEFAULT_WATCH_TABLES)).split(',')
@@ -82,6 +82,11 @@ VOLATILE_COLUMNS = {
 # "no time group"; canonicalize that presentation detail so a reviewer sees
 # the route change they made rather than a spurious companion update.
 NULL_EQUIVALENT_ZERO_COLUMNS = {'outbound_routes': {'time_group_id'}}
+NON_DIFF_COLUMNS = {'userman_users_settings': {'username'}}
+IDENTITY_CONTEXT_FIELDS = (
+    'username', 'uid', 'module', 'key', 'modulename', 'extension', 'id',
+    'account', 'grpnum', 'device', 'user', 'name', 'description',
+)
 CONTENT_HASH_CACHE = {}
 
 def change_counts(changes):
@@ -202,12 +207,24 @@ def snapshot_rows(cursor, table):
     # that structure so a review can explain *which* setting changed.  The
     # public status document is redacted below; only the 0600 baseline retains
     # raw values needed for an accurate comparison.
-    cursor.execute(f"SELECT * FROM `{table}`")
+    if table == 'userman_users_settings':
+        cursor.execute(
+            "SELECT s.*, u.username FROM `userman_users_settings` s "
+            "LEFT JOIN `userman_users` u ON u.id = s.uid"
+        )
+    else:
+        cursor.execute(f"SELECT * FROM `{table}`")
     volatile = VOLATILE_COLUMNS.get(table, set())
     normalized = []
     zero_columns = NULL_EQUIVALENT_ZERO_COLUMNS.get(table, set())
     for item in cursor.fetchall():
-        row = {key: clean(value) for key, value in item.items() if key not in volatile}
+        row = {}
+        for key, value in item.items():
+            if key in volatile:
+                continue
+            if table == 'userman_users_settings' and key == 'val' and isinstance(value, (bytes, bytearray)):
+                value = value.decode('utf-8', 'replace')
+            row[key] = clean(value)
         for key in zero_columns:
             if row.get(key) in (None, 0, '0'):
                 row[key] = None
@@ -291,8 +308,8 @@ def sensitive_field(field, row=None):
     # value.  Preserve ordinary setting values (so a breaker is reviewable),
     # but do not disclose a password/token setting merely because its column
     # is generically named `value`.
-    if name == 'value' and row:
-        setting = str(row.get('keyword', row.get('key', ''))).lower()
+    if name in ('value', 'val') and row:
+        setting = '{} {}'.format(row.get('module', ''), row.get('keyword', row.get('key', ''))).lower()
         return any(marker in setting for marker in SENSITIVE_FIELD_MARKERS) or setting == 'key' or setting.endswith('_key')
     return False
 
@@ -313,11 +330,20 @@ def database_diff(before, after):
         removed = [redact_row(old_rows[key]) for key in old_rows.keys() - new_rows.keys()]
         updated = []
         for key in old_rows.keys() & new_rows.keys():
+            ignored = NON_DIFF_COLUMNS.get(table, set())
             changed = {field: {'before': redact(field, old_rows[key].get(field), old_rows[key]), 'after': redact(field, new_rows[key].get(field), new_rows[key])}
                        for field in old_rows[key].keys() | new_rows[key].keys()
-                       if old_rows[key].get(field) != new_rows[key].get(field)}
+                       if field not in ignored and old_rows[key].get(field) != new_rows[key].get(field)}
             if changed:
-                updated.append({'key': key, 'fields': changed})
+                identity = {
+                    field: redact(field, new_rows[key].get(field), new_rows[key])
+                    for field in IDENTITY_CONTEXT_FIELDS
+                    if field in new_rows[key] and new_rows[key].get(field) not in (None, '')
+                }
+                entry = {'key': key, 'fields': changed}
+                if identity:
+                    entry['identity'] = identity
+                updated.append(entry)
         if added or removed or updated:
             diff[table] = {'added': added, 'removed': removed, 'updated': updated}
     return diff
@@ -432,9 +458,14 @@ def main():
                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
                         ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.')),
         }
+        # A smoke driver or administrator may Apply Config as soon as the
+        # published status shows pending drift. Record that transition in
+        # process memory before publishing, so a fast apply cannot clear the
+        # flag between the atomic status write and this assignment and leave
+        # the just-applied state compared against the old baseline.
+        previous_reload = database['need_reload']
         publish(observation)
         previous_feedback_signature = append_feedback(observation, previous_feedback_signature)
-        previous_reload = database['need_reload']
         time.sleep(5)
 
 if __name__ == '__main__':
