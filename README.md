@@ -123,7 +123,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.7.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.8.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
@@ -165,6 +165,10 @@ User Management profile records and per-user module/UCP settings are covered
 through `userman_users` and `userman_users_settings`. UCP assignments are
 identified by username, module, and setting name; password/token/PIN-like
 values are redacted while their field-level change remains visible.
+
+Fax Configuration settings are covered through the bounded `fax_details`
+table. This includes the concurrent fax channel limit as a readable before/after
+change; fax job/history tables are deliberately not observed.
 
 ## Coverage contract
 
