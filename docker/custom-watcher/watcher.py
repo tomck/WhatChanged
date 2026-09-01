@@ -135,7 +135,7 @@ def request_events(limit=2000):
         # Older sensor versions recorded every named GET. Filter their
         # background/read-only FreePBX commands as well so an existing log
         # cannot falsely identify the account whose browser was merely open.
-        if event['method'] == 'GET' and event['command'].lower() in READ_ONLY_COMMANDS:
+        if event['command'].lower() in READ_ONLY_COMMANDS:
             continue
         if event['username'] and http_status < 400:
             events.append(event)

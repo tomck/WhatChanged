@@ -44,6 +44,14 @@ if (count($lines ?: []) !== 1) {
     throw new RuntimeException('Read-only authping was recorded as a write');
 }
 
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_REQUEST = ['command' => 'navbarToogle'];
+whatchanged_audit_request();
+$lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+if (count($lines ?: []) !== 1) {
+    throw new RuntimeException('Navbar housekeeping was recorded as a write');
+}
+
 // Preserve coverage for the rare administrative GET paths that really are
 // state-changing.
 $_REQUEST = ['display' => 'modules', 'action' => 'disable'];
