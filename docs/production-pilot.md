@@ -5,6 +5,24 @@ suite has passed. It does not authorize a production configuration change.
 The watcher and module are observers: they must not call Apply Changes,
 restart Asterisk, or modify FreePBX configuration.
 
+## Authenticated request attribution
+
+The watcher installs request attribution by default. It is intentionally much
+smaller than a general web audit logger: successful authenticated FreePBX
+write requests append only the account name, timestamp, page/module/action,
+method, and status to a bounded local JSONL file. Form values, cookies,
+sessions, headers, and credentials are never recorded. There is no additional
+full database scan for attribution itself: the watcher uses a lightweight
+five-second reload/event probe and performs its bounded full observation on a
+transition, an event, or at most once every 30 seconds while idle.
+The separate module-file tree digest runs every five minutes and is pulled
+forward when authenticated request metadata indicates Module Admin activity.
+
+Treat **likely staged by** and **possible actors** as investigative leads, not
+proof. A shared or stolen account, concurrent admins, CLI, API, automation,
+direct database change, or custom PHP path can defeat exact attribution. The
+state diff remains the authoritative evidence of what the bounded watcher saw.
+
 ## Release preparation
 
 1. Start from a reviewed, tagged Git revision, run `scripts/package-module.sh`,

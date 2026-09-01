@@ -79,6 +79,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'module_files' => $this->fileScope($files, 'module/'),
                 'coverage_limitations' => $watcher['coverage_limitations'] ?? [],
                 'coverage' => $watcher['coverage'] ?? [],
+                'attribution' => $watcher['attribution'] ?? [],
                 'message' => $watcher['message'],
                 'baseline' => $watcher['baseline_available'],
                 'captured_at' => $watcher['baseline_captured_at'] ?? null,
@@ -108,6 +109,14 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'astdb_families' => [],
                 'generated_files' => '/etc/asterisk/*.conf',
                 'module_tree_digests' => 'all modules except pendingchanges',
+            ],
+            'attribution' => [
+                'enabled' => false,
+                'confidence' => $pending ? 'unavailable' : 'none',
+                'actors' => [],
+                'requests' => [],
+                'note' => 'Authenticated request correlation requires the external watcher sensor.',
+                'caveat' => 'Request correlation is evidence of who may have staged work, not proof that an account caused each reported state change.',
             ],
             'baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false,
         ];

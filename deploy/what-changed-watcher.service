@@ -12,6 +12,10 @@ Environment=WATCH_PATH=/etc/asterisk
 Environment=MODULE_PATH=/var/www/html/admin/modules
 Environment=ASTDB_PATH=/var/lib/asterisk/astdb.sqlite3
 Environment=STATE_DIR=/var/lib/asterisk/pendingchanges-watcher
+Environment=ATTRIBUTION_LOG=/var/lib/asterisk/pendingchanges-attribution/requests.jsonl
+Environment=PROBE_INTERVAL=5
+Environment=FULL_SCAN_INTERVAL=30
+Environment=MODULE_SCAN_INTERVAL=300
 Environment=PYTHONPATH=/usr/local/lib/what-changed-watcher/vendor
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /usr/local/lib/what-changed-watcher/watcher.py
@@ -21,7 +25,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
 ReadWritePaths=/var/lib/asterisk/pendingchanges-watcher
-ReadOnlyPaths=/etc/asterisk /var/lib/asterisk /var/www/html/admin/modules
+ReadOnlyPaths=/etc/asterisk /var/lib/asterisk /var/www/html/admin/modules /var/lib/asterisk/pendingchanges-attribution
 
 [Install]
 WantedBy=multi-user.target

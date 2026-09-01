@@ -95,10 +95,21 @@ required = {"users", "devices", "sip", "ringgroups", "queues_config"}
 actual = set(s["database_drift"])
 missing = sorted(required - actual)
 assert not missing, f"fixture drift missing tables: {missing}; observed: {sorted(actual)}"
+s_attribution = s.get("attribution", {})
+assert s_attribution.get("confidence") == "likely", s_attribution
+assert s_attribution.get("actors") == ["labadmin"], s_attribution
+areas = {event.get("display") or event.get("type") or event.get("module") or event.get("command") for event in s_attribution.get("requests", [])}
+assert {"extensions", "ringgroups", "queues"}.issubset(areas), areas
 '
 
-$docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
+"$root_dir/docker/apply-freepbx.sh"
 wait_clean
+$docker_cmd exec -T custom-watcher python -c '
+import json
+s = json.load(open("/var/lib/pendingchanges-watcher/status.json"))
+event = s.get("attribution", {}).get("last_apply") or {}
+assert event.get("username") == "labadmin" and event.get("operation") == "apply", event
+'
 
 # Deletion is the security-sensitive half of the lifecycle: a dismissed
 # employee can remove working endpoints/destinations and leave the next admin

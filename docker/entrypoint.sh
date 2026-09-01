@@ -71,11 +71,18 @@ fi
 cp -R /srv/pendingchanges/. /var/www/html/admin/modules/pendingchanges/
 if [ ! -e /var/lib/asterisk/bin/pendingchanges ]; then
   ln -sf /var/www/html/admin/modules/pendingchanges/bin/pendingchanges /var/lib/asterisk/bin/pendingchanges
-  # FreePBX's own diagnostic recommends this helper when a source-tree module
-  # is installed in a minimal lab image.  A registration failure must not take
-  # down the PBX: the module files remain available for inspection and retry.
-  fwconsole ma install pendingchanges || fwconsole ma enable pendingchanges || true
 fi
+# Re-register the synchronized source on every start. This keeps Module Admin's
+# recorded version aligned when a persisted web volume survives a module bump.
+# A registration failure must not take down the PBX: the source remains
+# available for inspection and a later archive-install validation.
+fwconsole ma install pendingchanges || fwconsole ma enable pendingchanges || true
+
+# The normal FreePBX Debian install exposes fwconsole in /usr/sbin. The
+# source-built disposable image keeps it only under /var/lib/asterisk/bin,
+# while Framework's authenticated Apply Config handler resolves /usr/sbin.
+# Mirror the packaged path so the lab can test the real web apply request.
+ln -sfn /var/lib/asterisk/bin/fwconsole /usr/sbin/fwconsole
 
 # FreePBX 17's Module Admin machine-ID helper assumes shell_exec always
 # returns a string. Debian 12's PHP 8.2 can return null instead, which turns
@@ -128,9 +135,12 @@ PY
 
 patch_findmefollow_php82_compatibility
 
-# Apache serves the local FreePBX UI as www-data.  Give it the minimal access
-# needed to read the generated FreePBX config and maintain PHP sessions.
-usermod -a -G asterisk www-data
+# Packaged FreePBX runs its Apache workers as asterisk so authenticated Apply
+# Config can regenerate files with the same ownership as the CLI. Mirror that
+# production contract in the lab rather than granting www-data broad write
+# access or sudo privileges.
+sed -i 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=asterisk/' /etc/apache2/envvars
+sed -i 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=asterisk/' /etc/apache2/envvars
 [ -f /etc/freepbx.conf ] && chgrp asterisk /etc/freepbx.conf && chmod 640 /etc/freepbx.conf
 [ -f /etc/amportal.conf ] && chgrp asterisk /etc/amportal.conf && chmod 640 /etc/amportal.conf
 chmod -R g+rwX /var/log/asterisk
@@ -140,8 +150,22 @@ chmod -R g+rwX /var/log/asterisk
 chmod -R g+rwX /var/spool/asterisk
 find /var/spool/asterisk -type d -exec chmod g+rws {} +
 mkdir -p /var/lib/php/sessions
-chown www-data:www-data /var/lib/php/sessions
+chown asterisk:asterisk /var/lib/php/sessions
 chmod 1733 /var/lib/php/sessions
+
+# Install the value-free authenticated-request sensor in Apache's PHP SAPI.
+# Its dedicated volume is writable by the web worker and readable by the
+# watcher without granting Apache access to the private baseline directory.
+install -d -m 0755 /usr/local/lib/what-changed-watcher
+install -m 0644 /srv/pendingchanges/deploy/what-changed-request-audit.php \
+  /usr/local/lib/what-changed-watcher/what-changed-request-audit.php
+install -m 0644 /srv/pendingchanges/deploy/99-what-changed-attribution.ini \
+  /etc/php/8.2/apache2/conf.d/99-what-changed-attribution.ini
+install -d -o asterisk -g asterisk -m 2770 /var/lib/asterisk/pendingchanges-attribution
+if [ -f /var/lib/asterisk/pendingchanges-attribution/requests.jsonl ]; then
+  chown asterisk:asterisk /var/lib/asterisk/pendingchanges-attribution/requests.jsonl
+  chmod 0640 /var/lib/asterisk/pendingchanges-attribution/requests.jsonl
+fi
 
 # FreePBX creates its AMI credentials during installation.  On a resumed lab,
 # the named Asterisk configuration volume can otherwise retain an older
@@ -198,8 +222,7 @@ fi
 # avoiding a recursive bootstrap failure in the disposable web UI.
 /var/lib/asterisk/bin/fwconsole chown >/dev/null
 # Apache can create freepbx.log before a CLI reload. Keep the shared log
-# directory group-inheriting and repair any existing log so both www-data and
-# asterisk can append through their common asterisk group.
+# directory group-inheriting and owned by the common asterisk account.
 find /var/log/asterisk -type d -exec chmod g+rws {} +
 # Create this before Apache can create it with a restrictive umask.  Both web
 # requests and CLI reloads log here; the CLI runs as asterisk.

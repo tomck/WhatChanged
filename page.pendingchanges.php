@@ -50,6 +50,18 @@ function pendingchanges_table_label(string $table): string {
     return ucwords(str_replace('_', ' ', $table));
 }
 
+function pendingchanges_request_target(array $event): string {
+    if (($event['operation'] ?? '') === 'apply') {
+        return 'Apply Config';
+    }
+    foreach (['display', 'type', 'module', 'action', 'command', 'handler', 'script'] as $field) {
+        if (!empty($event[$field])) {
+            return (string) $event[$field];
+        }
+    }
+    return 'FreePBX admin request';
+}
+
 function pendingchanges_fax_setting_label(string $key): string {
     $labels = [
         'concurrentfax' => 'Concurrent fax channels',
@@ -143,6 +155,7 @@ $extensionChanges = pendingchanges_extension_changes($status['database']);
 $otherDatabaseChanges = $status['database'];
 unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
 $astdbChanges = $status['astdb'] ?? [];
+$attribution = $status['attribution'] ?? [];
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -157,12 +170,48 @@ $astdbChanges = $status['astdb'] ?? [];
   .pendingchanges-kind { color:#65756f; font-size:12px; text-transform:uppercase; }
   .pendingchanges-change pre { max-height:260px; margin:8px 0 0; }
   .pendingchanges-file { padding:9px 14px; border-top:1px solid #e4ece9; }
+  .pendingchanges-attribution { padding:12px 14px; }
+  .pendingchanges-attribution table { margin:10px 0 0; }
+  .pendingchanges-confidence { font-weight:bold; text-transform:uppercase; font-size:12px; color:#5d6d67; }
 </style>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
-  <p class="text-muted">Read-only comparison against the last applied baseline. The watcher records current configuration drift, not the page or user that set FreePBX’s global reload flag.</p>
+  <p class="text-muted">Read-only comparison against the last applied baseline, with cautious correlation to authenticated administrator write requests.</p>
   <?= $notice ?>
   <div class="alert <?= $status['pending'] ? 'alert-warning' : 'alert-success' ?>"><?= htmlentities($status['message']) ?></div>
+  <?php if ($status['pending']): ?>
+    <section class="pendingchanges-card">
+      <h3>Administrator request evidence (inferred)</h3>
+      <div class="pendingchanges-attribution">
+        <div class="pendingchanges-confidence"><?= pendingchanges_h($attribution['confidence'] ?? 'unavailable') ?></div>
+        <?php if (!empty($attribution['actors'])): ?>
+          <p><strong><?= count($attribution['actors']) === 1 ? 'Likely staged by' : 'Possible actors' ?>:</strong>
+            <?= pendingchanges_h(implode(', ', $attribution['actors'])) ?></p>
+        <?php endif; ?>
+        <p><?= pendingchanges_h($attribution['note'] ?? 'No authenticated request evidence is available.') ?></p>
+        <p class="text-muted"><?= pendingchanges_h($attribution['caveat'] ?? 'This is correlation, not proof of causation.') ?></p>
+        <?php if (!empty($attribution['requests'])): ?>
+          <details><summary>Matching authenticated write requests (<?= (int) ($attribution['request_count'] ?? count($attribution['requests'])) ?>)</summary>
+            <table class="table table-striped table-condensed">
+              <thead><tr><th>Time</th><th>Administrator</th><th>Area</th><th>Method</th></tr></thead>
+              <tbody>
+              <?php foreach ($attribution['requests'] as $event): ?>
+                <tr>
+                  <td><?= pendingchanges_h(date('Y-m-d H:i:s T', (int) ($event['finished_at'] ?? 0))) ?></td>
+                  <td><?= pendingchanges_h($event['username'] ?? 'unknown') ?></td>
+                  <td><?= pendingchanges_h(pendingchanges_request_target($event)) ?></td>
+                  <td><?= pendingchanges_h($event['method'] ?? '') ?></td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </details>
+        <?php elseif (empty($attribution['enabled'])): ?>
+          <p class="text-muted">The authenticated-request sensor is not installed on this host.</p>
+        <?php endif; ?>
+      </div>
+    </section>
+  <?php endif; ?>
   <?php if (!$status['baseline']): ?>
     <?php if ($status['watcher']): ?>
       <p>The watcher will seed its baseline automatically when no reload is pending.</p>
