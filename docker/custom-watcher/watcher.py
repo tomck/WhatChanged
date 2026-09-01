@@ -30,7 +30,7 @@ ASTDB_MAX_ROWS = int(os.environ.get('ASTDB_MAX_ROWS', '10000'))
 # tables, and the watcher must never read them just because they exist.
 DEFAULT_WATCH_TABLES = (
     'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-    'did', 'extension_routes', 'extensions', 'featurecodes', 'freepbx_settings', 'globals',
+    'did', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'freepbx_settings', 'globals',
     'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
     # FreePBX 17 uses the singular `outbound_route_sequence` table. Retain
     # the historic plural entry for compatibility with older/restored PBXs,

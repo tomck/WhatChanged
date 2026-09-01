@@ -36,6 +36,7 @@ assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
 assert {
     'outbound_routes', 'outbound_route_patterns',
     'outbound_route_sequence', 'outbound_route_trunks', 'modules',
+    'fax_details',
     'userman_users', 'userman_users_settings',
 }.issubset(watcher.WATCH_TABLES)
 assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
@@ -52,6 +53,18 @@ assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
 assert watcher.VOLATILE_COLUMNS['modules'] == {'signature'}
 assert watcher.primary_key(KeyCursor(), 'modules') == ['modulename']
 assert watcher.NULL_EQUIVALENT_ZERO_COLUMNS['outbound_routes'] == {'time_group_id'}
+
+# Fax Configuration stores the concurrent receive limit as an ordinary,
+# readable key/value record rather than in the generic FreePBX settings table.
+fax_before = {'fax_details': {'keys': ['key'], 'rows': {
+    'concurrentfax': {'key': 'concurrentfax', 'value': '1'},
+}}}
+fax_after = {'fax_details': {'keys': ['key'], 'rows': {
+    'concurrentfax': {'key': 'concurrentfax', 'value': '5'},
+}}}
+fax_update = watcher.database_diff(fax_before, fax_after)['fax_details']['updated'][0]
+assert fax_update['key'] == 'concurrentfax'
+assert fax_update['fields'] == {'value': {'before': '1', 'after': '5'}}
 
 # Module activation changes must be named and readable while signature-cache
 # churn remains outside the pending configuration evidence.

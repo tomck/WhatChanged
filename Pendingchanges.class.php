@@ -8,7 +8,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     // turn this page into an unbounded scan of CDR/CEL/add-on tables.
     private const WATCH_TABLES = [
         'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-        'did', 'extension_routes', 'extensions', 'featurecodes', 'globals',
+        'did', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'globals',
         'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
         'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
         'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',

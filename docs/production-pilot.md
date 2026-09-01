@@ -78,3 +78,7 @@ User Management coverage includes the bounded `userman_users` and
 `userman_users_settings` tables. The latter is joined to the username for a
 readable local report; secret-looking setting values are redacted, and the
 private-alpha feedback export retains only source/count/field-name metadata.
+
+Fax Configuration coverage includes the bounded `fax_details` settings table,
+including the concurrent fax channel limit. Fax store/history records are not
+configuration evidence and remain outside the allowlist.

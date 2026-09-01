@@ -38,6 +38,9 @@ function pendingchanges_identity(string $table, array $row): string {
 }
 
 function pendingchanges_table_label(string $table): string {
+    if ($table === 'fax_details') {
+        return 'Fax Configuration';
+    }
     if ($table === 'userman_users') {
         return 'User Management users';
     }
@@ -45,6 +48,24 @@ function pendingchanges_table_label(string $table): string {
         return 'User Management / UCP settings';
     }
     return ucwords(str_replace('_', ' ', $table));
+}
+
+function pendingchanges_fax_setting_label(string $key): string {
+    $labels = [
+        'concurrentfax' => 'Concurrent fax channels',
+        'ecm' => 'Error correction mode',
+        'fax_rx_email' => 'Fax receive email',
+        'force_detection' => 'Always generate detection code',
+        'headerinfo' => 'Default fax header',
+        'legacy_mode' => 'Legacy mode',
+        'localstationid' => 'Local station identifier',
+        'maxpages' => 'Maximum pages',
+        'maxrate' => 'Maximum transfer rate',
+        'minrate' => 'Minimum transfer rate',
+        'papersize' => 'Default paper size',
+        'sender_address' => 'Outgoing email address',
+    ];
+    return $labels[$key] ?? ucwords(str_replace('_', ' ', $key));
 }
 
 function pendingchanges_record_id(string $kind, array $item): string {
@@ -90,6 +111,8 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     $details = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
     if ($kind === 'updated' && $table === 'userman_users_settings') {
         $title = pendingchanges_identity($table, $item['identity'] ?? []);
+    } elseif ($table === 'fax_details') {
+        $title = pendingchanges_fax_setting_label((string) ($item['key'] ?? 'record'));
     } else {
         $title = $kind === 'updated' ? (string) ($item['key'] ?? 'record') : pendingchanges_identity($table, $row);
     }
