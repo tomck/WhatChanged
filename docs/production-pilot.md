@@ -71,6 +71,8 @@ The database allowlist includes FreePBX's `modules` activation records, so an
 enable or disable operation is reported by module name. Module file digests
 remain a separate signal for installed code changes; cached module-signature
 verification metadata is not treated as pending configuration.
+The observer's own `pendingchanges` module record is excluded as module-owned
+state; other module enable/disable/version records remain covered.
 
 User Management coverage includes the bounded `userman_users` and
 `userman_users_settings` tables. The latter is joined to the username for a

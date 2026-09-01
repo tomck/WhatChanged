@@ -64,6 +64,19 @@ modules_after = {'modules': {'keys': ['modulename'], 'rows': {
 module_update = watcher.database_diff(modules_before, modules_after)['modules']['updated'][0]
 assert module_update['key'] == 'parkpro'
 assert module_update['fields'] == {'enabled': {'before': 1, 'after': 0}}
+legacy_modules = {'modules': {'keys': ['modulename'], 'rows': {
+    'parkpro': modules_before['modules']['rows']['parkpro'],
+    'pendingchanges': {'modulename': 'pendingchanges', 'version': '17.0.0.6', 'enabled': 1},
+}}}
+filtered_modules = watcher.without_module_owned_rows(legacy_modules)
+assert set(filtered_modules['modules']['rows']) == {'parkpro'}
+assert not watcher.database_diff(
+    filtered_modules,
+    watcher.without_module_owned_rows({'modules': {'keys': ['modulename'], 'rows': {
+        'parkpro': modules_before['modules']['rows']['parkpro'],
+        'pendingchanges': {'modulename': 'pendingchanges', 'version': '17.0.0.7', 'enabled': 1},
+    }}}),
+)
 
 # User Management UCP assignments live in a separate per-user settings table.
 # Preserve the useful assignment values, name the affected user/module/setting,

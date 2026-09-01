@@ -212,6 +212,8 @@ def snapshot_rows(cursor, table):
             "SELECT s.*, u.username FROM `userman_users_settings` s "
             "LEFT JOIN `userman_users` u ON u.id = s.uid"
         )
+    elif table == 'modules':
+        cursor.execute("SELECT * FROM `modules` WHERE `modulename` <> 'pendingchanges'")
     else:
         cursor.execute(f"SELECT * FROM `{table}`")
     volatile = VOLATILE_COLUMNS.get(table, set())
@@ -348,6 +350,23 @@ def database_diff(before, after):
             diff[table] = {'added': added, 'removed': removed, 'updated': updated}
     return diff
 
+def without_module_owned_rows(tables):
+    """Remove this observer's module row from old and new snapshot formats.
+
+    Older baselines may contain the row because module-table coverage predates
+    this exclusion. Filtering both sides prevents an observer upgrade from
+    appearing as an administrator's pending PBX change.
+    """
+    filtered = dict(tables)
+    modules = tables.get('modules')
+    if modules:
+        rows = {
+            key: row for key, row in modules.get('rows', {}).items()
+            if row.get('modulename') not in EXCLUDED_MODULES
+        }
+        filtered['modules'] = {**modules, 'rows': rows}
+    return filtered
+
 def astdb_diff(before, after):
     return database_diff({'astdb': before}, {'astdb': after}).get('astdb', {})
 
@@ -421,7 +440,10 @@ def main():
         if baseline:
             before_tables, after_tables, deferred_coverage = comparable_tables(
                 baseline['tables'], state['tables'], scope_changed, database['need_reload'])
-            database_drift = database_diff(before_tables, after_tables)
+            database_drift = database_diff(
+                without_module_owned_rows(before_tables),
+                without_module_owned_rows(after_tables),
+            )
             astdb_deferred = scope_changed and database['need_reload'] and 'astdb' not in baseline
             astdb_drift = {} if astdb_deferred else astdb_diff(baseline.get('astdb', {'keys': ['key'], 'rows': {}}), astdb)
         else:
@@ -450,6 +472,7 @@ def main():
             'coverage_limitations': limitations,
             'coverage': {
                 'database_tables': list(WATCH_TABLES),
+                'database_exclusions': ['modules.modulename=pendingchanges'],
                 'astdb_families': list(ASTDB_FAMILIES),
                 'generated_files': '/etc/asterisk/*.conf',
                 'module_tree_digests': 'all modules except pendingchanges',

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Verify that FreePBX Module Admin enable/disable state is attributable by
-# module name. The test uses this project's own disposable lab module and
-# restores it to enabled before finishing.
+# module name. The test uses a separate disposable fixture so the observer's
+# own module state can remain excluded without weakening this coverage test.
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -28,16 +28,23 @@ apply_clean() {
   wait_for "not s['need_reload'] and not s['database_drift'] and not s['astdb_drift'] and not s['file_drift']"
 }
 
-# Establish a known applied baseline with the fixture module enabled.
-compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma enable pendingchanges"' >/dev/null || true
+# Install a harmless Docker-only module fixture and establish a known applied
+# baseline with it enabled. Repeated runs preserve the same fixture identity.
+compose exec -T pbx sh -lc '
+  set -eu
+  rm -rf /var/www/html/admin/modules/whatchangedlab
+  cp -R /srv/pendingchanges/docker/fixtures/whatchangedlab /var/www/html/admin/modules/whatchangedlab
+  chown -R asterisk:asterisk /var/www/html/admin/modules/whatchangedlab
+  su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma install whatchangedlab"
+' >/dev/null
 apply_clean
 
-compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma disable pendingchanges"' >/dev/null
-wait_for "s['need_reload'] and any(u.get('key') == 'pendingchanges' and u.get('fields',{}).get('enabled') == {'before':1,'after':0} for u in s['database_drift'].get('modules',{}).get('updated',[]))"
+compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma disable whatchangedlab"' >/dev/null
+wait_for "s['need_reload'] and any(u.get('key') == 'whatchangedlab' and u.get('fields',{}).get('enabled') == {'before':1,'after':0} for u in s['database_drift'].get('modules',{}).get('updated',[]))"
 
 # Restore the fixture, Apply Config, and require a clean watcher baseline.
-compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma enable pendingchanges"' >/dev/null
+compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole ma enable whatchangedlab"' >/dev/null
 apply_clean
-compose exec -T database mariadb -uasterisk -plocal-freepbx asterisk -N -e "SELECT enabled FROM modules WHERE modulename='pendingchanges'" | grep -qx 1
+compose exec -T database mariadb -uasterisk -plocal-freepbx asterisk -N -e "SELECT enabled FROM modules WHERE modulename='whatchangedlab'" | grep -qx 1
 
 echo 'FreePBX module disable evidence lifecycle passed'

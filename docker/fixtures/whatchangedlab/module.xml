@@ -1,0 +1,12 @@
+<module>
+  <rawname>whatchangedlab</rawname>
+  <name>WhatChanged Docker Module Fixture</name>
+  <version>17.0.0.1</version>
+  <publisher>WhatChanged test fixture</publisher>
+  <license>GPLv3+</license>
+  <licenselink>https://www.gnu.org/licenses/gpl-3.0.html</licenselink>
+  <category>Reports</category>
+  <supported>
+    <version>17.0</version>
+  </supported>
+</module>
