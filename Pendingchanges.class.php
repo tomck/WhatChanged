@@ -13,7 +13,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
         'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
         'timeconditions', 'timegroups', 'timegroups_details',
-        'trunk_dialpatterns', 'trunks', 'users', 'zap',
+        'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
     ];
     private const MAX_TABLE_ROWS = 5000;
 
@@ -158,10 +158,19 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             // The signature column is a bulky verification cache, not module
             // activation state, and may contain non-UTF-8 blob data. Keep the
             // framework fallback aligned with the external watcher.
-            $columns = $table === 'modules' ? '`id`, `modulename`, `version`, `enabled`' : '*';
+            if ($table === 'modules') {
+                $columns = '`id`, `modulename`, `version`, `enabled`';
+            } elseif ($table === 'userman_users') {
+                $columns = '`id`, `auth`, `authid`, `username`, `description`, `default_extension`, `primary_group`, `fname`, `lname`, `displayname`, `title`, `company`, `department`, `language`, `timezone`, `dateformat`, `timeformat`, `datetimeformat`, `email`, `cell`, `work`, `home`, `fax`';
+            } else {
+                $columns = '*';
+            }
             $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
+                if ($table === 'userman_users_settings' && preg_match('/password|secret|token|pin|(^|_)key($|_)/i', (string) ($row['module'] ?? '').' '.(string) ($row['key'] ?? ''))) {
+                    $row['val'] = '[redacted sha256:'.hash('sha256', (string) ($row['val'] ?? '')).']';
+                }
                 ksort($row);
                 $normalized[] = $row;
             }

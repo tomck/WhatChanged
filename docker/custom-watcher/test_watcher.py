@@ -36,6 +36,7 @@ assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
 assert {
     'outbound_routes', 'outbound_route_patterns',
     'outbound_route_sequence', 'outbound_route_trunks', 'modules',
+    'userman_users', 'userman_users_settings',
 }.issubset(watcher.WATCH_TABLES)
 assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
     'key': 'pjsip_debug', 'api_key': '[redacted]'
@@ -63,6 +64,32 @@ modules_after = {'modules': {'keys': ['modulename'], 'rows': {
 module_update = watcher.database_diff(modules_before, modules_after)['modules']['updated'][0]
 assert module_update['key'] == 'parkpro'
 assert module_update['fields'] == {'enabled': {'before': 1, 'after': 0}}
+
+# User Management UCP assignments live in a separate per-user settings table.
+# Preserve the useful assignment values, name the affected user/module/setting,
+# and never let a joined username create duplicate drift by itself.
+userman_before = {'userman_users_settings': {'keys': ['uid', 'module', 'key'], 'rows': {
+    '8|ucp|Settings|assigned': {
+        'uid': 8, 'username': 'tom', 'module': 'ucp|Settings',
+        'key': 'assigned', 'val': '["7001"]', 'type': 'json-arr',
+    },
+}}}
+userman_after = {'userman_users_settings': {'keys': ['uid', 'module', 'key'], 'rows': {
+    '8|ucp|Settings|assigned': {
+        'uid': 8, 'username': 'tom', 'module': 'ucp|Settings',
+        'key': 'assigned', 'val': '["7001","41625"]', 'type': 'json-arr',
+    },
+}}}
+userman_update = watcher.database_diff(userman_before, userman_after)['userman_users_settings']['updated'][0]
+assert userman_update['identity'] == {
+    'username': 'tom', 'uid': 8, 'module': 'ucp|Settings', 'key': 'assigned',
+}
+assert userman_update['fields'] == {'val': {'before': '["7001"]', 'after': '["7001","41625"]'}}
+renamed_only = {'userman_users_settings': {'keys': ['uid', 'module', 'key'], 'rows': {
+    '8|ucp|Settings|assigned': {**userman_before['userman_users_settings']['rows']['8|ucp|Settings|assigned'], 'username': 'renamed'},
+}}}
+assert not watcher.database_diff(userman_before, renamed_only)
+assert watcher.redact_row({'module': 'example', 'key': 'api_token', 'val': 'private'})['val'] == '[redacted]'
 class NaturalKeyCursor:
     def __init__(self): self.calls = 0
     def execute(self, *_): self.calls += 1

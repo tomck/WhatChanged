@@ -65,7 +65,7 @@ services:
       # table above this size is read into a baseline.
       # The final entry is a disposable smoke-only fixture, not a production
       # table name.
-      WATCH_TABLES: "announcement,callbacks,conferences,customappsreg,devices,did,extension_routes,extensions,featurecodes,freepbx_settings,globals,iax,injected,ivr_details,ivr_entries,miscapps,miscdests,modules,outbound_route_patterns,outbound_route_sequence,outbound_route_sequences,outbound_route_trunks,outbound_routes,parkinglot,pjsip,queues_config,queues_details,queues_members,ringgroups,sip,sipsettings,kvstore_Sipsettings,timeconditions,timegroups,timegroups_details,trunk_dialpatterns,trunks,users,zap,pc_smoke_fixture"
+      WATCH_TABLES: "announcement,callbacks,conferences,customappsreg,devices,did,extension_routes,extensions,featurecodes,freepbx_settings,globals,iax,injected,ivr_details,ivr_entries,miscapps,miscdests,modules,outbound_route_patterns,outbound_route_sequence,outbound_route_sequences,outbound_route_trunks,outbound_routes,parkinglot,pjsip,queues_config,queues_details,queues_members,ringgroups,sip,sipsettings,kvstore_Sipsettings,timeconditions,timegroups,timegroups_details,trunk_dialpatterns,trunks,userman_users,userman_users_settings,users,zap,pc_smoke_fixture"
       MAX_TABLE_ROWS: "5000"
       # `sip` is endpoint configuration, not call history.  Preserve its
       # readable settings in the private baseline; public output redacts

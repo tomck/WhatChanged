@@ -71,3 +71,8 @@ The database allowlist includes FreePBX's `modules` activation records, so an
 enable or disable operation is reported by module name. Module file digests
 remain a separate signal for installed code changes; cached module-signature
 verification metadata is not treated as pending configuration.
+
+User Management coverage includes the bounded `userman_users` and
+`userman_users_settings` tables. The latter is joined to the username for a
+readable local report; secret-looking setting values are redacted, and the
+private-alpha feedback export retains only source/count/field-name metadata.
