@@ -39,6 +39,12 @@ rows/files. It asserts added, updated, removed, unknown-origin, generated-file,
 module-file, and module-owned exclusion behavior before restoring a clean
 watcher baseline.
 
+There is no official FreePBX Docker image. This lab remains a controlled test
+fixture, not a production PBX distribution. A future companion image should
+build Debian 12 through FreePBX's official installer, pin its source revision,
+publish provenance/SBOM information, and pass this same release gate before it
+is offered as an optional production-capable deployment.
+
 `smoke-freepbx-http.sh` separately exercises the authenticated extension, ring
 group, and queue fixture requests, confirms that FreePBX sets `need_reload`,
 then confirms a normal Apply Changes returns the watcher to a clean baseline.
@@ -77,6 +83,31 @@ separate, read-only Python service that automatically captures a configuration
 baseline while FreePBX is clean, then records added, removed, and updated
 database records while Apply Changes is pending. Password-, secret-, token-,
 and key-named fields are redacted. File drift remains a secondary signal only.
+
+The watcher installation also enables a default, low-cost authenticated-request
+sensor in Apache's PHP SAPI. For successful FreePBX admin write requests it
+appends only username, timestamp, page/module/action, request method, and HTTP
+status to a bounded local file. It never records form values, cookies, session
+IDs, headers, or credentials. The sensor itself never queries the database.
+The watcher correlates those breadcrumbs with a lightweight five-second
+reload/event probe; a bounded full state scan runs immediately on a transition
+or event and at most every 30 seconds while idle. The heavier module-file tree
+scan runs every five minutes or immediately after observed Module Admin work.
+It labels one account as
+**likely** or several accounts as **possible** actors. This is supporting
+evidence, not proof that an account
+caused each state change; CLI, API, automation, shared accounts, stolen
+sessions, and custom paths can remain unattributed.
+
+For a reviewed manual watcher installation, enable the same default sensor
+with:
+
+```sh
+sudo ./deploy/install-attribution-sensor.sh
+```
+
+That installer validates and reloads Apache only. It never invokes Apply
+Config, `fwconsole reload`, or an Asterisk reload.
 
 Open Source Tripwire is intentionally not part of this project: it can report
 that a file changed, but cannot explain a pending FreePBX change.
@@ -183,6 +214,14 @@ they are displayed as **Immediate Asterisk state**, never represented as a
 pending Apply Config record. Arbitrary AstDB keys, runtime state, custom
 module data, and any source not explicitly named by the report’s Coverage
 contract may not be detected.
+
+Administrator request attribution is a separate evidence layer over the same
+watcher. It identifies authenticated FreePBX web accounts that submitted write
+requests during the current pending interval and distinguishes the Framework
+`reload` command used by Apply Config. It cannot authoritatively bind a
+specific SQL/AstDB/file difference to a person, and changes made through CLI,
+API, automation, direct database access, or uninstrumented custom entry points
+may have no actor breadcrumb.
 
 FreePBX rewrites `sip.flags` as display/order metadata whenever an endpoint
 form is saved. The watcher deliberately excludes that volatile column so an

@@ -7,8 +7,14 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"
 
-docker compose -f "$COMPOSE_FILE" up -d --build
+# Profile-only services are not rebuilt by `up --build` unless their profile
+# is active. Build the smoke driver explicitly so the gate always tests the
+# checked-out assertions instead of a stale local image.
+docker compose -f "$COMPOSE_FILE" build pbx custom-watcher smoke
+docker compose -f "$COMPOSE_FILE" up -d
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python /usr/local/bin/test_watcher.py
+docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc \
+  'php /srv/pendingchanges/docker/test-request-audit.php /tmp/what-changed-request-audit-test.jsonl && rm -f /tmp/what-changed-request-audit-test.jsonl'
 docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-freepbx-http.sh"
 "$ROOT_DIR/docker/smoke-breakers.sh"

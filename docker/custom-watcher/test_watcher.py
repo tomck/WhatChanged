@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import types
+import json
 from pathlib import Path
 
 # Database access is exercised in the container smoke suite. Keep these pure
@@ -53,6 +54,63 @@ assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
 assert watcher.VOLATILE_COLUMNS['modules'] == {'signature'}
 assert watcher.primary_key(KeyCursor(), 'modules') == ['modulename']
 assert watcher.NULL_EQUIVALENT_ZERO_COLUMNS['outbound_routes'] == {'time_group_id'}
+
+# Authenticated request breadcrumbs contain only safe metadata. Correlation is
+# deliberately cautious: one account is likely, several are possible, and a
+# CLI/API mutation with no web breadcrumb remains unavailable.
+request_fixture = [
+    {
+        'event_id': 'one', 'finished_at': 101.0, 'username': 'tom',
+        'operation': 'stage', 'method': 'POST', 'script': 'config.php',
+        'display': 'extensions', 'module': '', 'type': 'extensions', 'action': 'edit',
+        'command': '', 'handler': '', 'http_status': 200,
+    },
+]
+attribution = watcher.request_attribution(request_fixture, 100, True)
+assert attribution['confidence'] == 'likely' and attribution['actors'] == ['tom']
+assert attribution['requests'][0]['display'] == 'extensions'
+possible = watcher.request_attribution(request_fixture + [
+    {**request_fixture[0], 'event_id': 'two', 'finished_at': 102.0, 'username': 'alice'},
+], 100, True)
+assert possible['confidence'] == 'possible' and possible['actors'] == ['alice', 'tom']
+assert watcher.request_attribution([], 100, True)['confidence'] == 'unavailable'
+assert watcher.request_attribution(request_fixture, 100, False)['confidence'] == 'none'
+assert not watcher.module_request_since(request_fixture, 100)
+assert watcher.module_request_since([
+    {**request_fixture[0], 'finished_at': 103.0, 'display': 'modules'},
+], 102)
+with tempfile.TemporaryDirectory() as temporary:
+    watcher.ATTRIBUTION_LOG = Path(temporary) / 'requests.jsonl'
+    watcher.ATTRIBUTION_LOG.write_text('\n'.join([
+        '{malformed',
+        json.dumps({'schema': 1, **request_fixture[0]}),
+        json.dumps({'schema': 1, **request_fixture[0], 'event_id': 'failed', 'http_status': 500}),
+        json.dumps({
+            'schema': 1, **request_fixture[0], 'event_id': 'background',
+            'method': 'GET', 'command': 'authping',
+        }),
+    ]) + '\n')
+    parsed = watcher.request_events()
+    assert len(parsed) == 1 and parsed[0]['event_id'] == 'one'
+
+# A cheap reload/event probe avoids repeatedly walking every table and module
+# while still forcing a full observation for meaningful transitions.
+watcher.FULL_SCAN_INTERVAL = 30
+assert watcher.observation_due(None, 0, None, False, 0, 0)
+assert watcher.observation_due(100, 105, False, True, 0, 0)
+assert watcher.observation_due(100, 105, False, False, 1, 2)
+assert watcher.observation_due(100, 130, False, False, 1, 1)
+assert not watcher.observation_due(100, 129.9, False, False, 1, 1)
+
+with tempfile.TemporaryDirectory() as temporary:
+    content = (b'what-changed-streaming-digest' * 100000)
+    large_file = Path(temporary) / 'large-module-file.bin'
+    large_file.write_bytes(content)
+    assert watcher.content_digest(large_file) == hashlib.sha256(content).hexdigest()
+    original_root = watcher.ROOT
+    watcher.ROOT = Path(temporary)
+    assert watcher.digest_files({'module/core': 'cached-tree'}) == {'module/core': 'cached-tree'}
+    watcher.ROOT = original_root
 
 # Fax Configuration stores the concurrent receive limit as an ordinary,
 # readable key/value record rather than in the generic FreePBX settings table.

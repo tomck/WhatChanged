@@ -18,7 +18,10 @@ def observation():
     return json.loads(STATUS.read_text())
 
 
-def wait_for(description, predicate, timeout=35):
+# The production watcher begins an idle full scan within 30 seconds. Allow
+# additional time for the bounded module-tree walk itself; the prior 35-second
+# assertion could expire one or two seconds before a valid observation landed.
+def wait_for(description, predicate, timeout=60):
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:

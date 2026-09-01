@@ -13,6 +13,13 @@ OUTPUT = STATE_DIR / 'status.json'
 BASELINE = STATE_DIR / 'baseline.json'
 FEEDBACK = STATE_DIR / 'feedback.jsonl'
 FEEDBACK_MAX_EVENTS = int(os.environ.get('FEEDBACK_MAX_EVENTS', '500'))
+ATTRIBUTION_LOG = Path(os.environ.get(
+    'ATTRIBUTION_LOG',
+    '/var/lib/asterisk/pendingchanges-attribution/requests.jsonl',
+))
+PROBE_INTERVAL = float(os.environ.get('PROBE_INTERVAL', '5'))
+FULL_SCAN_INTERVAL = float(os.environ.get('FULL_SCAN_INTERVAL', '30'))
+MODULE_SCAN_INTERVAL = float(os.environ.get('MODULE_SCAN_INTERVAL', '300'))
 ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
 ASTDB_PATH = Path(os.environ.get('ASTDB_PATH', '/var/lib/asterisk/astdb.sqlite3'))
@@ -88,6 +95,97 @@ IDENTITY_CONTEXT_FIELDS = (
     'account', 'grpnum', 'device', 'user', 'name', 'description',
 )
 CONTENT_HASH_CACHE = {}
+READ_ONLY_COMMANDS = {
+    'authping', 'scheduler', 'navbartoogle', 'check-and-set-language',
+}
+
+ATTRIBUTION_TEXT_FIELDS = (
+    'event_id', 'username', 'operation', 'method', 'script', 'display',
+    'module', 'type', 'action', 'command', 'handler',
+)
+
+def request_events(limit=2000):
+    """Read bounded, value-free request breadcrumbs produced by Apache PHP."""
+    if not ATTRIBUTION_LOG.is_file():
+        return []
+    try:
+        lines = ATTRIBUTION_LOG.read_text(errors='replace').splitlines()[-limit:]
+    except OSError:
+        return []
+    events = []
+    for line in lines:
+        try:
+            raw = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(raw, dict) or raw.get('schema') != 1:
+            continue
+        if raw.get('operation') not in ('stage', 'apply'):
+            continue
+        try:
+            finished_at = float(raw['finished_at'])
+            http_status = int(raw.get('http_status', 200))
+        except (KeyError, TypeError, ValueError):
+            continue
+        event = {
+            field: str(raw.get(field, ''))[:128]
+            for field in ATTRIBUTION_TEXT_FIELDS
+        }
+        event.update({'finished_at': finished_at, 'http_status': http_status})
+        # Older sensor versions recorded every named GET. Filter their
+        # background/read-only FreePBX commands as well so an existing log
+        # cannot falsely identify the account whose browser was merely open.
+        if event['method'] == 'GET' and event['command'].lower() in READ_ONLY_COMMANDS:
+            continue
+        if event['username'] and http_status < 400:
+            events.append(event)
+    return sorted(events, key=lambda item: item['finished_at'])
+
+def request_attribution(events, baseline_captured_at, pending_reload, sensor_available=True):
+    """Correlate admin requests with a pending interval without claiming proof.
+
+    FreePBX does not bind a database/AstDB mutation to an authenticated user.
+    These are therefore candidate actors observed during the same interval,
+    never an authoritative change audit trail.
+    """
+    since = float(baseline_captured_at or 0) - 2.0
+    staged = [event for event in events if event['operation'] == 'stage' and event['finished_at'] >= since]
+    applied = [event for event in events if event['operation'] == 'apply']
+    actors = sorted({event['username'] for event in staged})
+    if not pending_reload:
+        confidence = 'none'
+        note = 'No pending reload interval is available for actor correlation.'
+        staged = []
+        actors = []
+    elif len(actors) == 1:
+        confidence = 'likely'
+        note = 'One authenticated administrator account made matching write requests during this pending interval.'
+    elif len(actors) > 1:
+        confidence = 'possible'
+        note = 'Multiple authenticated administrator accounts made write requests during this pending interval.'
+    else:
+        confidence = 'unavailable'
+        note = 'No matching authenticated web request was observed; the change may have come from CLI, API, automation, or an uncovered path.'
+    return {
+        'enabled': bool(sensor_available),
+        'confidence': confidence,
+        'actors': actors,
+        'request_count': len(staged),
+        'requests': staged[-50:],
+        'last_apply': applied[-1] if applied else None,
+        'note': note,
+        'caveat': 'Request correlation is evidence of who may have staged work, not proof that an account caused each reported state change.',
+    }
+
+def module_request_since(events, since):
+    """Return true when request metadata points to Module Admin activity."""
+    fields = ('display', 'module', 'type', 'command', 'handler')
+    return any(
+        event['finished_at'] > since and any(
+            'module' in event.get(field, '').lower() for field in fields
+        )
+        for event in events
+    )
 
 def change_counts(changes):
     """Return a privacy-preserving change-type summary, never row values."""
@@ -136,15 +234,22 @@ def content_digest(path):
     cached = CONTENT_HASH_CACHE.get(cache_key)
     if cached and cached[0] == fingerprint:
         return cached[1]
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest_builder = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest_builder.update(chunk)
+    digest = digest_builder.hexdigest()
     CONTENT_HASH_CACHE[cache_key] = (fingerprint, digest)
     return digest
 
-def digest_files():
+def digest_files(cached_module_files=None):
     files = {
         f'generated/{p.name}': content_digest(p)
         for p in sorted(ROOT.glob('*.conf')) if p.is_file()
     }
+    if cached_module_files is not None:
+        files.update(cached_module_files)
+        return files
     # Module Admin changes many files per package. A module-level tree digest
     # keeps the status document compact while still detecting any altered,
     # added, or removed file inside a module. Module-owned files are excluded.
@@ -262,6 +367,39 @@ def database_snapshot():
     connection.close()
     value = column(row, 'value', 0) if row else None
     return {'need_reload': bool(value == 'true'), 'tables': snapshot, 'limitations': limitations}
+
+def reload_requested():
+    """Read only FreePBX's lightweight global reload flag."""
+    connection = pymysql.connect(
+        host=os.environ['DB_HOST'], user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT value FROM admin WHERE variable = 'need_reload'")
+            row = cursor.fetchone()
+    finally:
+        connection.close()
+    value = column(row, 'value', 0) if row else None
+    return value == 'true'
+
+def attribution_log_mtime():
+    try:
+        return ATTRIBUTION_LOG.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+def observation_due(last_observation, now, previous_reload, current_reload,
+                    previous_request_mtime, current_request_mtime):
+    """Decide whether the expensive bounded state snapshot is needed."""
+    if last_observation is None:
+        return True
+    if current_reload != previous_reload:
+        return True
+    if current_request_mtime != previous_request_mtime:
+        return True
+    return now - last_observation >= FULL_SCAN_INTERVAL
 
 def astdb_snapshot():
     """Capture bounded, named AstDB families without asking Asterisk to mutate state.
@@ -412,10 +550,26 @@ def save_baseline(state):
 def main():
     previous_reload = None
     previous_feedback_signature = None
+    last_observation = None
+    previous_request_mtime = attribution_log_mtime()
+    cached_module_files = None
+    last_module_scan = None
+    last_module_scan_wall = 0.0
     while True:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        now = time.monotonic()
+        current_request_mtime = attribution_log_mtime()
+        if last_observation is not None:
+            current_reload = reload_requested()
+            if not observation_due(
+                last_observation, now, previous_reload, current_reload,
+                previous_request_mtime, current_request_mtime,
+            ):
+                time.sleep(PROBE_INTERVAL)
+                continue
         database = database_snapshot()
         astdb = astdb_snapshot()
+        events = request_events()
         # A baseline created under a different scope cannot be compared
         # honestly: switching from the pre-0.1 broad scan to the bounded
         # allowlist would otherwise look like hundreds of removals.  Replace
@@ -427,7 +581,20 @@ def main():
             'astdb_families': list(ASTDB_FAMILIES),
             'astdb_max_rows': ASTDB_MAX_ROWS,
         }
-        state = {'scope': scope, 'tables': database['tables'], 'astdb': astdb, 'files': digest_files()}
+        scan_modules = (
+            cached_module_files is None or last_module_scan is None or
+            now - last_module_scan >= MODULE_SCAN_INTERVAL or
+            module_request_since(events, last_module_scan_wall)
+        )
+        files = digest_files(None if scan_modules else cached_module_files)
+        if scan_modules:
+            cached_module_files = {
+                name: digest for name, digest in files.items()
+                if name.startswith('module/')
+            }
+            last_module_scan = time.monotonic()
+            last_module_scan_wall = time.time()
+        state = {'scope': scope, 'tables': database['tables'], 'astdb': astdb, 'files': files}
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if not BASELINE.exists() and not database['need_reload']:
             save_baseline(state)
@@ -461,11 +628,18 @@ def main():
             })
         if astdb_deferred:
             limitations.append({'reason': 'astdb_scope_expanded_while_pending', 'families': list(ASTDB_FAMILIES)})
+        baseline_captured_at = int(BASELINE.stat().st_mtime) if baseline else None
+        attribution = request_attribution(
+            events,
+            baseline_captured_at,
+            database['need_reload'],
+            sensor_available=ATTRIBUTION_LOG.parent.is_dir(),
+        )
         observation = {
             'observed_at': int(time.time()),
             'need_reload': database['need_reload'],
             'baseline_available': baseline is not None,
-            'baseline_captured_at': int(BASELINE.stat().st_mtime) if baseline else None,
+            'baseline_captured_at': baseline_captured_at,
             'database_drift': database_drift,
             'astdb_drift': astdb_drift,
             'file_drift': file_drift,
@@ -476,7 +650,9 @@ def main():
                 'astdb_families': list(ASTDB_FAMILIES),
                 'generated_files': '/etc/asterisk/*.conf',
                 'module_tree_digests': 'all modules except pendingchanges',
+                'request_attribution': 'authenticated FreePBX web write metadata; inferred correlation only',
             },
+            'attribution': attribution,
             'message': 'Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
                         ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.')),
@@ -487,9 +663,13 @@ def main():
         # flag between the atomic status write and this assignment and leave
         # the just-applied state compared against the old baseline.
         previous_reload = database['need_reload']
+        last_observation = time.monotonic()
+        # Keep the pre-snapshot mtime. If a request arrives during a long
+        # snapshot, the next lightweight probe notices it and scans again.
+        previous_request_mtime = current_request_mtime
         publish(observation)
         previous_feedback_signature = append_feedback(observation, previous_feedback_signature)
-        time.sleep(5)
+        time.sleep(PROBE_INTERVAL)
 
 if __name__ == '__main__':
     main()

@@ -38,6 +38,7 @@ services:
       - asterisk-config:/etc/asterisk
       - asterisk-var:/var/lib/asterisk
       - watcher-data:/var/lib/asterisk/pendingchanges-watcher:ro
+      - attribution-data:/var/lib/asterisk/pendingchanges-attribution
     healthcheck:
       test: ["CMD-SHELL", "test -f /etc/freepbx.conf && php /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
       interval: 10s
@@ -71,11 +72,21 @@ services:
       # readable settings in the private baseline; public output redacts
       # sensitive fields.
       TABLE_ROW_LIMITS: "sip=20000"
+      ATTRIBUTION_LOG: /var/lib/asterisk/pendingchanges-attribution/requests.jsonl
+      # Poll only the tiny reload flag and attribution-file timestamp every
+      # five seconds. The bounded full snapshot runs on a transition/event or
+      # at most every 30 seconds while the PBX is otherwise idle.
+      PROBE_INTERVAL: "5"
+      FULL_SCAN_INTERVAL: "30"
+      # Keep the lab gate reasonably short. Production defaults to five
+      # minutes, with authenticated Module Admin activity triggering it early.
+      MODULE_SCAN_INTERVAL: "30"
     volumes:
       - asterisk-config:/etc/asterisk:ro
       - asterisk-var:/var/lib/asterisk:ro
       - freepbx-web:/var/www/html:ro
       - watcher-data:/var/lib/pendingchanges-watcher
+      - attribution-data:/var/lib/asterisk/pendingchanges-attribution:ro
     healthcheck:
       test: ["CMD-SHELL", "test -s /var/lib/pendingchanges-watcher/status.json"]
       interval: 5s
@@ -105,3 +116,4 @@ volumes:
   asterisk-config:
   asterisk-var:
   watcher-data:
+  attribution-data:
