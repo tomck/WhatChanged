@@ -19,6 +19,13 @@ function pendingchanges_h($value): string {
 }
 
 function pendingchanges_identity(string $table, array $row): string {
+    if ($table === 'userman_users') {
+        $username = (string) ($row['username'] ?? '');
+        $id = (string) ($row['id'] ?? '');
+        if ($username !== '') {
+            return $username.($id !== '' ? ' — User '.$id : '');
+        }
+    }
     if ($table === 'userman_users_settings') {
         $user = (string) ($row['username'] ?? ('User '.($row['uid'] ?? 'record')));
         return $user.' — '.(string) ($row['module'] ?? 'setting').' / '.(string) ($row['key'] ?? 'value');
@@ -121,7 +128,7 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
     $row = $kind === 'updated' ? ['id' => $item['key'] ?? 'record'] : $item;
     $details = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
-    if ($kind === 'updated' && $table === 'userman_users_settings') {
+    if ($kind === 'updated' && !empty($item['identity'])) {
         $title = pendingchanges_identity($table, $item['identity'] ?? []);
     } elseif ($table === 'fax_details') {
         $title = pendingchanges_fax_setting_label((string) ($item['key'] ?? 'record'));

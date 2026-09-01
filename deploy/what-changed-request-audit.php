@@ -47,6 +47,14 @@ if (!function_exists('whatchanged_audit_scalar')) {
         $type = whatchanged_audit_scalar($request['type'] ?? '');
         $isApply = $command === 'reload' || $handler === 'reload';
         $isWrite = in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+        $readOnlyCommands = ['authping', 'scheduler', 'navbartoogle', 'check-and-set-language'];
+
+        // FreePBX sends some UI housekeeping through POST. Request method
+        // alone does not make navbar toggles or keep-alive checks evidence of
+        // staged PBX configuration.
+        if (in_array(strtolower($command), $readOnlyCommands, true)) {
+            return;
+        }
 
         // A few FreePBX administrative operations are intentionally exposed
         // as named GET requests. Keep only the small destructive allowlist;

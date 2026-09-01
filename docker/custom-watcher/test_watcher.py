@@ -87,7 +87,7 @@ with tempfile.TemporaryDirectory() as temporary:
         json.dumps({'schema': 1, **request_fixture[0], 'event_id': 'failed', 'http_status': 500}),
         json.dumps({
             'schema': 1, **request_fixture[0], 'event_id': 'background',
-            'method': 'GET', 'command': 'authping',
+            'method': 'POST', 'command': 'navbarToogle',
         }),
     ]) + '\n')
     parsed = watcher.request_events()
