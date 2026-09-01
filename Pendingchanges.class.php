@@ -104,6 +104,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             'astdb' => [],
             'coverage' => [
                 'database_tables' => self::WATCH_TABLES,
+                'database_exclusions' => ['modules.modulename=pendingchanges'],
                 'astdb_families' => [],
                 'generated_files' => '/etc/asterisk/*.conf',
                 'module_tree_digests' => 'all modules except pendingchanges',
@@ -165,7 +166,8 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             } else {
                 $columns = '*';
             }
-            $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted)->fetchAll(\PDO::FETCH_ASSOC);
+            $where = $table === 'modules' ? " WHERE `modulename` <> 'pendingchanges'" : '';
+            $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted.$where)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
                 if ($table === 'userman_users_settings' && preg_match('/password|secret|token|pin|(^|_)key($|_)/i', (string) ($row['module'] ?? '').' '.(string) ($row['key'] ?? ''))) {
