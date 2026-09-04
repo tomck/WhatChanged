@@ -122,7 +122,7 @@ services:
       - fpbx15-attribution:/var/lib/asterisk/pendingchanges-attribution
       - ../../dist:/artifacts:ro
     healthcheck:
-      test: ["CMD-SHELL", "test -f /var/www/html/admin/config.php && /var/lib/asterisk/bin/fwconsole --version >/dev/null && mysql -N -uroot -e \"SELECT Host FROM mysql.user WHERE User='what_changed' AND Host='%'\" | grep -qx '%'"]
+      test: ["CMD-SHELL", "test -f /what-changed-ready && test -f /var/www/html/admin/config.php && /var/lib/asterisk/bin/fwconsole --version >/dev/null && mysql -N -uroot -e \"SELECT Host FROM mysql.user WHERE User='what_changed' AND Host='%'\" | grep -qx '%'"]
       interval: 10s
       timeout: 8s
       retries: 90
