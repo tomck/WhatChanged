@@ -1,0 +1,5 @@
+FROM flaviostutz/freepbx:15.0.17.17.6@sha256:c36349911e5c427e444ee64c18754dc534624bd024c4d1019cc5dc593cd1f39b
+
+RUN mv /startup.sh /upstream-startup.sh
+COPY fpbx15-startup.sh /startup.sh
+RUN chmod 0755 /startup.sh

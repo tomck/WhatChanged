@@ -1,0 +1,235 @@
+name: whatchanged-legacy
+
+x-watcher-environment: &watcher-environment
+  DB_NAME: asterisk
+  DB_USER: what_changed
+  DB_PASSWORD: legacy-watcher-only
+  WATCH_TABLES: announcement,callbacks,conferences,customappsreg,devices,did,extension_routes,extensions,fax_details,featurecodes,freepbx_settings,globals,iax,injected,ivr_details,ivr_entries,miscapps,miscdests,modules,outbound_route_patterns,outbound_route_sequence,outbound_route_sequences,outbound_route_trunks,outbound_routes,parkinglot,pjsip,queues_config,queues_details,queues_members,ringgroups,sip,sipsettings,kvstore_Sipsettings,timeconditions,timegroups,timegroups_details,trunk_dialpatterns,trunks,userman_users,userman_users_settings,users,zap,pc_legacy_smoke
+  MAX_TABLE_ROWS: "5000"
+  TABLE_ROW_LIMITS: sip=20000
+  ASTDB_FAMILIES: AMPUSER,DEVICE,CF,CFB,CFU,CFNA,DND,CW,FOLLOWME,BLKVM
+  ASTDB_MAX_ROWS: "10000"
+  PROBE_INTERVAL: "2"
+  FULL_SCAN_INTERVAL: "5"
+  MODULE_SCAN_INTERVAL: "10"
+
+services:
+  fpbx16-database:
+    profiles: ["16"]
+    image: mariadb:10.6@sha256:92e50059ea0a5965a33ef751970eab37d421b91ebbd01ac909039cffe159e574
+    environment:
+      MARIADB_ROOT_PASSWORD: legacy-freepbx-root
+      MARIADB_DATABASE: asterisk
+      MARIADB_USER: asterisk
+      MARIADB_PASSWORD: legacy-freepbx
+    volumes:
+      - fpbx16-database:/var/lib/mysql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  fpbx16:
+    profiles: ["16"]
+    build:
+      context: .
+      dockerfile: Dockerfile.fpbx16
+    image: whatchanged/fpbx16-lab:asterisk20.8.1.2-freepbx16
+    depends_on:
+      fpbx16-database:
+        condition: service_healthy
+    environment:
+      DB_EMBEDDED: "FALSE"
+      DB_HOST: fpbx16-database
+      DB_PORT: "3306"
+      DB_NAME: asterisk
+      DB_USER: asterisk
+      DB_PASS: legacy-freepbx
+      FREEPBX_VERSION: 16.0.40.7
+      CONTAINER_ENABLE_FAIL2BAN: "FALSE"
+      CONTAINER_ENABLE_FIREWALL: "FALSE"
+      CONTAINER_ENABLE_MESSAGING: "FALSE"
+      CONTAINER_ENABLE_MONITORING: "FALSE"
+      CONTAINER_ENABLE_SCHEDULING: "FALSE"
+      ENABLE_FOP: "FALSE"
+      ENABLE_FAIL2BAN: "FALSE"
+      ENABLE_SMTP: "FALSE"
+      ENABLE_SSL: "FALSE"
+      TIMEZONE: America/Chicago
+    ports:
+      - "127.0.0.1:8160:80"
+    volumes:
+      - fpbx16-data:/data
+      - fpbx16-web:/var/www/html
+      - fpbx16-watcher-state:/data/var/lib/asterisk/pendingchanges-watcher
+      - fpbx16-attribution:/data/var/lib/asterisk/pendingchanges-attribution
+      - ../../dist:/artifacts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /etc/freepbx.conf && test -f /var/www/html/admin/config.php && /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
+      interval: 10s
+      timeout: 8s
+      retries: 180
+      start_period: 30s
+
+  fpbx16-watcher:
+    profiles: ["16"]
+    build: ../custom-watcher
+    depends_on:
+      fpbx16:
+        condition: service_healthy
+    environment:
+      <<: *watcher-environment
+      DB_HOST: fpbx16-database
+      WATCH_PATH: /legacy-data/etc/asterisk
+      MODULE_PATH: /legacy-web/admin/modules
+      ASTDB_PATH: /legacy-data/var/lib/asterisk/astdb.sqlite3
+      ATTRIBUTION_LOG: /legacy-attribution/requests.jsonl
+      RUN_UID: "2600"
+      RUN_GID: "2600"
+    volumes:
+      - fpbx16-data:/legacy-data:ro
+      - fpbx16-web:/legacy-web:ro
+      - fpbx16-watcher-state:/var/lib/pendingchanges-watcher
+      - fpbx16-attribution:/legacy-attribution:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /var/lib/pendingchanges-watcher/status.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+  fpbx15:
+    profiles: ["15"]
+    build:
+      context: .
+      dockerfile: Dockerfile.fpbx15
+    image: whatchanged/fpbx15-lab:15.0.17.17.6
+    environment:
+      ADMIN_PASSWORD: legacy-admin-only
+      FAIL2BAN_ENABLE: "false"
+      ENABLE_AUTO_RESTORE: "false"
+      ENABLE_DELETE_OLD_RECORDINGS: "false"
+      DISABLE_SIGNATURE_CHECK: "true"
+    ports:
+      - "127.0.0.1:8150:80"
+    volumes:
+      - fpbx15-database:/var/lib/mysql
+      - fpbx15-asterisk-config:/etc/asterisk
+      - fpbx15-asterisk-var:/var/lib/asterisk
+      - fpbx15-web:/var/www/html
+      - fpbx15-watcher-state:/var/lib/asterisk/pendingchanges-watcher
+      - fpbx15-attribution:/var/lib/asterisk/pendingchanges-attribution
+      - ../../dist:/artifacts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/www/html/admin/config.php && /var/lib/asterisk/bin/fwconsole --version >/dev/null && mysql -N -uroot -e \"SELECT Host FROM mysql.user WHERE User='what_changed' AND Host='%'\" | grep -qx '%'"]
+      interval: 10s
+      timeout: 8s
+      retries: 90
+      start_period: 30s
+
+  fpbx15-watcher:
+    profiles: ["15"]
+    build: ../custom-watcher
+    depends_on:
+      fpbx15:
+        condition: service_healthy
+    restart: on-failure
+    environment:
+      <<: *watcher-environment
+      DB_HOST: fpbx15
+      WATCH_PATH: /legacy-asterisk
+      MODULE_PATH: /legacy-web/admin/modules
+      ASTDB_PATH: /legacy-asterisk-var/astdb.sqlite3
+      ATTRIBUTION_LOG: /legacy-attribution/requests.jsonl
+      RUN_UID: "2600"
+      RUN_GID: "2600"
+    volumes:
+      - fpbx15-asterisk-config:/legacy-asterisk:ro
+      - fpbx15-asterisk-var:/legacy-asterisk-var:ro
+      - fpbx15-web:/legacy-web:ro
+      - fpbx15-watcher-state:/var/lib/pendingchanges-watcher
+      - fpbx15-attribution:/legacy-attribution:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /var/lib/pendingchanges-watcher/status.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+  fpbx14:
+    profiles: ["14"]
+    build:
+      context: .
+      dockerfile: Dockerfile.fpbx14
+    image: whatchanged/fpbx14-lab:14.1.1
+    environment:
+      ADMIN_PASSWORD: legacy-admin-only
+      FAIL2BAN_ENABLE: "false"
+      ENABLE_AUTO_RESTORE: "false"
+      ENABLE_DELETE_OLD_RECORDINGS: "false"
+      DISABLE_SIGNATURE_CHECK: "true"
+    ports:
+      - "127.0.0.1:8140:80"
+    volumes:
+      - fpbx14-database:/var/lib/mysql
+      - fpbx14-asterisk-config:/etc/asterisk
+      - fpbx14-asterisk-var:/var/lib/asterisk
+      - fpbx14-web:/var/www/html
+      - fpbx14-watcher-state:/var/lib/asterisk/pendingchanges-watcher
+      - fpbx14-attribution:/var/lib/asterisk/pendingchanges-attribution
+      - ../../dist:/artifacts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/www/html/admin/config.php && /var/lib/asterisk/bin/fwconsole --version >/dev/null && mysql -N -uroot -e \"SELECT Host FROM mysql.user WHERE User='what_changed' AND Host='%'\" | grep -qx '%'"]
+      interval: 10s
+      timeout: 8s
+      retries: 90
+      start_period: 30s
+
+  fpbx14-watcher:
+    profiles: ["14"]
+    build: ../custom-watcher
+    depends_on:
+      fpbx14:
+        condition: service_healthy
+    restart: on-failure
+    environment:
+      <<: *watcher-environment
+      DB_HOST: fpbx14
+      DB_USER: what_changed
+      DB_PASSWORD: legacy-watcher-only
+      WATCH_PATH: /legacy-asterisk
+      MODULE_PATH: /legacy-web/admin/modules
+      ASTDB_PATH: /legacy-asterisk-var/astdb.sqlite3
+      ATTRIBUTION_LOG: /legacy-attribution/requests.jsonl
+      RUN_UID: "2600"
+      RUN_GID: "2600"
+    volumes:
+      - fpbx14-asterisk-config:/legacy-asterisk:ro
+      - fpbx14-asterisk-var:/legacy-asterisk-var:ro
+      - fpbx14-web:/legacy-web:ro
+      - fpbx14-watcher-state:/var/lib/pendingchanges-watcher
+      - fpbx14-attribution:/legacy-attribution:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /var/lib/pendingchanges-watcher/status.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+volumes:
+  fpbx16-database:
+  fpbx16-data:
+  fpbx16-web:
+  fpbx16-watcher-state:
+  fpbx16-attribution:
+  fpbx15-database:
+  fpbx15-asterisk-config:
+  fpbx15-asterisk-var:
+  fpbx15-web:
+  fpbx15-watcher-state:
+  fpbx15-attribution:
+  fpbx14-database:
+  fpbx14-asterisk-config:
+  fpbx14-asterisk-var:
+  fpbx14-web:
+  fpbx14-watcher-state:
+  fpbx14-attribution:

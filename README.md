@@ -1,8 +1,9 @@
 # WhatChanged
 
-`pendingchanges` is a FreePBX 17 diagnostic module. It explains the **Apply
-Changes** banner by comparing the current configuration state with one
-baseline captured after a known-good apply.
+`pendingchanges` is a FreePBX diagnostic module. FreePBX 17 is the primary
+target; FreePBX 14, 15, and 16 are separately versioned private-alpha
+candidates. It explains the **Apply Changes** banner by comparing the current
+configuration state with one baseline captured after a known-good apply.
 
 It is deliberately read-only with respect to PBX configuration: it neither
 reloads Asterisk nor changes FreePBX settings. FreePBX itself stores the
@@ -132,24 +133,47 @@ signed checksum manifest without moving the secret key into the lab:
 ./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.11.tgz what-changed-watcher_0.1.1_all.deb
 ```
 
+The complete 14-17 GitHub prerelease set has a stricter two-stage workflow.
+Build the signing bundle locally, sign it interactively on the FreePBX signing
+host, retrieve the resulting `signed/` directory, and verify it before
+publishing:
+
+```sh
+./scripts/package-release-signing-bundle.sh
+./scripts/verify-github-release-set.sh dist/signed-release
+```
+
+The version/tag map, exact per-generation installation commands, signing-host
+procedure, and guarded GitHub publisher are documented in
+[the GitHub release runbook](docs/github-releases.md). Release archives belong
+on GitHub Releases, not in source-control history; all module and watcher tags
+point to the same reviewed source commit from which their assets were built.
+
 ### FreePBX 14-16 compatibility candidates
 
 The legacy candidates are separate archives with matching FreePBX major-version
 metadata. Their shared PHP source is syntax-tested against PHP 5.6, 7.4, and
-8.2; this does not substitute for an install on each real FreePBX generation.
-Build and run the compatibility gate with:
+8.2. Build and run the compatibility gate with:
 
 ```sh
 ./docker/legacy-compatibility-gate.sh
 ```
 
+Then run the digest-pinned real-image lifecycle for FreePBX 16, 15, and 14:
+
+```sh
+./docker/legacy-real-image-gate.sh
+```
+
 That produces FreePBX 14, 15, and 16 module candidates plus a portable
 systemd watcher bundle for older FreePBX Distro/SNG7-style hosts. See
-[the legacy alpha guide](docs/legacy-alpha-install.md). These releases remain
-explicitly experimental until Module Admin installation, page rendering, and
-staged-change detection are reported from each matching FreePBX generation.
-The exact evidence and remaining gaps are tracked in
-[the legacy test matrix](docs/legacy-test-matrix.md).
+[the legacy alpha guide](docs/legacy-alpha-install.md). The representative
+historical Docker stacks now pass Module Admin installation, watcher-to-BMO
+integration, staged database drift, Apply Config, and clean-baseline checks.
+They remain experimental until tested on varied maintained installations. See
+[the Docker lab guide](docs/legacy-docker-lab.md) and
+[the legacy test matrix](docs/legacy-test-matrix.md) for the exact evidence and
+limits.
 
 Open Source Tripwire is intentionally not part of this project: it can report
 that a file changed, but cannot explain a pending FreePBX change.
