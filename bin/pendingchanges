@@ -2,7 +2,7 @@
 <?php
 require_once '/etc/freepbx.conf';
 $service = FreePBX::Pendingchanges();
-$command = $argv[1] ?? 'status';
+$command = isset($argv[1]) ? $argv[1] : 'status';
 try {
     if ($command === 'seed') {
         $result = $service->seedBaseline();
@@ -14,7 +14,7 @@ try {
         throw new RuntimeException('Usage: pendingchanges [status|seed|feedback]');
     }
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL;
-} catch (Throwable $e) {
+} catch (Exception $e) {
     fwrite(STDERR, $e->getMessage().PHP_EOL);
     exit(1);
 }

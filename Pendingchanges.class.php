@@ -2,11 +2,11 @@
 namespace FreePBX\modules;
 
 class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
-    private const BASELINE_TABLE = 'pendingchanges_baseline';
+    const BASELINE_TABLE = 'pendingchanges_baseline';
     // Keep the framework-only fallback bounded too. The external watcher is
     // preferred in production, but an unreadable watcher status must never
     // turn this page into an unbounded scan of CDR/CEL/add-on tables.
-    private const WATCH_TABLES = [
+    const WATCH_TABLES = [
         'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
         'did', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'globals',
         'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
@@ -15,7 +15,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         'timeconditions', 'timegroups', 'timegroups_details',
         'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
     ];
-    private const MAX_TABLE_ROWS = 5000;
+    const MAX_TABLE_ROWS = 5000;
 
     public function doConfigPageInit($page) {}
 
@@ -36,13 +36,13 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return [];
     }
 
-    public function needReload(): bool {
+    public function needReload() {
         $statement = \FreePBX::Database()->prepare("SELECT value FROM admin WHERE variable = 'need_reload'");
         $statement->execute();
         return $statement->fetchColumn() === 'true';
     }
 
-    public function baseline(): ?array {
+    public function baseline() {
         $statement = \FreePBX::Database()->query('SELECT database_snapshot, file_snapshot, captured_at FROM '.self::BASELINE_TABLE.' WHERE id = 1');
         $row = $statement->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
@@ -55,7 +55,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         ];
     }
 
-    public function seedBaseline(): array {
+    public function seedBaseline() {
         if ($this->needReload()) {
             throw new \RuntimeException('Cannot seed a baseline while Apply Changes is pending. Apply or clear the pending reload first.');
         }
@@ -66,23 +66,23 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return ['tables' => count($database), 'files' => count($files)];
     }
 
-    public function status(): array {
+    public function status() {
         $watcher = $this->watcherStatus();
         if ($watcher !== null) {
             $files = $watcher['file_drift'];
             return [
                 'pending' => $watcher['need_reload'],
                 'database' => $watcher['database_drift'],
-                'astdb' => $watcher['astdb_drift'] ?? [],
+                'astdb' => isset($watcher['astdb_drift']) ? $watcher['astdb_drift'] : [],
                 'files' => $files,
                 'generated_files' => $this->fileScope($files, 'generated/'),
                 'module_files' => $this->fileScope($files, 'module/'),
-                'coverage_limitations' => $watcher['coverage_limitations'] ?? [],
-                'coverage' => $watcher['coverage'] ?? [],
-                'attribution' => $watcher['attribution'] ?? [],
+                'coverage_limitations' => isset($watcher['coverage_limitations']) ? $watcher['coverage_limitations'] : [],
+                'coverage' => isset($watcher['coverage']) ? $watcher['coverage'] : [],
+                'attribution' => isset($watcher['attribution']) ? $watcher['attribution'] : [],
                 'message' => $watcher['message'],
                 'baseline' => $watcher['baseline_available'],
-                'captured_at' => $watcher['baseline_captured_at'] ?? null,
+                'captured_at' => isset($watcher['baseline_captured_at']) ? $watcher['baseline_captured_at'] : null,
                 'watcher_observed_at' => $watcher['observed_at'],
                 'watcher' => true,
             ];
@@ -122,7 +122,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         ];
     }
 
-    public function feedback(): array {
+    public function feedback() {
         $path = '/var/lib/asterisk/pendingchanges-watcher/feedback.jsonl';
         if (!is_readable($path)) {
             return ['schema' => 1, 'events' => [], 'message' => 'No local watcher feedback ledger is available.'];
@@ -130,7 +130,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         $events = [];
         foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
             $event = json_decode($line, true);
-            if (is_array($event) && ($event['schema'] ?? null) === 1) {
+            if (is_array($event) && (isset($event['schema']) ? $event['schema'] : null) === 1) {
                 $events[] = $event;
             }
         }
@@ -141,7 +141,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         ];
     }
 
-    private function watcherStatus(): ?array {
+    private function watcherStatus() {
         $path = '/var/lib/asterisk/pendingchanges-watcher/status.json';
         if (!is_readable($path)) {
             return null;
@@ -153,7 +153,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return $status;
     }
 
-    private function databaseSnapshot(): array {
+    private function databaseSnapshot() {
         $available = array_column(\FreePBX::Database()->query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"')->fetchAll(\PDO::FETCH_NUM), 0);
         $snapshot = [];
         foreach (self::WATCH_TABLES as $table) {
@@ -179,20 +179,22 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted.$where)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
-                if ($table === 'userman_users_settings' && preg_match('/password|secret|token|pin|(^|_)key($|_)/i', (string) ($row['module'] ?? '').' '.(string) ($row['key'] ?? ''))) {
-                    $row['val'] = '[redacted sha256:'.hash('sha256', (string) ($row['val'] ?? '')).']';
+                if ($table === 'userman_users_settings' && preg_match('/password|secret|token|pin|(^|_)key($|_)/i', (string) (isset($row['module']) ? $row['module'] : '').' '.(string) (isset($row['key']) ? $row['key'] : ''))) {
+                    $row['val'] = '[redacted sha256:'.hash('sha256', (string) (isset($row['val']) ? $row['val'] : '')).']';
                 }
                 ksort($row);
                 $normalized[] = $row;
             }
-            usort($normalized, static fn($a, $b) => strcmp(json_encode($a), json_encode($b)));
+            usort($normalized, static function ($a, $b) {
+                return strcmp(json_encode($a), json_encode($b));
+            });
             $snapshot[$table] = $normalized;
         }
         ksort($snapshot);
         return $snapshot;
     }
 
-    private function fileSnapshot(): array {
+    private function fileSnapshot() {
         $root = '/etc/asterisk';
         $snapshot = [];
         foreach (glob($root.'/*.conf') ?: [] as $path) {
@@ -221,15 +223,17 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return $snapshot;
     }
 
-    private function fileScope(array $files, string $prefix): array {
-        return array_filter($files, static fn($name) => str_starts_with((string) $name, $prefix), ARRAY_FILTER_USE_KEY);
+    private function fileScope(array $files, $prefix) {
+        return array_filter($files, static function ($name) use ($prefix) {
+            return strncmp((string) $name, $prefix, strlen($prefix)) === 0;
+        }, ARRAY_FILTER_USE_KEY);
     }
 
-    private function databaseDiff(array $before, array $after): array {
+    private function databaseDiff(array $before, array $after) {
         $diff = [];
         foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $table) {
-            $old = $before[$table] ?? [];
-            $new = $after[$table] ?? [];
+            $old = isset($before[$table]) ? $before[$table] : [];
+            $new = isset($after[$table]) ? $after[$table] : [];
             if ($old === $new) {
                 continue;
             }
@@ -245,11 +249,13 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         return $diff;
     }
 
-    private function fileDiff(array $before, array $after): array {
+    private function fileDiff(array $before, array $after) {
         $diff = [];
         foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $file) {
-            if (($before[$file] ?? null) !== ($after[$file] ?? null)) {
-                $diff[$file] = ['before' => $before[$file] ?? null, 'after' => $after[$file] ?? null];
+            $old = isset($before[$file]) ? $before[$file] : null;
+            $new = isset($after[$file]) ? $after[$file] : null;
+            if ($old !== $new) {
+                $diff[$file] = ['before' => $old, 'after' => $new];
             }
         }
         return $diff;

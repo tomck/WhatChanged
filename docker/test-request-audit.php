@@ -1,5 +1,5 @@
 <?php
-$path = $argv[1] ?? sys_get_temp_dir().'/what-changed-request-audit.jsonl';
+$path = isset($argv[1]) ? $argv[1] : sys_get_temp_dir().'/what-changed-request-audit.jsonl';
 putenv('WHAT_CHANGED_ATTRIBUTION_LOG='.$path);
 @unlink($path);
 require __DIR__.'/../deploy/what-changed-request-audit.php';
@@ -25,11 +25,14 @@ $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 if (count($lines ?: []) !== 1) {
     throw new RuntimeException('Expected one request breadcrumb');
 }
-$event = json_decode($lines[0], true, 512, JSON_THROW_ON_ERROR);
+$event = json_decode($lines[0], true);
+if (!is_array($event)) {
+    throw new RuntimeException('Request breadcrumb was not valid JSON');
+}
 if ($event['username'] !== 'smoke_admin' || $event['operation'] !== 'stage' || $event['type'] !== 'extensions') {
     throw new RuntimeException('Unexpected request breadcrumb');
 }
-if (str_contains($lines[0], 'must-never-be-recorded') || isset($event['secret'])) {
+if (strpos($lines[0], 'must-never-be-recorded') !== false || isset($event['secret'])) {
     throw new RuntimeException('Request values leaked into breadcrumb');
 }
 

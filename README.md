@@ -129,8 +129,27 @@ For a release staged on the signing host, create detached GPG signatures and a
 signed checksum manifest without moving the secret key into the lab:
 
 ```sh
-./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.10.tgz what-changed-watcher_0.1.0_all.deb
+./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.11.tgz what-changed-watcher_0.1.1_all.deb
 ```
+
+### FreePBX 14-16 compatibility candidates
+
+The legacy candidates are separate archives with matching FreePBX major-version
+metadata. Their shared PHP source is syntax-tested against PHP 5.6, 7.4, and
+8.2; this does not substitute for an install on each real FreePBX generation.
+Build and run the compatibility gate with:
+
+```sh
+./docker/legacy-compatibility-gate.sh
+```
+
+That produces FreePBX 14, 15, and 16 module candidates plus a portable
+systemd watcher bundle for older FreePBX Distro/SNG7-style hosts. See
+[the legacy alpha guide](docs/legacy-alpha-install.md). These releases remain
+explicitly experimental until Module Admin installation, page rendering, and
+staged-change detection are reported from each matching FreePBX generation.
+The exact evidence and remaining gaps are tracked in
+[the legacy test matrix](docs/legacy-test-matrix.md).
 
 Open Source Tripwire is intentionally not part of this project: it can report
 that a file changed, but cannot explain a pending FreePBX change.
@@ -177,7 +196,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.10.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.11.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:

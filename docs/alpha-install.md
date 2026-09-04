@@ -26,10 +26,10 @@ Run these commands as a root-capable administrator, substituting the exact
 downloaded filenames:
 
 ```sh
-sudo apt install ./what-changed-watcher_0.1.0_all.deb
+sudo apt install ./what-changed-watcher_0.1.1_all.deb
 sudo what-changed-watcher-configure
 
-sudo tar -xzf pendingchanges-17.0.0.10.tgz -C /var/www/html/admin/modules
+sudo tar -xzf pendingchanges-17.0.0.11.tgz -C /var/www/html/admin/modules
 sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 ```
