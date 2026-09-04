@@ -65,10 +65,12 @@ fi
 if [ ! -d /var/www/html/admin/modules/pendingchanges ]; then
   mkdir -p /var/www/html/admin/modules/pendingchanges
 fi
-# Synchronize the read-only workspace source on every disposable-lab start so
-# rebuilt module code is actually what Module Admin installs from the persisted
-# web volume.
-cp -R /srv/pendingchanges/. /var/www/html/admin/modules/pendingchanges/
+# Synchronize only the module payload on every disposable-lab start.  Copying
+# the whole checkout also traverses .git and build artifacts; Docker Desktop
+# file sharing can reject that traversal while the checkout changes.
+for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
+  cp -R "/srv/pendingchanges/$path" /var/www/html/admin/modules/pendingchanges/
+done
 if [ ! -e /var/lib/asterisk/bin/pendingchanges ]; then
   ln -sf /var/www/html/admin/modules/pendingchanges/bin/pendingchanges /var/lib/asterisk/bin/pendingchanges
 fi

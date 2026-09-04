@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+case "${1:-remove}" in
+  remove|purge)
+    rm -f /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini
+    if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1; then
+      systemctl reload apache2 >/dev/null 2>&1 || true
+    fi
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    ;;
+esac
+
+# Do not remove /var/lib/asterisk/pendingchanges-watcher. It contains the
+# operator's local evidence and must remain recoverable after package removal.

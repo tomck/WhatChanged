@@ -1,0 +1,11 @@
+Package: what-changed-watcher
+Version: 0.1.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3, python3-pymysql, php-cli, apache2, mariadb-client
+Maintainer: WhatChanged Alpha <alpha@whatchanged.invalid>
+Description: Read-only FreePBX pending-change observer
+ WhatChanged observes a bounded set of FreePBX configuration records and
+ watched files. It does not apply configuration, reload Asterisk, or modify
+ FreePBX configuration.

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+case "${1:-remove}" in
+  remove|deconfigure|upgrade)
+    systemctl stop what-changed-watcher.service >/dev/null 2>&1 || true
+    ;;
+esac
