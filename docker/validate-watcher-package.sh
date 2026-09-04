@@ -17,17 +17,19 @@ fi
 package=$(cd "$(dirname "$package")" && pwd)/$(basename "$package")
 case "$package" in "$root_dir"/*) ;; *) echo 'Package must be inside this checkout.' >&2; exit 2 ;; esac
 name=$(basename "$package")
+expected_version=$(sed -n 's/^Version: //p' "$root_dir/packaging/watcher/DEBIAN/control")
 
 docker compose -f "$compose_file" up -d pbx
 docker compose -f "$compose_file" cp "$package" "pbx:/tmp/$name"
-docker compose -f "$compose_file" exec -T pbx sh -s -- "$name" <<'SH'
+docker compose -f "$compose_file" exec -T pbx sh -s -- "$name" "$expected_version" <<'SH'
 set -eu
 package=/tmp/$1
+expected_version=$2
 stage=$(mktemp -d /tmp/what-changed-watcher-validate.XXXXXX)
 trap 'rm -rf "$stage" "$package"' EXIT HUP INT TERM
 
 dpkg-deb --info "$package" | grep -qx ' Package: what-changed-watcher'
-dpkg-deb --info "$package" | grep -qx ' Version: 0.1.0'
+dpkg-deb --info "$package" | grep -qx " Version: $expected_version"
 dpkg-deb --contents "$package" | grep -q 'usr/lib/what-changed-watcher/watcher.py'
 dpkg-deb --contents "$package" | grep -q 'lib/systemd/system/what-changed-watcher.service'
 dpkg-deb --contents "$package" | grep -q 'usr/sbin/what-changed-watcher-configure'
@@ -42,5 +44,9 @@ sh -n "$stage/usr/sbin/what-changed-watcher-configure"
 sh -n "$stage/usr/sbin/what-changed-watcher-install-sensor"
 php -l "$stage/usr/lib/what-changed-watcher/configure-database.php"
 python3 -m py_compile "$stage/usr/lib/what-changed-watcher/watcher.py"
+grep -q 'ExecStart=/usr/bin/python3 /usr/lib/what-changed-watcher/watcher.py' \
+  "$stage/lib/systemd/system/what-changed-watcher.service"
+grep -q 'auto_prepend_file=/usr/lib/what-changed-watcher/what-changed-request-audit.php' \
+  "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
 echo 'Watcher Debian package layout validation passed'
 SH

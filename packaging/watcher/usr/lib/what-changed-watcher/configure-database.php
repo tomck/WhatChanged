@@ -8,8 +8,8 @@ if ($argc !== 1) {
 }
 require '/etc/freepbx.conf';
 
-$host = (string) ($amp_conf['AMPDBHOST'] ?? 'localhost');
-$name = (string) ($amp_conf['AMPDBNAME'] ?? 'asterisk');
+$host = (string) (isset($amp_conf['AMPDBHOST']) ? $amp_conf['AMPDBHOST'] : 'localhost');
+$name = (string) (isset($amp_conf['AMPDBNAME']) ? $amp_conf['AMPDBNAME'] : 'asterisk');
 if (!in_array($host, ['localhost', '127.0.0.1'], true)) {
     fwrite(STDERR, "The packaged setup supports only a local MariaDB server. Configure a reviewed SELECT-only account manually for remote MariaDB.\n");
     exit(1);

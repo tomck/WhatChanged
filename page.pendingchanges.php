@@ -8,27 +8,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['seed_baseline'])) {
     try {
         $result = $tripwire->seedBaseline();
         $notice = '<div class="alert alert-success">Applied baseline saved ('.(int) $result['tables'].' tables, '.(int) $result['files'].' files).</div>';
-    } catch (\Throwable $e) {
+    } catch (\Exception $e) {
         $notice = '<div class="alert alert-danger">'.htmlentities($e->getMessage()).'</div>';
     }
 }
 $status = $tripwire->status();
 
-function pendingchanges_h($value): string {
+function pendingchanges_h($value) {
     return htmlentities((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function pendingchanges_identity(string $table, array $row): string {
+function pendingchanges_identity($table, array $row) {
     if ($table === 'userman_users') {
-        $username = (string) ($row['username'] ?? '');
-        $id = (string) ($row['id'] ?? '');
+        $username = (string) (isset($row['username']) ? $row['username'] : '');
+        $id = (string) (isset($row['id']) ? $row['id'] : '');
         if ($username !== '') {
             return $username.($id !== '' ? ' — User '.$id : '');
         }
     }
     if ($table === 'userman_users_settings') {
-        $user = (string) ($row['username'] ?? ('User '.($row['uid'] ?? 'record')));
-        return $user.' — '.(string) ($row['module'] ?? 'setting').' / '.(string) ($row['key'] ?? 'value');
+        $user = (string) (isset($row['username']) ? $row['username'] : ('User '.(isset($row['uid']) ? $row['uid'] : 'record')));
+        return $user.' — '.(string) (isset($row['module']) ? $row['module'] : 'setting').' / '.(string) (isset($row['key']) ? $row['key'] : 'value');
     }
     foreach (['extension', 'id', 'account', 'grpnum', 'device', 'user'] as $field) {
         if (array_key_exists($field, $row) && $row[$field] !== '') {
@@ -44,7 +44,7 @@ function pendingchanges_identity(string $table, array $row): string {
     return $table.' record';
 }
 
-function pendingchanges_table_label(string $table): string {
+function pendingchanges_table_label($table) {
     if ($table === 'fax_details') {
         return 'Fax Configuration';
     }
@@ -57,8 +57,8 @@ function pendingchanges_table_label(string $table): string {
     return ucwords(str_replace('_', ' ', $table));
 }
 
-function pendingchanges_request_target(array $event): string {
-    if (($event['operation'] ?? '') === 'apply') {
+function pendingchanges_request_target(array $event) {
+    if ((isset($event['operation']) ? $event['operation'] : '') === 'apply') {
         return 'Apply Config';
     }
     foreach (['display', 'type', 'module', 'action', 'command', 'handler', 'script'] as $field) {
@@ -69,7 +69,7 @@ function pendingchanges_request_target(array $event): string {
     return 'FreePBX admin request';
 }
 
-function pendingchanges_fax_setting_label(string $key): string {
+function pendingchanges_fax_setting_label($key) {
     $labels = [
         'concurrentfax' => 'Concurrent fax channels',
         'ecm' => 'Error correction mode',
@@ -84,12 +84,12 @@ function pendingchanges_fax_setting_label(string $key): string {
         'papersize' => 'Default paper size',
         'sender_address' => 'Outgoing email address',
     ];
-    return $labels[$key] ?? ucwords(str_replace('_', ' ', $key));
+    return isset($labels[$key]) ? $labels[$key] : ucwords(str_replace('_', ' ', $key));
 }
 
-function pendingchanges_record_id(string $kind, array $item): string {
+function pendingchanges_record_id($kind, array $item) {
     if ($kind === 'updated') {
-        return (string) ($item['key'] ?? 'record');
+        return (string) (isset($item['key']) ? $item['key'] : 'record');
     }
     foreach (['extension', 'id'] as $field) {
         if (isset($item[$field]) && $item[$field] !== '') {
@@ -99,21 +99,24 @@ function pendingchanges_record_id(string $kind, array $item): string {
     return 'record';
 }
 
-function pendingchanges_extension_changes(array $database): array {
+function pendingchanges_extension_changes(array $database) {
     $merged = [];
     foreach (['users' => 'Extension', 'devices' => 'Endpoint device'] as $table => $label) {
         foreach (['added', 'removed', 'updated'] as $kind) {
-            foreach (($database[$table][$kind] ?? []) as $item) {
+            $items = isset($database[$table][$kind]) ? $database[$table][$kind] : [];
+            foreach ($items as $item) {
                 $id = pendingchanges_record_id($kind, $item);
                 if (!isset($merged[$kind][$id])) {
                     $merged[$kind][$id] = ['id' => $id, 'name' => '', 'evidence' => []];
                 }
-                $row = $kind === 'updated' ? [] : $item;
-                $name = $row['name'] ?? $row['description'] ?? '';
+                $row = $kind === 'updated'
+                    ? (isset($item['identity']) ? $item['identity'] : [])
+                    : $item;
+                $name = isset($row['name']) ? $row['name'] : (isset($row['description']) ? $row['description'] : '');
                 if ($name !== '' && $merged[$kind][$id]['name'] === '') {
                     $merged[$kind][$id]['name'] = (string) $name;
                 }
-                $merged[$kind][$id]['evidence'][$label] = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
+                $merged[$kind][$id]['evidence'][$label] = $kind === 'updated' ? (isset($item['fields']) ? $item['fields'] : []) : $item;
             }
         }
     }
@@ -124,16 +127,16 @@ function pendingchanges_extension_changes(array $database): array {
     return $merged;
 }
 
-function pendingchanges_render_record(string $kind, string $table, array $item): void {
+function pendingchanges_render_record($kind, $table, array $item) {
     $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
-    $row = $kind === 'updated' ? ['id' => $item['key'] ?? 'record'] : $item;
-    $details = $kind === 'updated' ? ($item['fields'] ?? []) : $item;
+    $row = $kind === 'updated' ? ['id' => isset($item['key']) ? $item['key'] : 'record'] : $item;
+    $details = $kind === 'updated' ? (isset($item['fields']) ? $item['fields'] : []) : $item;
     if ($kind === 'updated' && !empty($item['identity'])) {
-        $title = pendingchanges_identity($table, $item['identity'] ?? []);
+        $title = pendingchanges_identity($table, isset($item['identity']) ? $item['identity'] : []);
     } elseif ($table === 'fax_details') {
-        $title = pendingchanges_fax_setting_label((string) ($item['key'] ?? 'record'));
+        $title = pendingchanges_fax_setting_label((string) (isset($item['key']) ? $item['key'] : 'record'));
     } else {
-        $title = $kind === 'updated' ? (string) ($item['key'] ?? 'record') : pendingchanges_identity($table, $row);
+        $title = $kind === 'updated' ? (string) (isset($item['key']) ? $item['key'] : 'record') : pendingchanges_identity($table, $row);
     }
     ?>
     <div class="pendingchanges-change pendingchanges-<?= pendingchanges_h($kind) ?>">
@@ -145,7 +148,7 @@ function pendingchanges_render_record(string $kind, string $table, array $item):
     <?php
 }
 
-function pendingchanges_render_extension(string $kind, array $item): void {
+function pendingchanges_render_extension($kind, array $item) {
     $symbols = ['added' => '+', 'removed' => '−', 'updated' => '~'];
     $title = $item['id'].($item['name'] !== '' ? ' — '.$item['name'] : '');
     ?>
@@ -161,8 +164,8 @@ function pendingchanges_render_extension(string $kind, array $item): void {
 $extensionChanges = pendingchanges_extension_changes($status['database']);
 $otherDatabaseChanges = $status['database'];
 unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
-$astdbChanges = $status['astdb'] ?? [];
-$attribution = $status['attribution'] ?? [];
+$astdbChanges = isset($status['astdb']) ? $status['astdb'] : [];
+$attribution = isset($status['attribution']) ? $status['attribution'] : [];
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -190,24 +193,24 @@ $attribution = $status['attribution'] ?? [];
     <section class="pendingchanges-card">
       <h3>Administrator request evidence (inferred)</h3>
       <div class="pendingchanges-attribution">
-        <div class="pendingchanges-confidence"><?= pendingchanges_h($attribution['confidence'] ?? 'unavailable') ?></div>
+        <div class="pendingchanges-confidence"><?= pendingchanges_h(isset($attribution['confidence']) ? $attribution['confidence'] : 'unavailable') ?></div>
         <?php if (!empty($attribution['actors'])): ?>
           <p><strong><?= count($attribution['actors']) === 1 ? 'Likely staged by' : 'Possible actors' ?>:</strong>
             <?= pendingchanges_h(implode(', ', $attribution['actors'])) ?></p>
         <?php endif; ?>
-        <p><?= pendingchanges_h($attribution['note'] ?? 'No authenticated request evidence is available.') ?></p>
-        <p class="text-muted"><?= pendingchanges_h($attribution['caveat'] ?? 'This is correlation, not proof of causation.') ?></p>
+        <p><?= pendingchanges_h(isset($attribution['note']) ? $attribution['note'] : 'No authenticated request evidence is available.') ?></p>
+        <p class="text-muted"><?= pendingchanges_h(isset($attribution['caveat']) ? $attribution['caveat'] : 'This is correlation, not proof of causation.') ?></p>
         <?php if (!empty($attribution['requests'])): ?>
-          <details><summary>Matching authenticated write requests (<?= (int) ($attribution['request_count'] ?? count($attribution['requests'])) ?>)</summary>
+          <details><summary>Matching authenticated write requests (<?= (int) (isset($attribution['request_count']) ? $attribution['request_count'] : count($attribution['requests'])) ?>)</summary>
             <table class="table table-striped table-condensed">
               <thead><tr><th>Time</th><th>Administrator</th><th>Area</th><th>Method</th></tr></thead>
               <tbody>
               <?php foreach ($attribution['requests'] as $event): ?>
                 <tr>
-                  <td><?= pendingchanges_h(date('Y-m-d H:i:s T', (int) ($event['finished_at'] ?? 0))) ?></td>
-                  <td><?= pendingchanges_h($event['username'] ?? 'unknown') ?></td>
+                  <td><?= pendingchanges_h(date('Y-m-d H:i:s T', (int) (isset($event['finished_at']) ? $event['finished_at'] : 0))) ?></td>
+                  <td><?= pendingchanges_h(isset($event['username']) ? $event['username'] : 'unknown') ?></td>
                   <td><?= pendingchanges_h(pendingchanges_request_target($event)) ?></td>
-                  <td><?= pendingchanges_h($event['method'] ?? '') ?></td>
+                  <td><?= pendingchanges_h(isset($event['method']) ? $event['method'] : '') ?></td>
                 </tr>
               <?php endforeach; ?>
               </tbody>
@@ -238,15 +241,15 @@ $attribution = $status['attribution'] ?? [];
       <div class="alert alert-info">Some configuration coverage is limited. These are coverage limitations, not pending changes.</div>
       <?php foreach ($status['coverage_limitations'] as $limitation): ?>
         <div class="pendingchanges-file">
-          <?php if (($limitation['reason'] ?? '') === 'row_limit'): ?>
-            <?= pendingchanges_h($limitation['table'] ?? 'unknown table') ?>: <?= (int) ($limitation['rows'] ?? 0) ?> rows exceeds the <?= (int) ($limitation['limit'] ?? 0) ?>-row cap.
-          <?php elseif (($limitation['reason'] ?? '') === 'scope_expanded_while_pending'): ?>
-            Additional watcher coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', $limitation['tables'] ?? [])) ?>.
-          <?php elseif (($limitation['reason'] ?? '') === 'astdb_scope_expanded_while_pending'): ?>
-            Immediate Asterisk-state coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', $limitation['families'] ?? [])) ?>.
-          <?php elseif (($limitation['reason'] ?? '') === 'astdb_row_limit'): ?>
-            AstDB coverage was not read because <?= (int) ($limitation['rows'] ?? 0) ?> rows exceeds the <?= (int) ($limitation['limit'] ?? 0) ?>-row cap.
-          <?php elseif (($limitation['reason'] ?? '') === 'astdb_unavailable'): ?>
+          <?php if ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'row_limit'): ?>
+            <?= pendingchanges_h(isset($limitation['table']) ? $limitation['table'] : 'unknown table') ?>: <?= (int) (isset($limitation['rows']) ? $limitation['rows'] : 0) ?> rows exceeds the <?= (int) (isset($limitation['limit']) ? $limitation['limit'] : 0) ?>-row cap.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'scope_expanded_while_pending'): ?>
+            Additional watcher coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : [])) ?>.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_scope_expanded_while_pending'): ?>
+            Immediate Asterisk-state coverage begins after the current pending reload is resolved: <?= pendingchanges_h(implode(', ', isset($limitation['families']) ? $limitation['families'] : [])) ?>.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_row_limit'): ?>
+            AstDB coverage was not read because <?= (int) (isset($limitation['rows']) ? $limitation['rows'] : 0) ?> rows exceeds the <?= (int) (isset($limitation['limit']) ? $limitation['limit'] : 0) ?>-row cap.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_unavailable'): ?>
             AstDB immediate-state coverage is unavailable on this host.
           <?php else: ?>
             <?= pendingchanges_h(json_encode($limitation, JSON_UNESCAPED_SLASHES)) ?>
@@ -261,7 +264,7 @@ $attribution = $status['attribution'] ?? [];
       <section class="pendingchanges-card">
         <h3>Extensions</h3>
         <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
-          <?php foreach ($extensionChanges[$kind] ?? [] as $item) pendingchanges_render_extension($kind, $item); ?>
+          <?php foreach (isset($extensionChanges[$kind]) ? $extensionChanges[$kind] : [] as $item) pendingchanges_render_extension($kind, $item); ?>
         <?php endforeach; ?>
       </section>
     <?php endif; ?>
@@ -270,7 +273,7 @@ $attribution = $status['attribution'] ?? [];
       <section class="pendingchanges-card">
         <h3><?= pendingchanges_h(pendingchanges_table_label($table)) ?></h3>
         <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
-          <?php foreach ($changes[$kind] ?? [] as $item) pendingchanges_render_record($kind, $table, $item); ?>
+          <?php foreach (isset($changes[$kind]) ? $changes[$kind] : [] as $item) pendingchanges_render_record($kind, $table, $item); ?>
         <?php endforeach; ?>
       </section>
     <?php endforeach; ?>
@@ -279,7 +282,7 @@ $attribution = $status['attribution'] ?? [];
         <h3>Immediate Asterisk state (AstDB)</h3>
         <p class="pendingchanges-file">These named FreePBX state families may already be effective; they are not necessarily waiting for Apply Config.</p>
         <?php foreach (['added', 'removed', 'updated'] as $kind): ?>
-          <?php foreach ($astdbChanges[$kind] ?? [] as $item) pendingchanges_render_record($kind, 'AstDB', $item); ?>
+          <?php foreach (isset($astdbChanges[$kind]) ? $astdbChanges[$kind] : [] as $item) pendingchanges_render_record($kind, 'AstDB', $item); ?>
         <?php endforeach; ?>
       </section>
     <?php endif; ?>

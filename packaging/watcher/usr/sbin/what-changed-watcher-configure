@@ -11,7 +11,11 @@ if [ ! -f /etc/freepbx.conf ]; then
 fi
 
 secret=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
-database=$(php /usr/lib/what-changed-watcher/configure-database.php)
+library=/usr/lib/what-changed-watcher
+if [ ! -f "$library/configure-database.php" ]; then
+  library=/usr/local/lib/what-changed-watcher
+fi
+database=$(php "$library/configure-database.php")
 tab=$(printf '\t')
 db_host=${database%%"$tab"*}
 db_name=${database#*"$tab"}
@@ -22,7 +26,15 @@ fi
 
 # Root's local MariaDB socket is used only to create/update this dedicated
 # account. The watcher itself receives SELECT and nothing else.
-mariadb --protocol=socket <<SQL
+if command -v mariadb >/dev/null 2>&1; then
+  mysql_client=mariadb
+elif command -v mysql >/dev/null 2>&1; then
+  mysql_client=mysql
+else
+  echo 'Neither the mariadb nor mysql client was found.' >&2
+  exit 1
+fi
+"$mysql_client" --protocol=socket <<SQL
   CREATE USER IF NOT EXISTS 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
   ALTER USER 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
   GRANT SELECT ON \`$db_name\`.* TO 'what_changed_watcher'@'localhost';

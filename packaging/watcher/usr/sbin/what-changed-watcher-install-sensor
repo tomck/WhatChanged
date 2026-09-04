@@ -7,19 +7,30 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 target=
-for candidate in /etc/php/*/apache2/conf.d; do
+for candidate in /etc/php/*/apache2/conf.d /etc/php.d; do
   if [ -d "$candidate" ]; then
     target=$candidate
   fi
 done
 if [ -z "$target" ]; then
-  echo 'No Apache PHP conf.d directory was found.' >&2
+  echo 'No Apache PHP configuration directory was found.' >&2
   exit 1
 fi
 
 install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-attribution
+sensor_source=/usr/lib/what-changed-watcher/99-what-changed-attribution.ini
+if [ ! -f "$sensor_source" ]; then
+  sensor_source=/usr/local/lib/what-changed-watcher/99-what-changed-attribution.ini
+fi
 install -o root -g root -m 0644 \
-  /usr/lib/what-changed-watcher/99-what-changed-attribution.ini \
+  "$sensor_source" \
   "$target/99-what-changed-attribution.ini"
 apachectl configtest
-systemctl reload apache2
+if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
+  systemctl reload apache2
+elif systemctl list-unit-files httpd.service >/dev/null 2>&1; then
+  systemctl reload httpd
+else
+  echo 'No Apache systemd service was found.' >&2
+  exit 1
+fi

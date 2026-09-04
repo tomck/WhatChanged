@@ -11,7 +11,7 @@
  */
 
 if (!function_exists('whatchanged_audit_scalar')) {
-    function whatchanged_audit_scalar($value, int $limit = 96): string
+    function whatchanged_audit_scalar($value, $limit = 96)
     {
         if (!is_scalar($value)) {
             return '';
@@ -20,9 +20,9 @@ if (!function_exists('whatchanged_audit_scalar')) {
         return substr((string) $value, 0, $limit);
     }
 
-    function whatchanged_audit_username(): string
+    function whatchanged_audit_username()
     {
-        $user = $_SESSION['AMP_user'] ?? null;
+        $user = isset($_SESSION['AMP_user']) ? $_SESSION['AMP_user'] : null;
         if (!is_object($user)) {
             return '';
         }
@@ -35,16 +35,16 @@ if (!function_exists('whatchanged_audit_scalar')) {
         return '';
     }
 
-    function whatchanged_audit_request(): void
+    function whatchanged_audit_request()
     {
-        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        $request = is_array($_REQUEST ?? null) ? $_REQUEST : [];
-        $command = whatchanged_audit_scalar($request['command'] ?? '');
-        $handler = whatchanged_audit_scalar($request['handler'] ?? '');
-        $action = whatchanged_audit_scalar($request['action'] ?? '');
-        $display = whatchanged_audit_scalar($request['display'] ?? '');
-        $module = whatchanged_audit_scalar($request['module'] ?? '');
-        $type = whatchanged_audit_scalar($request['type'] ?? '');
+        $method = strtoupper((string) (isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET'));
+        $request = is_array($_REQUEST) ? $_REQUEST : [];
+        $command = whatchanged_audit_scalar(isset($request['command']) ? $request['command'] : '');
+        $handler = whatchanged_audit_scalar(isset($request['handler']) ? $request['handler'] : '');
+        $action = whatchanged_audit_scalar(isset($request['action']) ? $request['action'] : '');
+        $display = whatchanged_audit_scalar(isset($request['display']) ? $request['display'] : '');
+        $module = whatchanged_audit_scalar(isset($request['module']) ? $request['module'] : '');
+        $type = whatchanged_audit_scalar(isset($request['type']) ? $request['type'] : '');
         $isApply = $command === 'reload' || $handler === 'reload';
         $isWrite = in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $readOnlyCommands = ['authping', 'scheduler', 'navbartoogle', 'check-and-set-language'];
@@ -93,8 +93,14 @@ if (!function_exists('whatchanged_audit_scalar')) {
         }
 
         try {
-            $eventId = bin2hex(random_bytes(12));
-        } catch (Throwable $error) {
+            if (function_exists('random_bytes')) {
+                $eventId = bin2hex(random_bytes(12));
+            } elseif (function_exists('openssl_random_pseudo_bytes')) {
+                $eventId = bin2hex(openssl_random_pseudo_bytes(12));
+            } else {
+                throw new Exception('No secure random source is available');
+            }
+        } catch (Exception $error) {
             $eventId = hash('sha256', microtime(true).'-'.getmypid().'-'.$username);
         }
         $event = [
@@ -104,7 +110,7 @@ if (!function_exists('whatchanged_audit_scalar')) {
             'username' => $username,
             'operation' => $isApply ? 'apply' : 'stage',
             'method' => $method,
-            'script' => whatchanged_audit_scalar(basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''))),
+            'script' => whatchanged_audit_scalar(basename((string) (isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : ''))),
             'display' => $display,
             'module' => $module,
             'type' => $type,
@@ -126,7 +132,7 @@ if (!function_exists('whatchanged_audit_scalar')) {
         }
         if (flock($handle, LOCK_EX)) {
             $stat = fstat($handle);
-            if (($stat['size'] ?? 0) > 1048576) {
+            if ((isset($stat['size']) ? $stat['size'] : 0) > 1048576) {
                 ftruncate($handle, 0);
                 rewind($handle);
             } else {
@@ -143,6 +149,6 @@ if (!function_exists('whatchanged_audit_scalar')) {
 
 // auto_prepend_file runs before FreePBX restores authentication. The shutdown
 // callback runs after gui_auth.php and the requested module handler complete.
-if (PHP_SAPI !== 'cli' && str_starts_with((string) ($_SERVER['SCRIPT_FILENAME'] ?? ''), '/var/www/html/admin/')) {
+if (PHP_SAPI !== 'cli' && strncmp((string) (isset($_SERVER['SCRIPT_FILENAME']) ? $_SERVER['SCRIPT_FILENAME'] : ''), '/var/www/html/admin/', 20) === 0) {
     register_shutdown_function('whatchanged_audit_request');
 }
