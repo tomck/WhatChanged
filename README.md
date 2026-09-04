@@ -109,6 +109,29 @@ sudo ./deploy/install-attribution-sensor.sh
 That installer validates and reloads Apache only. It never invokes Apply
 Config, `fwconsole reload`, or an Asterisk reload.
 
+## Private alpha release artifacts
+
+Alpha testers install two separately signed artifacts: the FreePBX module
+archive (`pendingchanges-<version>.tgz`) and the Debian watcher package
+(`what-changed-watcher_<version>_all.deb`). The module archive does **not**
+contain the watcher. Build the watcher package in the disposable Debian 12 lab
+with:
+
+```sh
+./scripts/package-watcher.sh
+```
+
+See [the alpha installation guide](docs/alpha-install.md) for the supported
+one-PBX setup, checksum/signature verification, first-baseline workflow, and
+remote-MariaDB limitation.
+
+For a release staged on the signing host, create detached GPG signatures and a
+signed checksum manifest without moving the secret key into the lab:
+
+```sh
+./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.10.tgz what-changed-watcher_0.1.0_all.deb
+```
+
 Open Source Tripwire is intentionally not part of this project: it can report
 that a file changed, but cannot explain a pending FreePBX change.
 
@@ -154,7 +177,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.8.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.10.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
