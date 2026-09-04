@@ -1,3 +1,8 @@
 __pycache__/
 *.py[cod]
 .env.lab
+dist/pendingchanges-*.tgz
+dist/what-changed-watcher*.deb
+dist/what-changed-watcher-portable_*.tar.gz
+dist/what-changed-signing-*.tar.gz
+dist/signed-release/

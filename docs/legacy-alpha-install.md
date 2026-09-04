@@ -50,7 +50,25 @@ starts the observer. It does not run Apply Config or reload Asterisk.
 
 ## Install the matching module candidate
 
-Replace the filename below with the archive for the PBX's major version:
+Use only the archive matching the PBX's FreePBX major version.
+
+FreePBX 14:
+
+```sh
+sudo tar -xzf pendingchanges-14.0.0.11.tgz -C /var/www/html/admin/modules
+sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
+sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+```
+
+FreePBX 15:
+
+```sh
+sudo tar -xzf pendingchanges-15.0.0.11.tgz -C /var/www/html/admin/modules
+sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
+sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+```
+
+FreePBX 16:
 
 ```sh
 sudo tar -xzf pendingchanges-16.0.0.11.tgz -C /var/www/html/admin/modules

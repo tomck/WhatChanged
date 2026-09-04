@@ -1,0 +1,10 @@
+FROM maxrip/docker-freepbx:asterisk20.8.1.2-freepbx16@sha256:d0368ee4928676ada5a4db231d7328fafc04cc3716f5d5168e707bf532c17a1c
+
+# The published image's Asterisk binary links against libbfd-2.40-system.so,
+# but its final package-cleanup layer removes binutils and npm. Restore those
+# runtime packages from the matching Debian 12 base repositories; FreePBX's
+# locally bundled pm2 module needs npm during its own install script.
+RUN mv /etc/apt/sources.list.d/php.list /etc/apt/sources.list.d/php.list.disabled \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends binutils npm \
+    && rm -rf /var/lib/apt/lists/*

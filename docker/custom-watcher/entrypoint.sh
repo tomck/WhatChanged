@@ -4,6 +4,8 @@
 set -eu
 
 state_dir=${STATE_DIR:-/var/lib/pendingchanges-watcher}
+run_uid=${RUN_UID:-999}
+run_gid=${RUN_GID:-999}
 mkdir -p "$state_dir"
-chown -R 999:999 "$state_dir"
-exec su-exec 999:999 python /usr/local/bin/watcher.py
+chown -R "$run_uid:$run_gid" "$state_dir"
+exec su-exec "$run_uid:$run_gid" python /usr/local/bin/watcher.py
