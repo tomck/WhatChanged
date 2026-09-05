@@ -5,10 +5,10 @@ deliberately narrower than a support claim.
 
 | FreePBX target | Candidate | Validated runtime | Current evidence | Still required |
 | --- | --- | --- | --- | --- |
-| 14 | `14.0.0.11` | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 15 | `15.0.0.11` | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 16 | `16.0.0.11` | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 17 | `17.0.0.11` | PHP 8.2 | All compatibility checks, real Module Admin archive install, and complete Docker smoke gate | Continued alpha feedback on varied installations |
+| 14 | `14.0.0.12` | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 15 | `15.0.0.12` | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 16 | `16.0.0.12` | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 17 | `17.0.0.12` | PHP 8.2 | All compatibility checks, real Module Admin archive install, and complete Docker smoke gate | Continued alpha feedback on varied installations |
 
 The shared portable watcher additionally passes Python 3.6 compilation,
 cross-version PHP sensor tests, archive-layout checks, and service-path checks.

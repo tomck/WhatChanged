@@ -30,9 +30,10 @@ trap 'rm -rf "$stage" "$package"' EXIT HUP INT TERM
 
 dpkg-deb --info "$package" | grep -qx ' Package: what-changed-watcher'
 dpkg-deb --info "$package" | grep -qx " Version: $expected_version"
-dpkg-deb --contents "$package" | grep -q 'usr/lib/what-changed-watcher/watcher.py'
-dpkg-deb --contents "$package" | grep -q 'lib/systemd/system/what-changed-watcher.service'
-dpkg-deb --contents "$package" | grep -q 'usr/sbin/what-changed-watcher-configure'
+dpkg-deb --contents "$package" > "$stage/contents.txt"
+grep -q 'usr/lib/what-changed-watcher/watcher.py' "$stage/contents.txt"
+grep -q 'lib/systemd/system/what-changed-watcher.service' "$stage/contents.txt"
+grep -q 'usr/sbin/what-changed-watcher-configure' "$stage/contents.txt"
 dpkg-deb --extract "$package" "$stage"
 
 test -f "$stage/etc/what-changed-watcher.env"

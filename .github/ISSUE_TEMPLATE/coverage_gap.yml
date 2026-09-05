@@ -1,0 +1,48 @@
+name: Coverage gap
+description: Report a FreePBX change that was not attributed by the explicit coverage
+title: "[Coverage]: "
+labels: [coverage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WhatChanged is intentionally bounded. This form helps add a source safely. Do not upload PBX backups, database dumps, credentials, call records, or unredacted screenshots.
+  - type: input
+    id: versions
+    attributes:
+      label: Module, watcher, FreePBX, PHP, Asterisk, and OS versions
+    validations:
+      required: true
+  - type: dropdown
+    id: health
+    attributes:
+      label: Watcher health at the time
+      options: [Healthy, Delayed, Stale, Invalid, Unreadable, Installed Unconfigured, Not Installed]
+    validations:
+      required: true
+  - type: textarea
+    id: action
+    attributes:
+      label: What synthetic change did you make?
+      description: Name the FreePBX page and setting, but replace real values with safe test values.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What evidence appeared?
+      description: Include the redacted `pendingchanges feedback` output if useful; never include the full status file.
+  - type: textarea
+    id: reload
+    attributes:
+      label: Apply Config state
+      description: Did the button appear, and was Apply Config pressed?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I used synthetic or redacted values and included no credentials, customer data, or call records.
+          required: true

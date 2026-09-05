@@ -10,6 +10,32 @@ namespace {
     {
         public function status()
         {
+            if (isset($GLOBALS['argv'][2]) && $GLOBALS['argv'][2] === 'degraded') {
+                return [
+                    'pending' => false,
+                    'baseline' => true,
+                    'watcher' => false,
+                    'message' => 'Watcher health is degraded; current full-scope configuration state is unknown.',
+                    'captured_at' => 1700000000,
+                    'database' => [],
+                    'astdb' => [],
+                    'generated_files' => [],
+                    'module_files' => [],
+                    'coverage_limitations' => [],
+                    'coverage' => [],
+                    'attribution' => [],
+                    'watcher_health' => [
+                        'state' => 'not_installed',
+                        'label' => 'Not Installed',
+                        'severity' => 'warning',
+                        'detail' => 'The external watcher is not installed; framework-only coverage is reduced.',
+                        'sensor_loaded' => false,
+                        'observation_age_seconds' => null,
+                    ],
+                    'data_current' => false,
+                    'coverage_mode' => 'framework',
+                ];
+            }
             return [
                 'pending' => true,
                 'baseline' => true,
@@ -17,6 +43,16 @@ namespace {
                 'message' => 'Configuration drift detected since the applied baseline.',
                 'captured_at' => 1700000000,
                 'watcher_observed_at' => 1700000030,
+                'watcher_health' => [
+                    'state' => 'healthy',
+                    'label' => 'Healthy',
+                    'severity' => 'success',
+                    'detail' => 'A completed watcher observation is current.',
+                    'sensor_loaded' => true,
+                    'observation_age_seconds' => 5,
+                ],
+                'data_current' => true,
+                'coverage_mode' => 'watcher',
                 'database' => [
                     'users' => [
                         'added' => [],
@@ -62,8 +98,8 @@ namespace {
         }
     }
 
-    if ($argc !== 2) {
-        fwrite(STDERR, "usage: legacy-page-smoke.php extracted-module-directory\n");
+    if ($argc < 2 || $argc > 3) {
+        fwrite(STDERR, "usage: legacy-page-smoke.php extracted-module-directory [degraded]\n");
         exit(2);
     }
 
@@ -77,10 +113,16 @@ namespace {
     ob_start();
     require $argv[1].'/page.pendingchanges.php';
     $html = ob_get_clean();
-    foreach (['Pending Changes Tripwire', '7001', 'Legacy test', 'legacy_admin'] as $expected) {
+    $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
+        ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'No drift appears in the available evidence']
+        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Current full watcher snapshot', '7001', 'Legacy test', 'legacy_admin'];
+    foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);
         }
+    }
+    if (isset($argv[2]) && $argv[2] === 'degraded' && strpos($html, 'No attributable configuration or watched-file drift is currently present.') !== false) {
+        throw new \RuntimeException('Degraded watcher page claimed a current clean state');
     }
     echo "legacy page rendering checks passed\n";
 }

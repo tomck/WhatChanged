@@ -67,11 +67,21 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     public function status() {
-        $watcher = $this->watcherStatus();
+        $probe = $this->watcherProbe();
+        $watcher = $probe['status'];
+        $health = $probe['health'];
         if ($watcher !== null) {
             $files = $watcher['file_drift'];
+            $current = $health['state'] === 'healthy';
+            $pending = $current ? $watcher['need_reload'] : $this->needReload();
+            $message = $watcher['message'];
+            if ($health['state'] === 'delayed') {
+                $message = 'Watcher observation is delayed; current configuration state may be incomplete.';
+            } elseif ($health['state'] === 'stale') {
+                $message = 'Watcher results are stale. Current configuration state is unknown.';
+            }
             return [
-                'pending' => $watcher['need_reload'],
+                'pending' => $pending,
                 'database' => $watcher['database_drift'],
                 'astdb' => isset($watcher['astdb_drift']) ? $watcher['astdb_drift'] : [],
                 'files' => $files,
@@ -80,24 +90,50 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'coverage_limitations' => isset($watcher['coverage_limitations']) ? $watcher['coverage_limitations'] : [],
                 'coverage' => isset($watcher['coverage']) ? $watcher['coverage'] : [],
                 'attribution' => isset($watcher['attribution']) ? $watcher['attribution'] : [],
-                'message' => $watcher['message'],
+                'message' => $message,
                 'baseline' => $watcher['baseline_available'],
                 'captured_at' => isset($watcher['baseline_captured_at']) ? $watcher['baseline_captured_at'] : null,
                 'watcher_observed_at' => $watcher['observed_at'],
                 'watcher' => true,
+                'watcher_health' => $health,
+                'data_current' => $current,
+                'coverage_mode' => 'watcher',
             ];
         }
         $baseline = $this->baseline();
         $pending = $this->needReload();
         if (!$baseline) {
-            return ['pending' => $pending, 'baseline' => false, 'message' => 'No applied baseline has been seeded.', 'watcher' => false];
+            return [
+                'pending' => $pending,
+                'database' => [],
+                'astdb' => [],
+                'files' => [],
+                'generated_files' => [],
+                'module_files' => [],
+                'coverage_limitations' => [],
+                'coverage' => [],
+                'attribution' => $this->unavailableAttribution($pending),
+                'baseline' => false,
+                'captured_at' => null,
+                'message' => 'No applied baseline has been seeded; full watcher coverage is unavailable.',
+                'watcher' => false,
+                'watcher_health' => $health,
+                'data_current' => false,
+                'coverage_mode' => 'framework',
+            ];
         }
         $database = $this->databaseDiff($baseline['database'], $this->databaseSnapshot());
         $files = $this->fileDiff($baseline['files'], $this->fileSnapshot());
         $hasDrift = !empty($database) || !empty($files);
-        $message = $pending && !$hasDrift
-            ? 'Reload requested; origin unavailable.'
-            : ($pending ? 'Configuration drift detected since the applied baseline.' : 'No pending reload.');
+        if ($hasDrift) {
+            $message = $pending
+                ? 'Configuration drift detected by the framework-only fallback; watcher coverage is degraded.'
+                : 'Framework-only drift detected; watcher coverage is degraded.';
+        } else {
+            $message = $pending
+                ? 'Reload requested; full origin analysis is unavailable because watcher health is degraded.'
+                : 'Watcher health is degraded; current full-scope configuration state is unknown.';
+        }
         return compact('pending', 'database', 'files', 'message') + [
             'generated_files' => $this->fileScope($files, 'generated/'),
             'module_files' => $this->fileScope($files, 'module/'),
@@ -110,15 +146,13 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'generated_files' => '/etc/asterisk/*.conf',
                 'module_tree_digests' => 'all modules except pendingchanges',
             ],
-            'attribution' => [
-                'enabled' => false,
-                'confidence' => $pending ? 'unavailable' : 'none',
-                'actors' => [],
-                'requests' => [],
-                'note' => 'Authenticated request correlation requires the external watcher sensor.',
-                'caveat' => 'Request correlation is evidence of who may have staged work, not proof that an account caused each reported state change.',
-            ],
-            'baseline' => true, 'captured_at' => $baseline['captured_at'], 'watcher' => false,
+            'attribution' => $this->unavailableAttribution($pending),
+            'baseline' => true,
+            'captured_at' => $baseline['captured_at'],
+            'watcher' => false,
+            'watcher_health' => $health,
+            'data_current' => false,
+            'coverage_mode' => 'framework',
         ];
     }
 
@@ -141,16 +175,141 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         ];
     }
 
-    private function watcherStatus() {
+    private function watcherProbe() {
         $path = '/var/lib/asterisk/pendingchanges-watcher/status.json';
+        $installed = $this->watcherInstalled();
+        $sensorLoaded = $this->attributionSensorLoaded();
         if (!is_readable($path)) {
-            return null;
+            return [
+                'status' => null,
+                'health' => self::watcherHealthForMissingStatus($installed, $sensorLoaded),
+            ];
         }
-        $status = json_decode((string) file_get_contents($path), true);
-        if (!is_array($status) || !isset($status['need_reload'], $status['database_drift'], $status['file_drift'], $status['message'])) {
-            return null;
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            return [
+                'status' => null,
+                'health' => self::watcherHealthFailure('unreadable', 'Watcher status exists but could not be read.', $installed, $sensorLoaded),
+            ];
         }
-        return $status;
+        $status = json_decode((string) $contents, true);
+        if (!is_array($status) || !isset($status['observed_at'], $status['need_reload'], $status['database_drift'], $status['file_drift'], $status['message'])) {
+            return [
+                'status' => null,
+                'health' => self::watcherHealthFailure('invalid', 'Watcher status is malformed or incomplete.', $installed, $sensorLoaded),
+            ];
+        }
+        return [
+            'status' => $status,
+            'health' => self::classifyWatcherHealth($status, time(), $installed, $sensorLoaded),
+        ];
+    }
+
+    public static function classifyWatcherHealth(array $status, $now = null, $installed = true, $sensorLoaded = false) {
+        $now = $now === null ? time() : (int) $now;
+        $observed = isset($status['observed_at']) && is_numeric($status['observed_at']) ? (int) $status['observed_at'] : 0;
+        if ($observed <= 0) {
+            return self::watcherHealthFailure('invalid', 'Watcher status has no valid observation time.', $installed, $sensorLoaded);
+        }
+        $metadata = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : [];
+        $expected = isset($metadata['expected_refresh_seconds']) && is_numeric($metadata['expected_refresh_seconds'])
+            ? (int) ceil((float) $metadata['expected_refresh_seconds']) : 30;
+        if ($expected < 1 || $expected > 3600) {
+            $expected = 30;
+        }
+        $age = max(0, $now - $observed);
+        $healthyDeadline = max(15, $expected * 3);
+        $delayedDeadline = max(60, $expected * 10);
+        if ($age <= $healthyDeadline) {
+            $state = 'healthy';
+            $label = 'Healthy';
+            $severity = 'success';
+            $detail = 'A completed watcher observation is current.';
+        } elseif ($age <= $delayedDeadline) {
+            $state = 'delayed';
+            $label = 'Delayed';
+            $severity = 'warning';
+            $detail = 'The latest completed watcher observation is later than expected.';
+        } else {
+            $state = 'stale';
+            $label = 'Stale';
+            $severity = 'danger';
+            $detail = 'The latest watcher observation is too old to describe current configuration state.';
+        }
+        return [
+            'state' => $state,
+            'label' => $label,
+            'severity' => $severity,
+            'detail' => $detail,
+            'installed' => (bool) $installed,
+            'sensor_loaded' => (bool) $sensorLoaded,
+            'observation_age_seconds' => $age,
+            'expected_refresh_seconds' => $expected,
+            'healthy_deadline_seconds' => $healthyDeadline,
+            'stale_deadline_seconds' => $delayedDeadline,
+        ];
+    }
+
+    private static function watcherHealthForMissingStatus($installed, $sensorLoaded) {
+        if ($installed) {
+            return self::watcherHealthFailure(
+                'installed_unconfigured',
+                'The watcher appears installed but has not published a readable observation.',
+                true,
+                $sensorLoaded
+            );
+        }
+        return self::watcherHealthFailure(
+            'not_installed',
+            'The external watcher is not installed; framework-only coverage is reduced.',
+            false,
+            $sensorLoaded,
+            'warning'
+        );
+    }
+
+    private static function watcherHealthFailure($state, $detail, $installed, $sensorLoaded, $severity = 'danger') {
+        return [
+            'state' => $state,
+            'label' => ucwords(str_replace('_', ' ', $state)),
+            'severity' => $severity,
+            'detail' => $detail,
+            'installed' => (bool) $installed,
+            'sensor_loaded' => (bool) $sensorLoaded,
+            'observation_age_seconds' => null,
+            'expected_refresh_seconds' => null,
+        ];
+    }
+
+    private function watcherInstalled() {
+        foreach ([
+            '/usr/lib/what-changed-watcher/watcher.py',
+            '/usr/local/lib/what-changed-watcher/watcher.py',
+            '/etc/systemd/system/what-changed-watcher.service',
+            '/lib/systemd/system/what-changed-watcher.service',
+            '/usr/lib/systemd/system/what-changed-watcher.service',
+            '/etc/what-changed-watcher.env',
+        ] as $path) {
+            if (file_exists($path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function attributionSensorLoaded() {
+        return strpos((string) ini_get('auto_prepend_file'), 'what-changed-request-audit.php') !== false;
+    }
+
+    private function unavailableAttribution($pending) {
+        return [
+            'enabled' => false,
+            'confidence' => $pending ? 'unavailable' : 'none',
+            'actors' => [],
+            'requests' => [],
+            'note' => 'Authenticated request correlation requires the external watcher sensor.',
+            'caveat' => 'Request correlation is evidence of who may have staged work, not proof that an account caused each reported state change.',
+        ];
     }
 
     private function databaseSnapshot() {

@@ -4,8 +4,8 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 release_dir=${1:-"$root_dir/dist/signed-release"}
 release_dir=$(cd "$release_dir" && pwd)
-module_release=11
-watcher_version=0.1.1
+module_release=12
+watcher_version=0.1.2
 gpg_home=$(mktemp -d)
 module_stage=$(mktemp -d)
 trap 'rm -rf "$gpg_home" "$module_stage"' EXIT HUP INT TERM

@@ -43,13 +43,18 @@ def table_changes(state, kind):
 
 def reset_baseline(cursor):
     """Remove test-only state and wait for a fresh clean watcher baseline."""
-    previous_observation = observation().get('observed_at', 0) if STATUS.exists() else 0
     set_reload(cursor, False)
     cursor.execute(f'DROP TABLE IF EXISTS `{TABLE}`')
     for path in (GENERATED_FIXTURE, MODULE_FIXTURE, OWN_MODULE_FIXTURE, BASELINE):
         path.unlink(missing_ok=True)
+    previous_observation = observation().get('observed_at', 0) if STATUS.exists() else 0
+    set_reload(cursor, True)
+    pending = wait_for('fixture cleanup transition was not observed', lambda state:
+                       state['observed_at'] > previous_observation and
+                       state['need_reload'])
+    set_reload(cursor, False)
     return wait_for('clean baseline was not captured', lambda state:
-                    state['observed_at'] > previous_observation and
+                    state['observed_at'] > pending['observed_at'] and
                     state['baseline_available'] and not state['need_reload'] and
                     not state['database_drift'] and not state['astdb_drift'] and
                     not state['file_drift'])

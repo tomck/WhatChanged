@@ -1,4 +1,4 @@
-# WhatChanged private-alpha installation
+# WhatChanged public-alpha installation
 
 This alpha supports FreePBX 17 on a Debian 12 PBX with a **local** MariaDB
 server. It is an observer: installation, configuration, and removal must not
@@ -26,10 +26,10 @@ Run these commands as a root-capable administrator, substituting the exact
 downloaded filenames:
 
 ```sh
-sudo apt install ./what-changed-watcher_0.1.1_all.deb
+sudo apt install ./what-changed-watcher_0.1.2_all.deb
 sudo what-changed-watcher-configure
 
-sudo tar -xzf pendingchanges-17.0.0.11.tgz -C /var/www/html/admin/modules
+sudo tar -xzf pendingchanges-17.0.0.12.tgz -C /var/www/html/admin/modules
 sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 ```
@@ -58,6 +58,13 @@ sudo -u asterisk php /var/www/html/admin/modules/pendingchanges/bin/pendingchang
 In FreePBX, open **Reports → Pending Changes Tripwire**. The Module Admin
 status may say **Unsigned** until the module is locally signed on that PBX;
 that is expected for an alpha archive and does not prevent operation.
+
+The Watcher health card must say **Healthy** and **Current full watcher
+snapshot** before an empty drift report can be treated as meaningful. A running
+systemd unit alone is not sufficient. Delayed, stale, invalid, unreadable,
+unconfigured, or absent states are deliberately degraded and cannot produce an
+all-clear result. The attribution sensor line should say **Loaded for this
+FreePBX web request** if inferred administrator evidence is expected.
 
 Do one normal, known Apply Config only when you were already ready to apply
 the PBX's existing pending work. The watcher then captures its first clean
