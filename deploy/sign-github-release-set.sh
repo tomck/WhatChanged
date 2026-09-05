@@ -8,8 +8,8 @@ primary=44D5C8E9005344DE422F443FEF3752E0A8C82A63
 bundle_dir=$(cd "$(dirname "$0")" && pwd)
 unsigned_dir="$bundle_dir/unsigned"
 output_dir="$bundle_dir/signed"
-module_release=11
-watcher_version=0.1.1
+module_release=12
+watcher_version=0.1.2
 
 if [[ ! -t 0 || ! -t 1 ]]; then
   echo 'Run this program from an interactive terminal so GPG pinentry can unlock the key.' >&2

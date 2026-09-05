@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .env.lab
+/uisp_inventory.py
 dist/pendingchanges-*.tgz
 dist/what-changed-watcher*.deb
 dist/what-changed-watcher-portable_*.tar.gz

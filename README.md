@@ -1,7 +1,7 @@
 # WhatChanged
 
 `pendingchanges` is a FreePBX diagnostic module. FreePBX 17 is the primary
-target; FreePBX 14, 15, and 16 are separately versioned private-alpha
+target; FreePBX 14, 15, and 16 are separately versioned public-alpha
 candidates. It explains the **Apply Changes** banner by comparing the current
 configuration state with one baseline captured after a known-good apply.
 
@@ -110,7 +110,7 @@ sudo ./deploy/install-attribution-sensor.sh
 That installer validates and reloads Apache only. It never invokes Apply
 Config, `fwconsole reload`, or an Asterisk reload.
 
-## Private alpha release artifacts
+## Public alpha release artifacts
 
 Alpha testers install two separately signed artifacts: the FreePBX module
 archive (`pendingchanges-<version>.tgz`) and the Debian watcher package
@@ -126,11 +126,17 @@ See [the alpha installation guide](docs/alpha-install.md) for the supported
 one-PBX setup, checksum/signature verification, first-baseline workflow, and
 remote-MariaDB limitation.
 
+The Reports page now verifies the observer itself. A green **Healthy** result
+requires a recently completed full watcher snapshot; merely finding an
+installed service file is not enough. Delayed, stale, malformed, unreadable,
+unconfigured, and absent observers are shown explicitly, and degraded states
+never produce an all-clear message.
+
 For a release staged on the signing host, create detached GPG signatures and a
 signed checksum manifest without moving the secret key into the lab:
 
 ```sh
-./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.11.tgz what-changed-watcher_0.1.1_all.deb
+./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.12.tgz what-changed-watcher_0.1.2_all.deb
 ```
 
 The complete 14-17 GitHub prerelease set has a stricter two-stage workflow.
@@ -191,9 +197,9 @@ php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges feedback
 `seed` refuses to replace the baseline while a reload is pending. Capture a
 new baseline only after Apply Changes has completed successfully.
 
-## Private-alpha feedback export
+## Public-alpha feedback export
 
-The watcher never sends telemetry. For a private-alpha participant who chooses
+The watcher never sends telemetry. For a public-alpha participant who chooses
 to share what the watcher recognized, export its local bounded event ledger:
 
 ```sh
@@ -220,7 +226,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.11.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.12.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
@@ -293,6 +299,20 @@ FreePBX rewrites `sip.flags` as display/order metadata whenever an endpoint
 form is saved. The watcher deliberately excludes that volatile column so an
 extension edit reports the meaningful endpoint settings instead of a long list
 of false updates.
+
+## Public alpha and responsible disclosure
+
+This is alpha software. It adds a read-only observer and deliberately makes no
+claim that every FreePBX, Asterisk, commercial-module, or custom-module state
+store is covered. Anything not explicitly listed in the Coverage contract may
+not be detected. A locally signed or untrusted-module warning may remain until
+the author's OpenPGP primary key is certified through FreePBX's signing process.
+
+Use the coverage-gap issue form for a reproducible missed-change report that
+contains no PBX secrets or customer data. Report security problems privately
+through [GitHub Security Advisories](SECURITY.md); never attach database dumps,
+configuration archives, credentials, call records, or unredacted screenshots
+to a public issue.
 
 ## License
 

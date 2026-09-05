@@ -58,6 +58,9 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
    and start the watcher service. Confirm Module Admin lists it as either
    signed or explicitly **Unsigned** (the expected status for an intentionally
    unsigned local archive); do not mistake the warning for an install failure.
+   On the Reports page require **Healthy**, **Current full watcher snapshot**,
+   and (for administrator correlation) **Loaded for this FreePBX web request**.
+   A running unit without a recent completed observation is not healthy.
 2. Perform a known, normal Apply Changes. Wait for the watcher to record a
    clean baseline; retain only that baseline and its current status document.
 3. Make one documented, reversible test change without Apply Changes. Verify
@@ -95,8 +98,13 @@ state; other module enable/disable/version records remain covered.
 User Management coverage includes the bounded `userman_users` and
 `userman_users_settings` tables. The latter is joined to the username for a
 readable local report; secret-looking setting values are redacted, and the
-private-alpha feedback export retains only source/count/field-name metadata.
+public-alpha feedback export retains only source/count/field-name metadata.
 
 Fax Configuration coverage includes the bounded `fax_details` settings table,
 including the concurrent fax channel limit. Fax store/history records are not
 configuration evidence and remain outside the allowlist.
+
+If the health card reports delayed, stale, invalid, unreadable, unconfigured,
+or not installed, the full watcher result is not current. The module may show
+last-known or framework-only evidence to aid diagnosis, but it deliberately
+refuses to describe an empty degraded result as clean.

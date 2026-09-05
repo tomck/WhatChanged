@@ -9,11 +9,11 @@ are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-14.0.0.11` | 14 | `pendingchanges-14.0.0.11.tgz` | portable 0.1.1 bundle |
-| `pendingchanges-15.0.0.11` | 15 | `pendingchanges-15.0.0.11.tgz` | portable 0.1.1 bundle |
-| `pendingchanges-16.0.0.11` | 16 | `pendingchanges-16.0.0.11.tgz` | portable 0.1.1 bundle |
-| `pendingchanges-17.0.0.11` | 17 | `pendingchanges-17.0.0.11.tgz` | Debian 0.1.1 package |
-| `watcher-0.1.1` | shared observer | portable bundle and Debian package | n/a |
+| `pendingchanges-14.0.0.12` | 14 | `pendingchanges-14.0.0.12.tgz` | portable 0.1.2 bundle |
+| `pendingchanges-15.0.0.12` | 15 | `pendingchanges-15.0.0.12.tgz` | portable 0.1.2 bundle |
+| `pendingchanges-16.0.0.12` | 16 | `pendingchanges-16.0.0.12.tgz` | portable 0.1.2 bundle |
+| `pendingchanges-17.0.0.12` | 17 | `pendingchanges-17.0.0.12.tgz` | Debian 0.1.2 package |
+| `watcher-0.1.2` | shared observer | portable bundle and Debian package | n/a |
 
 All five tags point to the same source commit. Each release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
@@ -31,7 +31,7 @@ transferred to the isolated signing host:
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-0.1.1.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-0.1.2.tar.gz`. It contains
 the four module candidates, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -41,8 +41,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-0.1.1.tar.gz
-cd what-changed-signing-0.1.1
+tar -xzf what-changed-signing-0.1.2.tar.gz
+cd what-changed-signing-0.1.2
 ./sign.sh
 ```
 

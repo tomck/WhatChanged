@@ -99,6 +99,15 @@ READ_ONLY_COMMANDS = {
     'authping', 'scheduler', 'navbartoogle', 'check-and-set-language',
 }
 
+def watcher_health_metadata():
+    """Describe the observation cadence consumed by the FreePBX module."""
+    return {
+        'schema': 1,
+        'expected_refresh_seconds': FULL_SCAN_INTERVAL,
+        'probe_interval_seconds': PROBE_INTERVAL,
+        'module_scan_interval_seconds': MODULE_SCAN_INTERVAL,
+    }
+
 ATTRIBUTION_TEXT_FIELDS = (
     'event_id', 'username', 'operation', 'method', 'script', 'display',
     'module', 'type', 'action', 'command', 'handler',
@@ -637,6 +646,7 @@ def main():
         )
         observation = {
             'observed_at': int(time.time()),
+            'watcher_health': watcher_health_metadata(),
             'need_reload': database['need_reload'],
             'baseline_available': baseline is not None,
             'baseline_captured_at': baseline_captured_at,

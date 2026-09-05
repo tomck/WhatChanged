@@ -2,8 +2,8 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-bundle_version=0.1.1
-module_release=11
+bundle_version=0.1.2
+module_release=12
 bundle_name="what-changed-signing-$bundle_version"
 archive="$root_dir/dist/$bundle_name.tar.gz"
 stage=$(mktemp -d)

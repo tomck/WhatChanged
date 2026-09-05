@@ -54,6 +54,15 @@ assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
 assert watcher.VOLATILE_COLUMNS['modules'] == {'signature'}
 assert watcher.primary_key(KeyCursor(), 'modules') == ['modulename']
 assert watcher.NULL_EQUIVALENT_ZERO_COLUMNS['outbound_routes'] == {'time_group_id'}
+watcher.PROBE_INTERVAL = 5
+watcher.FULL_SCAN_INTERVAL = 30
+watcher.MODULE_SCAN_INTERVAL = 300
+assert watcher.watcher_health_metadata() == {
+    'schema': 1,
+    'expected_refresh_seconds': 30,
+    'probe_interval_seconds': 5,
+    'module_scan_interval_seconds': 300,
+}
 
 # Authenticated request breadcrumbs contain only safe metadata. Correlation is
 # deliberately cautious: one account is likely, several are possible, and a

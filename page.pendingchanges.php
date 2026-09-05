@@ -166,6 +166,18 @@ $otherDatabaseChanges = $status['database'];
 unset($otherDatabaseChanges['users'], $otherDatabaseChanges['devices']);
 $astdbChanges = isset($status['astdb']) ? $status['astdb'] : [];
 $attribution = isset($status['attribution']) ? $status['attribution'] : [];
+$watcherHealth = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : [
+    'state' => 'invalid',
+    'label' => 'Unknown',
+    'severity' => 'danger',
+    'detail' => 'Watcher health information is unavailable.',
+    'sensor_loaded' => false,
+    'observation_age_seconds' => null,
+];
+$dataCurrent = !empty($status['data_current']);
+$messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] === 'danger'
+    ? 'alert-danger'
+    : ((isset($watcherHealth['severity']) && $watcherHealth['severity'] === 'warning') || $status['pending'] ? 'alert-warning' : 'alert-success');
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -183,12 +195,38 @@ $attribution = isset($status['attribution']) ? $status['attribution'] : [];
   .pendingchanges-attribution { padding:12px 14px; }
   .pendingchanges-attribution table { margin:10px 0 0; }
   .pendingchanges-confidence { font-weight:bold; text-transform:uppercase; font-size:12px; color:#5d6d67; }
+  .pendingchanges-health { padding:12px 14px; display:grid; grid-template-columns:minmax(110px, auto) 1fr; gap:7px 14px; }
+  .pendingchanges-health-label { font-weight:bold; }
+  .pendingchanges-health-state { font-weight:bold; text-transform:uppercase; }
+  .pendingchanges-health-state-success { color:#218739; }
+  .pendingchanges-health-state-warning { color:#a86d00; }
+  .pendingchanges-health-state-danger { color:#bb2d3b; }
 </style>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
   <p class="text-muted">Read-only comparison against the last applied baseline, with cautious correlation to authenticated administrator write requests.</p>
   <?= $notice ?>
-  <div class="alert <?= $status['pending'] ? 'alert-warning' : 'alert-success' ?>"><?= htmlentities($status['message']) ?></div>
+  <div class="alert <?= $messageClass ?>"><?= pendingchanges_h($status['message']) ?></div>
+  <section class="pendingchanges-card">
+    <h3>Watcher health</h3>
+    <div class="pendingchanges-health">
+      <div class="pendingchanges-health-label">Observer</div>
+      <div>
+        <span class="pendingchanges-health-state pendingchanges-health-state-<?= pendingchanges_h(isset($watcherHealth['severity']) ? $watcherHealth['severity'] : 'danger') ?>"><?= pendingchanges_h(isset($watcherHealth['label']) ? $watcherHealth['label'] : 'Unknown') ?></span>
+        — <?= pendingchanges_h(isset($watcherHealth['detail']) ? $watcherHealth['detail'] : '') ?>
+        <?php if (isset($watcherHealth['observation_age_seconds'])): ?>
+          Latest completed observation: <?= (int) $watcherHealth['observation_age_seconds'] ?> seconds ago.
+        <?php endif; ?>
+      </div>
+      <div class="pendingchanges-health-label">Coverage</div>
+      <div><?= $dataCurrent ? 'Current full watcher snapshot' : 'Reduced or last-known coverage; do not treat an empty result as all clear' ?></div>
+      <div class="pendingchanges-health-label">Attribution sensor</div>
+      <div><?= !empty($watcherHealth['sensor_loaded']) ? 'Loaded for this FreePBX web request' : 'Not loaded for this FreePBX web request; administrator correlation may be unavailable' ?></div>
+    </div>
+  </section>
+  <?php if (!$dataCurrent): ?>
+    <div class="alert alert-warning">Current full-scope drift cannot be declared clear while watcher health is degraded. Any evidence below is framework-only or from the last completed watcher observation.</div>
+  <?php endif; ?>
   <?php if ($status['pending']): ?>
     <section class="pendingchanges-card">
       <h3>Administrator request evidence (inferred)</h3>
@@ -257,8 +295,10 @@ $attribution = isset($status['attribution']) ? $status['attribution'] : [];
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
-    <?php if (empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+    <?php if ($dataCurrent && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
+    <?php elseif (!$dataCurrent && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+      <p class="text-muted">No drift appears in the available evidence, but watcher health must be restored before this can be treated as a current result.</p>
     <?php endif; ?>
     <?php if (!empty($extensionChanges)): ?>
       <section class="pendingchanges-card">
