@@ -2,10 +2,10 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-release_number=$(sed -n 's:.*<version>17\.0\.0\.\([^<]*\)</version>.*:\1:p' "$root_dir/module.xml")
+source "$root_dir/deploy/release-versions.sh"
 
-if [[ -z "$release_number" ]]; then
-  echo 'module.xml does not contain a 17.0.0.x source version' >&2
+if [[ -z "$module_version" ]]; then
+  echo 'module.xml does not contain a 17.x.y.z source version' >&2
   exit 1
 fi
 
@@ -27,13 +27,13 @@ cmp "$portable_root/files/watcher.py" "$root_dir/docker/custom-watcher/watcher.p
 
 for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
   read -r target php_version <<<"$specification"
-  archive="$root_dir/dist/pendingchanges-$target.0.0.$release_number.tgz"
+  archive="$root_dir/dist/pendingchanges-$module_version.tgz"
   if [[ "$target" == 17 ]]; then
     "$root_dir/scripts/package-module.sh" --target 17 --output-dir "$root_dir/dist" >/dev/null
   fi
 
   tar -tzf "$archive" | grep -qx 'pendingchanges/module.xml'
-  tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$target.0.0.$release_number</version>"
+  tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$module_version</version>"
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$target.0</version>"
 
   docker run --rm \

@@ -1,8 +1,10 @@
 # WhatChanged
 
+The shared `pendingchanges-17.0.1.0.tgz` module supports FreePBX 14–17.
+There is one PHP implementation and one release archive for all four versions. See [shared module compatibility](docs/shared-module.md).
+
 `pendingchanges` is a FreePBX diagnostic module. FreePBX 17 is the primary
-target; FreePBX 14, 15, and 16 are separately versioned public-alpha
-candidates. It explains the **Apply Changes** banner by comparing the current
+target; FreePBX 14, 15, and 16 use the same public-alpha module. It explains the **Apply Changes** banner by comparing the current
 configuration state with one baseline captured after a known-good apply.
 
 It is deliberately read-only with respect to PBX configuration: it neither
@@ -137,7 +139,7 @@ signed checksum manifest without moving the secret key into the lab:
 
 ```sh
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
-./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.12.tgz what-changed-watcher_0.1.2_all.deb
+./deploy/sign-release-artifacts.sh pendingchanges-17.0.1.0.tgz what-changed-watcher_0.1.2_all.deb
 ```
 
 The complete 14-17 GitHub prerelease set has a stricter two-stage workflow.
@@ -158,8 +160,7 @@ point to the same reviewed source commit from which their assets were built.
 
 ### FreePBX 14-16 compatibility candidates
 
-The legacy candidates are separate archives with matching FreePBX major-version
-metadata. Their shared PHP source is syntax-tested against PHP 5.6, 7.4, and
+The legacy candidates are a shared archive declaring all four FreePBX versions. Their shared PHP source is syntax-tested against PHP 5.6, 7.4, and
 8.2. Build and run the compatibility gate with:
 
 ```sh
@@ -227,7 +228,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.0.12.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.1.0.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:

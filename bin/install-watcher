@@ -1,0 +1,74 @@
+#!/bin/sh
+# One-step watcher install shipped inside the pendingchanges module archive.
+# Picks the Debian layout on Debian-based systems and the portable
+# (/usr/local) layout on CentOS/SangomaOS/SNG7-style systems, then runs the
+# same sensor + database-account configuration as the standalone packages.
+#
+# Usage (as root, after installing the module archive):
+#   sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+#   sudo .../bin/install-watcher debian|portable   # override OS detection
+set -eu
+
+usage() {
+  echo 'usage: install-watcher [--help] [debian|portable]' >&2
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo 'Install the WhatChanged watcher bundled with this module.'
+  echo 'Layouts: debian (Debian 12 / FreePBX 17, /usr/lib) or portable (CentOS 7 / SangomaOS, /usr/local).'
+  echo 'With no argument the layout is detected from the host OS.'
+  exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo 'Run this installer as root.' >&2
+  exit 1
+fi
+if [ ! -f /etc/freepbx.conf ]; then
+  echo 'FreePBX was not found at /etc/freepbx.conf.' >&2
+  exit 1
+fi
+if ! command -v systemctl >/dev/null 2>&1; then
+  echo 'A systemd-based FreePBX host is required.' >&2
+  exit 1
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo 'Python 3.6 or newer is required.' >&2
+  exit 1
+fi
+python_version=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 6) else 1)' || {
+  echo "Python 3.6 or newer is required; found $python_version." >&2
+  exit 1
+}
+python3 -c 'import pymysql' >/dev/null 2>&1 || {
+  echo 'The Python 3 PyMySQL package is required (Debian: python3-pymysql; Distro/SNG7: python3-PyMySQL).' >&2
+  exit 1
+}
+if ! command -v php >/dev/null 2>&1; then
+  echo 'PHP (php-cli) is required to read the FreePBX database configuration.' >&2
+  exit 1
+fi
+if ! command -v mariadb >/dev/null 2>&1 && ! command -v mysql >/dev/null 2>&1; then
+  echo 'Neither the mariadb nor mysql client was found.' >&2
+  exit 1
+fi
+
+payload=$(CDPATH= cd -- "$(dirname -- "$0")/../watcher" && pwd)
+export WATCHER_SRC="$payload"
+
+layout=${1:-auto}
+case "$layout" in
+  auto)
+    if [ -f /etc/debian_version ] || command -v apt-get >/dev/null 2>&1; then
+      layout=debian
+    else
+      layout=portable
+    fi
+    ;;
+  debian|portable) ;;
+  *) usage; exit 2 ;;
+esac
+
+echo "Installing the WhatChanged watcher ($layout layout)..."
+sh "$payload/install-$layout.sh"

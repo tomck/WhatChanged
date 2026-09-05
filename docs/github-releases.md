@@ -1,21 +1,16 @@
 # GitHub prerelease runbook
 
 WhatChanged uses one reviewed source commit for a coordinated release set. The
-module implementation is shared; packaging changes only `module.xml` so each
-archive declares the matching FreePBX major version. The generated archives
+module implementation and archive are shared across FreePBX 14–17. The generated archives
 are GitHub Release assets and are not committed as source files.
 
 ## Tags and assets
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-14.0.0.12` | 14 | `pendingchanges-14.0.0.12.tgz` | portable 0.1.2 bundle |
-| `pendingchanges-15.0.0.12` | 15 | `pendingchanges-15.0.0.12.tgz` | portable 0.1.2 bundle |
-| `pendingchanges-16.0.0.12` | 16 | `pendingchanges-16.0.0.12.tgz` | portable 0.1.2 bundle |
-| `pendingchanges-17.0.0.12` | 17 | `pendingchanges-17.0.0.12.tgz` | Debian 0.1.2 package |
-| `watcher-0.1.2` | shared observer | portable bundle and Debian package | n/a |
+| `pendingchanges-17.0.1.0` | 14–17 | `pendingchanges-17.0.1.0.tgz` | Debian 0.1.2 package |
 
-All five tags point to the same source commit. Each release is marked as an
+One module tag identifies the source commit. The release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
 not a claim that every third-party FreePBX module or state store is covered.
 
@@ -31,8 +26,8 @@ transferred to the isolated signing host:
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-0.1.2.tar.gz`. It contains
-the four module candidates, both watcher formats, the interactive signing
+The final command creates `dist/what-changed-signing-17.0.1.0.tar.gz`. It contains
+the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
 ## 2. Sign interactively
@@ -41,8 +36,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-0.1.2.tar.gz
-cd what-changed-signing-0.1.2
+tar -xzf what-changed-signing-17.0.1.0.tar.gz
+cd what-changed-signing-17.0.1.0
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
@@ -80,5 +75,5 @@ signed set has been reviewed:
 ./scripts/publish-github-releases.sh dist/signed-release
 ```
 
-It pushes `main` and the five annotated tags, then creates five GitHub alpha
-prereleases using the version-specific notes in `docs/releases/`.
+It pushes `main` and the module tag, then creates one GitHub alpha prerelease
+containing the module and both watcher package formats.
