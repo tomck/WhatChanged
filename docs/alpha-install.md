@@ -1,48 +1,78 @@
 # WhatChanged public-alpha installation
 
-This alpha supports FreePBX 17 on a Debian 12 PBX with a **local** MariaDB
+This alpha supports FreePBX 14, 15, 16, and 17 with one shared module
+archive (`pendingchanges-17.0.1.0.tgz`) on a PBX with a **local** MariaDB
 server. It is an observer: installation, configuration, and removal must not
-Apply Config or reload Asterisk.
+Apply Config or reload Asterisk. See
+[shared module compatibility](shared-module.md).
 
 ## Before installing
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-<module-version>.tgz`
-   - `what-changed-watcher_<watcher-version>_all.deb`
+   - `pendingchanges-17.0.1.0.tgz`
+   - the watcher for your OS: `what-changed-watcher_0.1.2_all.deb`
+     (Debian 12 / FreePBX 17) or `what-changed-watcher-portable_0.1.2.tar.gz`
+     (CentOS 7 / SangomaOS / SNG7 and other legacy hosts)
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
-   project public key. A Debian package is also signed by an APT repository
-   Release file when installed from the future repository.
+   project public key. See [alpha release verification](release-assets.md).
 
 The release publisher creates `SHA256SUMS`, `SHA256SUMS.asc`, and one `.asc`
 detached signature per release artifact with the approved signing subkey. A
 FreePBX local module signature is different: it is generated after the module
 is installed on each PBX and does not replace the detached archive signature.
+Module Admin installs and runs Unsigned archives normally; see
+[local signing](local-signing.md).
 
 ## Install
 
-Run these commands as a root-capable administrator, substituting the exact
-downloaded filenames:
+Install the shared module archive on any supported FreePBX version:
 
 ```sh
-sudo apt install ./what-changed-watcher_0.1.2_all.deb
-sudo what-changed-watcher-configure
-
-sudo tar -xzf pendingchanges-17.0.0.12.tgz -C /var/www/html/admin/modules
+sudo tar -xzf pendingchanges-17.0.1.0.tgz -C /var/www/html/admin/modules
 sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 ```
 
-The watcher setup generates a new random password, creates a local MariaDB
+### Easiest watcher path: from the module you just installed
+
+The module archive embeds the watcher, so no second download is needed.
+As root, run the bundled installer; it detects Debian vs
+CentOS/SangomaOS layouts automatically:
+
+```sh
+sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+```
+
+### Standalone watcher packages
+
+If you prefer the separate artifacts:
+
+Debian 12 / FreePBX 17:
+
+```sh
+sudo apt install ./what-changed-watcher_0.1.2_all.deb
+sudo what-changed-watcher-configure
+```
+
+CentOS 7 / SangomaOS / legacy hosts:
+
+```sh
+tar -xzf what-changed-watcher-portable_0.1.2.tar.gz
+cd what-changed-watcher-portable-0.1.2
+sudo ./install.sh
+```
+
+All three paths generate a new random password, create a local MariaDB
 account named `what_changed_watcher` with **SELECT only** on the FreePBX
-database, installs the authenticated-request sensor, and starts the watcher.
-It does not read form values, does not Apply Config, and does not reload
+database, install the authenticated-request sensor, and start the watcher.
+They do not read form values, do not Apply Config, and do not reload
 Asterisk.
 
-If the PBX uses a remote MariaDB server, stop at the setup command. Create a
-reviewed `SELECT`-only account for the PBX host, update
-`/etc/what-changed-watcher.env`, and then start the service manually:
+If the PBX uses a remote MariaDB server, create a reviewed `SELECT`-only
+account for the PBX host, update `/etc/what-changed-watcher.env`, and then
+start the service manually:
 
 ```sh
 sudo systemctl enable --now what-changed-watcher
@@ -52,19 +82,23 @@ sudo systemctl enable --now what-changed-watcher
 
 ```sh
 sudo systemctl status what-changed-watcher --no-pager
-sudo -u asterisk php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges status
+sudo -u asterisk php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor
 ```
 
-In FreePBX, open **Reports → Pending Changes Tripwire**. The Module Admin
-status may say **Unsigned** until the module is locally signed on that PBX;
-that is expected for an alpha archive and does not prevent operation.
+`doctor` exits 0 only when the watcher has published a current observation;
+it prints the watcher state and, when the watcher is missing, the exact
+installer command for that host. The full JSON status is available with the
+`status` command.
 
-The Watcher health card must say **Healthy** and **Current full watcher
-snapshot** before an empty drift report can be treated as meaningful. A running
-systemd unit alone is not sufficient. Delayed, stale, invalid, unreadable,
-unconfigured, or absent states are deliberately degraded and cannot produce an
-all-clear result. The attribution sensor line should say **Loaded for this
-FreePBX web request** if inferred administrator evidence is expected.
+In FreePBX, open **Reports → Pending Changes Tripwire**. The Watcher health
+card must show **Healthy** and **Current full watcher snapshot** before you
+treat an empty report as all clear. A running systemd unit alone is not
+sufficient: delayed, stale, invalid, unreadable, unconfigured, or absent
+states are deliberately degraded and never produce an all-clear result. The
+attribution sensor line should say **Loaded for this FreePBX web request**
+if inferred administrator evidence is expected. The Module Admin status may
+say **Unsigned** until the module is locally signed on that PBX; that is
+expected and does not prevent operation.
 
 Do one normal, known Apply Config only when you were already ready to apply
 the PBX's existing pending work. The watcher then captures its first clean

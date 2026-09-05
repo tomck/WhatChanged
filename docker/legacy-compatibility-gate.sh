@@ -35,6 +35,26 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
   tar -tzf "$archive" | grep -qx 'pendingchanges/module.xml'
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$module_version</version>"
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$target.0</version>"
+  # The module archive must remain a self-sufficient watcher installer.
+  for payload in bin/install-watcher watcher/watcher.py watcher/what-changed-request-audit.php \
+    watcher/99-what-changed-attribution.ini watcher/what-changed-watcher.service \
+    watcher/what-changed-watcher.env watcher/configure-database.php \
+    watcher/what-changed-watcher-configure watcher/what-changed-watcher-install-sensor \
+    watcher/install-debian.sh watcher/install-portable.sh; do
+    tar -tzf "$archive" | grep -qx "pendingchanges/$payload"
+  done
+  payload_stage=$(mktemp -d)
+  tar -xzf "$archive" -C "$payload_stage" pendingchanges/bin/install-watcher \
+    pendingchanges/watcher/install-debian.sh pendingchanges/watcher/install-portable.sh \
+    pendingchanges/watcher/watcher.py
+  test -x "$payload_stage/pendingchanges/bin/install-watcher"
+  test -x "$payload_stage/pendingchanges/watcher/install-debian.sh"
+  test -x "$payload_stage/pendingchanges/watcher/install-portable.sh"
+  sh -n "$payload_stage/pendingchanges/bin/install-watcher" \
+    "$payload_stage/pendingchanges/watcher/install-debian.sh" \
+    "$payload_stage/pendingchanges/watcher/install-portable.sh"
+  cmp "$payload_stage/pendingchanges/watcher/watcher.py" "$root_dir/docker/custom-watcher/watcher.py"
+  rm -rf "$payload_stage"
 
   docker run --rm \
     -v "$archive:/tmp/pendingchanges.tgz:ro" \

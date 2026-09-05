@@ -114,10 +114,18 @@ Config, `fwconsole reload`, or an Asterisk reload.
 
 ## Public alpha release artifacts
 
-Alpha testers install two separately signed artifacts: the FreePBX module
-archive (`pendingchanges-<version>.tgz`) and the Debian watcher package
-(`what-changed-watcher_<version>_all.deb`). The module archive does **not**
-contain the watcher. Build the watcher package in the disposable Debian 12 lab
+Alpha testers install the shared FreePBX module archive
+(`pendingchanges-<version>.tgz`), which embeds the watcher payload: after
+installing the module, run its bundled installer as root and it selects the
+Debian or CentOS/SangomaOS layout automatically:
+
+```sh
+sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+```
+
+Standalone watcher artifacts remain available: the Debian watcher package
+(`what-changed-watcher_<version>_all.deb`) and the portable systemd bundle
+for legacy hosts. Build the watcher package in the disposable Debian 12 lab
 with:
 
 ```sh
@@ -134,11 +142,18 @@ installed service file is not enough. Delayed, stale, malformed, unreadable,
 unconfigured, and absent observers are shown explicitly, and degraded states
 never produce an all-clear message.
 
-For a release staged on the signing host, create detached GPG signatures and a
-signed checksum manifest without moving the secret key into the lab:
+For an ordinary alpha release, sign locally with your own keyring — no
+production PBX and no `sign.php` required (see
+[local signing](docs/local-signing.md)):
 
 ```sh
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
+./scripts/sign-release-local.sh
+```
+
+The older per-file flow also remains:
+
+```sh
 ./deploy/sign-release-artifacts.sh pendingchanges-17.0.1.0.tgz what-changed-watcher_0.1.2_all.deb
 ```
 
@@ -173,7 +188,7 @@ Then run the digest-pinned real-image lifecycle for FreePBX 16, 15, and 14:
 ./docker/legacy-real-image-gate.sh
 ```
 
-That produces FreePBX 14, 15, and 16 module candidates plus a portable
+That produces the one shared module archive plus a portable
 systemd watcher bundle for older FreePBX Distro/SNG7-style hosts. See
 [the legacy alpha guide](docs/legacy-alpha-install.md). The representative
 historical Docker stacks now pass Module Admin installation, watcher-to-BMO
@@ -194,7 +209,12 @@ Run within a FreePBX installation as the Asterisk user:
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges status
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges seed
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges feedback
+php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor
 ```
+
+`doctor` is the watcher check: it prints the observer state, whether the
+snapshot is current, and the installer remedy when the watcher is missing,
+exiting nonzero while health is degraded.
 
 `seed` refuses to replace the baseline while a reload is pending. Capture a
 new baseline only after Apply Changes has completed successfully.

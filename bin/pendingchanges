@@ -10,8 +10,28 @@ try {
         $result = $service->status();
     } elseif ($command === 'feedback') {
         $result = $service->feedback();
+    } elseif ($command === 'doctor') {
+        $status = $service->status();
+        $health = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : array();
+        $lines = array(
+            'watcher_state=' . (isset($health['state']) ? $health['state'] : 'unknown'),
+            'watcher_label=' . (isset($health['label']) ? $health['label'] : 'Unknown'),
+            'data_current=' . (!empty($status['data_current']) ? 'yes' : 'no'),
+            'coverage_mode=' . (isset($status['coverage_mode']) ? $status['coverage_mode'] : 'unknown'),
+            'sensor_loaded=' . (!empty($health['sensor_loaded']) ? 'yes' : 'no'),
+            'pending_reload=' . (!empty($status['pending']) ? 'yes' : 'no'),
+        );
+        if (isset($health['observation_age_seconds'])) {
+            $lines[] = 'observation_age_seconds=' . (int) $health['observation_age_seconds'];
+        }
+        $state = isset($health['state']) ? $health['state'] : '';
+        if ($state === 'not_installed' || $state === 'installed_unconfigured') {
+            $lines[] = 'remedy=sudo ' . dirname(dirname(__FILE__)) . '/bin/install-watcher';
+        }
+        echo implode(PHP_EOL, $lines) . PHP_EOL;
+        exit(empty($status['data_current']) ? 2 : 0);
     } else {
-        throw new RuntimeException('Usage: pendingchanges [status|seed|feedback]');
+        throw new RuntimeException('Usage: pendingchanges [status|seed|feedback|doctor]');
     }
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL;
 } catch (Exception $e) {

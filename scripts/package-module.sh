@@ -52,5 +52,24 @@ for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.p
   cp -R "$root_dir/$path" "$module_dir/"
 done
 
+# Embed the watcher payload so the module archive alone is enough to install
+# the observer: bin/install-watcher (copied with bin/) picks the Debian or
+# portable layout at install time. Sources stay canonical in deploy/,
+# packaging/, and docker/; this is only a copy.
+mkdir -p "$module_dir/watcher"
+cp "$root_dir/docker/custom-watcher/watcher.py" "$module_dir/watcher/watcher.py"
+cp "$root_dir/deploy/what-changed-request-audit.php" "$module_dir/watcher/what-changed-request-audit.php"
+cp "$root_dir/deploy/99-what-changed-attribution.ini" "$module_dir/watcher/99-what-changed-attribution.ini"
+cp "$root_dir/deploy/what-changed-watcher.service" "$module_dir/watcher/what-changed-watcher.service"
+cp "$root_dir/deploy/what-changed-watcher.env.example" "$module_dir/watcher/what-changed-watcher.env"
+cp "$root_dir/packaging/watcher/usr/lib/what-changed-watcher/configure-database.php" "$module_dir/watcher/configure-database.php"
+cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-configure" "$module_dir/watcher/what-changed-watcher-configure"
+cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-install-sensor" "$module_dir/watcher/what-changed-watcher-install-sensor"
+cp "$root_dir/packaging/module-watcher/install-debian.sh" "$module_dir/watcher/install-debian.sh"
+cp "$root_dir/packaging/module-watcher/install-portable.sh" "$module_dir/watcher/install-portable.sh"
+chmod 0755 "$module_dir/bin/install-watcher" "$module_dir/bin/pendingchanges" \
+  "$module_dir/watcher/install-debian.sh" "$module_dir/watcher/install-portable.sh" \
+  "$module_dir/watcher/what-changed-watcher-configure" "$module_dir/watcher/what-changed-watcher-install-sensor"
+
 tar -C "$temp_dir" -czf "$archive" "$version"
 echo "$archive"
