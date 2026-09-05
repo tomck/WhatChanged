@@ -3,7 +3,11 @@
 # devtools/sign.php.  It signs only a temporary test string.
 set -eu
 
-subkey=5319601D6E2B13F507DC2618AFA3ED68ADB99176
+subkey=${WHAT_CHANGED_SIGNING_SUBKEY:-}
+if [ -z "$subkey" ]; then
+    echo 'Set WHAT_CHANGED_SIGNING_SUBKEY to the full fingerprint of the signing-capable subkey.' >&2
+    exit 2
+fi
 export GPG_TTY="$(tty)"
 if [ "$GPG_TTY" = "not a tty" ]; then
     echo "Run this from an interactive SSH terminal, not through a job or pipe." >&2

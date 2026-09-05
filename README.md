@@ -136,6 +136,7 @@ For a release staged on the signing host, create detached GPG signatures and a
 signed checksum manifest without moving the secret key into the lab:
 
 ```sh
+export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./deploy/sign-release-artifacts.sh pendingchanges-17.0.0.12.tgz what-changed-watcher_0.1.2_all.deb
 ```
 

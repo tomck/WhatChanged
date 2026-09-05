@@ -3,8 +3,7 @@
 # secret key and never contacts GitHub.
 set -euo pipefail
 
-subkey=5319601D6E2B13F507DC2618AFA3ED68ADB99176
-primary=44D5C8E9005344DE422F443FEF3752E0A8C82A63
+subkey=${WHAT_CHANGED_SIGNING_SUBKEY:-}
 bundle_dir=$(cd "$(dirname "$0")" && pwd)
 unsigned_dir="$bundle_dir/unsigned"
 output_dir="$bundle_dir/signed"
@@ -14,6 +13,10 @@ watcher_version=0.1.2
 if [[ ! -t 0 || ! -t 1 ]]; then
   echo 'Run this program from an interactive terminal so GPG pinentry can unlock the key.' >&2
   exit 1
+fi
+if [[ -z "$subkey" ]]; then
+  echo 'Set WHAT_CHANGED_SIGNING_SUBKEY to the full fingerprint of the signing-capable subkey.' >&2
+  exit 2
 fi
 if [[ -e "$output_dir" ]]; then
   echo "Refusing to replace existing output: $output_dir" >&2
@@ -26,6 +29,12 @@ fi
 
 export GPG_TTY="$(tty)"
 sudo gpg --list-secret-keys "$subkey" >/dev/null
+primary=$(sudo gpg --batch --with-colons --list-keys "$subkey" |
+  awk -F: '$1 == "fpr" && !seen { print $10; seen = 1 }')
+if [[ -z "$primary" ]]; then
+  echo 'Could not resolve the primary public key for the selected signing subkey.' >&2
+  exit 1
+fi
 
 preflight=$(mktemp /tmp/what-changed-release-signing.XXXXXX.asc)
 work=$(mktemp -d /tmp/what-changed-release.XXXXXX)
