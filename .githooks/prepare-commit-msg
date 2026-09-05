@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+message_file=${1:?prepare-commit-msg requires a commit message file}
+
+# Ordinary human-created commits are deliberately untouched. Codex commits
+# must go through scripts/codex-commit.sh, which supplies this gate and the
+# provenance values below.
+if [[ ${CODEX_COMMIT:-0} != 1 ]]; then
+    exit 0
+fi
+
+model=${CODEX_COMMIT_MODEL:-}
+reasoning=${CODEX_COMMIT_REASONING_EFFORT:-}
+thread=${CODEX_COMMIT_THREAD_ID:-}
+
+validate_value() {
+    local name=$1
+    local value=$2
+
+    if [[ -z $value ]]; then
+        echo "prepare-commit-msg: ${name} must not be empty" >&2
+        exit 1
+    fi
+
+    if [[ $value == *$'\n'* || $value == *$'\r'* ]]; then
+        echo "prepare-commit-msg: ${name} must be a single line" >&2
+        exit 1
+    fi
+}
+
+validate_value CODEX_COMMIT_MODEL "$model"
+
+git interpret-trailers --in-place \
+    --if-exists=doNothing \
+    --if-missing=add \
+    --trailer "Co-authored-by: Codex <noreply@openai.com>" \
+    "$message_file"
+
+git interpret-trailers --in-place \
+    --if-exists=replace \
+    --if-missing=add \
+    --trailer "Codex-Model: ${model}" \
+    "$message_file"
+
+if [[ -n $reasoning ]]; then
+    validate_value CODEX_COMMIT_REASONING_EFFORT "$reasoning"
+    git interpret-trailers --in-place \
+        --if-exists=replace \
+        --if-missing=add \
+        --trailer "Codex-Reasoning-Effort: ${reasoning}" \
+        "$message_file"
+fi
+
+if [[ -n $thread ]]; then
+    validate_value CODEX_COMMIT_THREAD_ID "$thread"
+    git interpret-trailers --in-place \
+        --if-exists=replace \
+        --if-missing=add \
+        --trailer "Codex-Thread: ${thread}" \
+        "$message_file"
+fi
