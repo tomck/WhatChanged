@@ -5,9 +5,13 @@
 # into the repository or Docker lab.
 set -eu
 
-subkey=5319601D6E2B13F507DC2618AFA3ED68ADB99176
+subkey=${WHAT_CHANGED_SIGNING_SUBKEY:-}
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 module.tgz watcher.deb [additional-release-file ...]" >&2
+  exit 2
+fi
+if [ -z "$subkey" ]; then
+  echo 'Set WHAT_CHANGED_SIGNING_SUBKEY to the full fingerprint of the signing-capable subkey.' >&2
   exit 2
 fi
 if [ ! -t 0 ] || [ ! -t 1 ]; then

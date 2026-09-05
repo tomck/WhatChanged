@@ -43,17 +43,19 @@ administrator, and run:
 ```sh
 tar -xzf what-changed-signing-0.1.2.tar.gz
 cd what-changed-signing-0.1.2
+export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
 
-The signer uses subkey fingerprint
-`5319601D6E2B13F507DC2618AFA3ED68ADB99176`. It first unlocks the key through a
-real terminal, then creates a FreePBX `module.sig` inside each module archive,
-detached OpenPGP signatures for every release asset, and a signed checksum
-manifest. The output is the `signed/` directory. Until Sangoma certifies the
-primary key, stock FreePBX systems may still describe these module signatures
-as locally signed or untrusted; the cryptographic signature and checksum can
-still be verified independently.
+The signing host supplies the signing-capable subkey through the environment;
+the repository does not prescribe a maintainer's personal key. The signer first
+unlocks that key through a real terminal, then creates a FreePBX `module.sig`
+inside each module archive, detached OpenPGP signatures for every release
+asset, and a signed checksum manifest. The output is the `signed/` directory.
+Until the maintainer's primary key is certified by Sangoma, stock FreePBX
+systems may still describe these module signatures as locally signed or
+untrusted; the cryptographic signature and checksum can still be verified
+independently.
 
 ## 3. Retrieve and verify
 

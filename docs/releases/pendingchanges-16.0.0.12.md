@@ -6,6 +6,6 @@ empty result as all clear when the observer is delayed, stale, invalid,
 unreadable, unconfigured, or absent.
 
 Use the matching portable watcher 0.1.2 bundle and follow the
-[legacy alpha guide](../legacy-alpha-install.md). Test first on a backed-up,
+[legacy alpha guide](https://github.com/tomck/WhatChanged/blob/main/docs/legacy-alpha-install.md). Test first on a backed-up,
 noncritical system. Anything outside the explicit Coverage contract may not be
 detected.
