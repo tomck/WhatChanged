@@ -29,7 +29,7 @@ downloaded filenames:
 sudo apt install ./what-changed-watcher_0.1.2_all.deb
 sudo what-changed-watcher-configure
 
-sudo tar -xzf pendingchanges-17.0.0.12.tgz -C /var/www/html/admin/modules
+sudo tar -xzf pendingchanges-17.0.1.0.tgz -C /var/www/html/admin/modules
 sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 ```

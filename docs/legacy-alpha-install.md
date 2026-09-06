@@ -4,11 +4,7 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-The candidate version must match the FreePBX major release:
-
-- FreePBX 14: `pendingchanges-14.0.0.12.tgz`
-- FreePBX 15: `pendingchanges-15.0.0.12.tgz`
-- FreePBX 16: `pendingchanges-16.0.0.12.tgz`
+All four FreePBX versions use `pendingchanges-17.0.1.0.tgz`.
 
 The same portable watcher bundle is used for all three. The module can display
 a smaller framework-only fallback without the watcher, but database, AstDB,
@@ -48,30 +44,12 @@ The installer creates a random credential for a dedicated local database user
 with `SELECT` only, installs a value-free authenticated-request sensor, and
 starts the observer. It does not run Apply Config or reload Asterisk.
 
-## Install the matching module candidate
+## Install the shared module
 
-Use only the archive matching the PBX's FreePBX major version.
-
-FreePBX 14:
+FreePBX 14, 15 and 16 use the same commands:
 
 ```sh
-sudo tar -xzf pendingchanges-14.0.0.12.tgz -C /var/www/html/admin/modules
-sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
-sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-```
-
-FreePBX 15:
-
-```sh
-sudo tar -xzf pendingchanges-15.0.0.12.tgz -C /var/www/html/admin/modules
-sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
-sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-```
-
-FreePBX 16:
-
-```sh
-sudo tar -xzf pendingchanges-16.0.0.12.tgz -C /var/www/html/admin/modules
+sudo tar -xzf pendingchanges-17.0.1.0.tgz -C /var/www/html/admin/modules
 sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 ```

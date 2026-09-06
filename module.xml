@@ -1,7 +1,7 @@
 <module>
   <rawname>pendingchanges</rawname>
   <name>Pending Changes Tripwire</name>
-  <version>17.0.0.12</version>
+  <version>17.0.1.0</version>
   <publisher>Local</publisher>
   <license>GPLv3+</license>
   <licenselink>https://www.gnu.org/licenses/gpl-3.0.html</licenselink>
@@ -10,9 +10,12 @@
     <pendingchanges>Pending Changes Tripwire</pendingchanges>
   </menuitems>
   <depends>
-    <phpversion>7.4.0</phpversion>
+    <phpversion>5.6.0</phpversion>
   </depends>
   <supported>
+    <version>14.0</version>
+    <version>15.0</version>
+    <version>16.0</version>
     <version>17.0</version>
   </supported>
 </module>

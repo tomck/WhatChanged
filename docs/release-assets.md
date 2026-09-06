@@ -16,21 +16,14 @@ gpg --homedir "$gpg_home" --verify pendingchanges-REPLACE-WITH-VERSION.tgz.asc p
 ```
 
 Verify the watcher package in the same way by passing its `.asc` file and
-package to `gpg --verify`. Confirm that the key fingerprint is:
-
-```text
-44D5 C8E9 0053 44DE 422F 443F EF37 52E0 A8C8 2A63
-```
-
-The signing subkey fingerprint is:
-
-```text
-5319 601D 6E2B 13F5 07DC 2618 AFA3 ED68 ADB9 9176
-```
+package to `gpg --verify`. Obtain the expected maintainer-key fingerprint from
+a trusted release announcement before trusting an imported release key. The
+repository and signing bundle deliberately do not prescribe a maintainer's
+personal primary-key or signing-subkey fingerprint.
 
 FreePBX 14-16 use the portable watcher bundle. FreePBX 17 on Debian 12 uses
-the Debian package. Follow the exact installation commands in the GitHub
-release notes for the selected FreePBX major version.
+the Debian package. Follow the installation guide linked from the unified
+release notes.
 
 These are alpha diagnostics. They are read-only with respect to FreePBX
 configuration, but they do install a local observer service and Apache request
