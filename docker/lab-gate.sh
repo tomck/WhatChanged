@@ -7,6 +7,9 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 MODULE_VERSION=$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "$ROOT_DIR/module.xml" | head -n 1)
 WATCHER_VERSION=$(sed -n 's/^Version: //p' "$ROOT_DIR/packaging/watcher/DEBIAN/control")
+FREEPBX_LAB_PORT=${FREEPBX_LAB_PORT:-8080}
+FREEPBX_LAB_URL=${FREEPBX_LAB_URL:-http://127.0.0.1:$FREEPBX_LAB_PORT}
+export FREEPBX_LAB_PORT FREEPBX_LAB_URL
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"
 
 # Profile-only services are not rebuilt by `up --build` unless their profile
@@ -14,6 +17,7 @@ export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"
 # checked-out assertions instead of a stale local image.
 docker compose -f "$COMPOSE_FILE" build pbx custom-watcher smoke
 docker compose -f "$COMPOSE_FILE" up -d
+"$ROOT_DIR/docker/bootstrap-freepbx.sh"
 "$ROOT_DIR/scripts/package-module.sh" --target 17 --output-dir "$ROOT_DIR/dist" >/dev/null
 "$ROOT_DIR/scripts/package-watcher.sh" >/dev/null
 "$ROOT_DIR/docker/validate-module-archive.sh" "$ROOT_DIR/dist/pendingchanges-$MODULE_VERSION.tgz"

@@ -2,6 +2,11 @@
 set -eu
 umask 0002
 
+# Compose must not treat a restarted PBX as ready merely because persistent
+# FreePBX files already exist. Recreate this marker only after every startup
+# repair and module synchronization step has completed.
+rm -f /var/www/html/.what-changed-entrypoint-ready
+
 # A named /etc/asterisk volume may have been initialized by an older image.
 # Repair ownership in place so the asterisk daemon, never root, owns runtime
 # state. This preserves the disposable lab's existing database and config.
@@ -232,4 +237,5 @@ touch /var/log/asterisk/freepbx.log
 chown asterisk:asterisk /var/log/asterisk/freepbx.log
 chmod 664 /var/log/asterisk/freepbx.log
 
+touch /var/www/html/.what-changed-entrypoint-ready
 exec apachectl -D FOREGROUND

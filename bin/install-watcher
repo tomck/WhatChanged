@@ -80,6 +80,11 @@ if [ -n "$test_root" ] && [ "$test_mode" != 1 ]; then
   echo 'WHAT_CHANGED_INSTALL_ROOT is reserved for the repository test gate.' >&2
   exit 1
 fi
+test_webroot=${WHAT_CHANGED_INSTALL_WEBROOT:-}
+if [ -n "$test_webroot" ] && [ "$test_mode" != 1 ]; then
+  echo 'WHAT_CHANGED_INSTALL_WEBROOT is reserved for the repository test gate.' >&2
+  exit 1
+fi
 if [ "$(id -u)" -ne 0 ]; then
   echo 'Run this installer as root.' >&2
   exit 1
@@ -104,25 +109,40 @@ if [ "$test_mode" != 1 ]; then
   }
 fi
 
-# Inspect the database location before changing the host, but only when the
-# install still needs a generated credential. Remote databases are a supported
-# manual-configuration path and do not require a local SQL client.
-database=
+# Inspect FreePBX's authoritative database and web-root settings before changing
+# the host. Remote databases are a supported manual-configuration path and do
+# not require a local SQL client.
 db_host=
+db_name=
 local_database=0
 live_environment=/etc/what-changed-watcher.env
+if [ "$test_mode" = 1 ]; then
+  freepbx_webroot=${test_webroot:-/var/www/html}
+else
+  description=$(php "$payload/configure-database.php" --describe)
+  tab=$(printf '\t')
+  db_host=${description%%"$tab"*}
+  remainder=${description#*"$tab"}
+  db_name=${remainder%%"$tab"*}
+  freepbx_webroot=${remainder#*"$tab"}
+  if [ "$db_host" = "$description" ] || [ "$db_name" = "$remainder" ] \
+      || [ -z "$db_name" ] || [ -z "$freepbx_webroot" ]; then
+    echo 'Could not determine the FreePBX database connection and web root.' >&2
+    exit 1
+  fi
+fi
+case "$freepbx_webroot" in
+  /*) : ;;
+  *) echo 'FreePBX AMPWEBROOT must be an absolute path.' >&2; exit 1 ;;
+esac
+module_path=${freepbx_webroot%/}/admin/modules
+echo "freepbx_webroot=$freepbx_webroot"
+echo "module_path=$module_path"
+
 if [ "$test_mode" != 1 ] && {
     [ ! -f "$live_environment" ] \
       || grep -q '^DB_PASSWORD=replace-with-generated-secret$' "$live_environment";
   }; then
-  database=$(php "$payload/configure-database.php" --describe)
-  tab=$(printf '\t')
-  db_host=${database%%"$tab"*}
-  db_name=${database#*"$tab"}
-  if [ "$db_host" = "$database" ] || [ -z "$db_name" ]; then
-    echo 'Could not determine the FreePBX database connection.' >&2
-    exit 1
-  fi
   case "$db_host" in
     localhost|127.0.0.1)
       local_database=1
@@ -146,10 +166,13 @@ install -m 0644 "$payload/configure-database.php" "$(target "$library/configure-
 install -m 0755 "$payload/what-changed-watcher-configure" "$(target /usr/sbin/what-changed-watcher-configure)"
 install -m 0755 "$payload/what-changed-watcher-install-sensor" "$(target /usr/sbin/what-changed-watcher-install-sensor)"
 
-sed "s#/usr/local/lib/what-changed-watcher#$library#g" \
+escaped_library=$(printf '%s' "$library" | sed 's/[&|]/\\&/g')
+escaped_module_path=$(printf '%s' "$module_path" | sed 's/[&|]/\\&/g')
+sed "s|/usr/local/lib/what-changed-watcher|$escaped_library|g" \
   "$payload/99-what-changed-attribution.ini" > "$(target "$library/99-what-changed-attribution.ini")"
 chmod 0644 "$(target "$library/99-what-changed-attribution.ini")"
-sed "s#/usr/local/lib/what-changed-watcher#$library#g" \
+sed -e "s|/usr/local/lib/what-changed-watcher|$escaped_library|g" \
+  -e "s|/var/www/html/admin/modules|$escaped_module_path|g" \
   "$payload/what-changed-watcher.service" > "$(target "$service")"
 chmod 0644 "$(target "$service")"
 

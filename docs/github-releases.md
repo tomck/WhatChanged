@@ -8,7 +8,7 @@ archives are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-17.0.1.1` | 14–17 | `pendingchanges-17.0.1.1.tgz` with embedded watcher | Optional Debian and portable 0.1.2 packages |
+| `pendingchanges-17.0.1.2` | 14–17 | `pendingchanges-17.0.1.2.tgz` with embedded watcher | Optional Debian and portable 0.1.2 packages |
 
 One module tag identifies the source commit. The release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
@@ -23,12 +23,12 @@ will be transferred to the isolated signing host:
 ```sh
 ./docker/legacy-compatibility-gate.sh
 ./docker/legacy-real-image-gate.sh
-git tag -a pendingchanges-17.0.1.1 -m 'Pending Changes Tripwire 17.0.1.1 alpha'
+git tag -a pendingchanges-17.0.1.2 -m 'Pending Changes Tripwire 17.0.1.2 alpha'
 ./scripts/package-watcher.sh
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-17.0.1.1.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-17.0.1.2.tar.gz`. It contains
 the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -38,8 +38,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-17.0.1.1.tar.gz
-cd what-changed-signing-17.0.1.1
+tar -xzf what-changed-signing-17.0.1.2.tar.gz
+cd what-changed-signing-17.0.1.2
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```

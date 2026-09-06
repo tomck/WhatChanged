@@ -29,7 +29,7 @@ services:
       FREEPBX_DB_NAME: asterisk
       FREEPBX_CDR_DB_NAME: asteriskcdrdb
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:${FREEPBX_LAB_PORT:-8080}:80"
     volumes:
       - ../:/srv/pendingchanges:ro
       # Keep FreePBX's installed framework/modules across ordinary container
@@ -40,7 +40,7 @@ services:
       - watcher-data:/var/lib/asterisk/pendingchanges-watcher:ro
       - attribution-data:/var/lib/asterisk/pendingchanges-attribution
     healthcheck:
-      test: ["CMD-SHELL", "test -f /etc/freepbx.conf && php /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
+      test: ["CMD-SHELL", "test -f /var/www/html/.what-changed-entrypoint-ready && php /var/lib/asterisk/bin/fwconsole --version >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 30

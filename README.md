@@ -6,9 +6,9 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current public
-alpha is **17.0.1.1**.
+alpha is **17.0.1.2**.
 
-[Download the alpha](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.1)
+[Download the alpha](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.2)
 · [Full installation guide](docs/alpha-install.md)
 · [Compatibility evidence](docs/legacy-test-matrix.md)
 · [Contributing](CONTRIBUTING.md)
@@ -21,15 +21,25 @@ alpha is **17.0.1.1**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.1.tgz` from the
-[17.0.1.1 alpha release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.1),
+Download `pendingchanges-17.0.1.2.tgz` from the
+[17.0.1.2 alpha release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.2),
 copy it to the PBX, and run:
 
 ```sh
-sudo tar -xzf pendingchanges-17.0.1.1.tgz -C /var/www/html/admin/modules
-sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
-sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+module_dir="$freepbx_webroot/admin/modules/pendingchanges"
+
+if [ -d "$freepbx_webroot/admin/modules" ]; then
+  sudo tar -xzf pendingchanges-17.0.1.2.tgz -C "$freepbx_webroot/admin/modules"
+  sudo chown -R asterisk:asterisk "$module_dir"
+  sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+  sudo "$module_dir/bin/install-watcher"
+else
+  echo "Could not find FreePBX's module directory beneath: $freepbx_webroot" >&2
+fi
 ```
 
 The module archive contains the watcher; there is no required second download.
@@ -56,8 +66,7 @@ experimental pending broader testing on maintained installations.
 
 ```sh
 sudo systemctl status what-changed-watcher --no-pager
-sudo -u asterisk php \
-  /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor
+sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
 ```
 
 Then open **Reports → Pending Changes Tripwire** in FreePBX. Before treating an
@@ -144,7 +153,11 @@ never through a public database dump or configuration archive.
 Run the watcher uninstaller before removing the FreePBX module:
 
 ```sh
-sudo /var/www/html/admin/modules/pendingchanges/bin/uninstall-watcher
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo "$freepbx_webroot/admin/modules/pendingchanges/bin/uninstall-watcher"
 sudo /var/lib/asterisk/bin/fwconsole ma uninstall pendingchanges
 ```
 

@@ -40,7 +40,7 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
 - The watcher has a dedicated MariaDB account limited to `SELECT` on the
   FreePBX configuration database. It must not have write, DDL, or reload
   permissions.
-- `/etc/asterisk`, `/var/www/html/admin/modules`, and (when enabled)
+- `/etc/asterisk`, FreePBX's configured `AMPWEBROOT/admin/modules`, and (when enabled)
   `/var/lib/asterisk/astdb.sqlite3` are mounted/readable
   read-only by the watcher. Its state directory is writable only by its own
   service account.
