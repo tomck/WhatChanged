@@ -5,10 +5,18 @@
 set -eu
 
 subkey=${WHAT_CHANGED_SIGNING_SUBKEY:-}
-module=/var/www/html/admin/modules/pendingchanges
+freepbx_webroot=$(
+    sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+        sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+module=${freepbx_webroot%/}/admin/modules/pendingchanges
 if [ -z "$subkey" ]; then
     echo 'Set WHAT_CHANGED_SIGNING_SUBKEY to the full fingerprint of the signing-capable subkey.' >&2
     exit 2
+fi
+if [ -z "$freepbx_webroot" ] || [ ! -d "$module" ]; then
+    echo 'Could not locate the installed pendingchanges module from FreePBX AMPWEBROOT.' >&2
+    exit 1
 fi
 export GPG_TTY="$(tty)"
 if [ "$GPG_TTY" = "not a tty" ]; then

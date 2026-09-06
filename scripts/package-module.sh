@@ -68,5 +68,5 @@ chmod 0755 "$module_dir/bin/install-watcher" "$module_dir/bin/uninstall-watcher"
   "$module_dir/watcher/what-changed-watcher-configure" \
   "$module_dir/watcher/what-changed-watcher-install-sensor"
 
-tar -C "$temp_dir" -czf "$archive" "$version"
+COPYFILE_DISABLE=1 tar --no-xattrs -C "$temp_dir" -czf "$archive" "$version"
 echo "$archive"

@@ -64,6 +64,16 @@ print('watcher evidence:', updates)
 apply_config
 
 original_sip=$(sip_value)
+if [ -z "$original_sip" ]; then
+  # A genuinely fresh FreePBX database does not materialize this SIP Settings
+  # row until the form is first submitted. Establish its documented default as
+  # applied state before testing a reversible update.
+  before=$(observed_at)
+  "$root_dir/docker/seed-sip-breaker.sh" yes
+  wait_status pending "$before"
+  apply_config
+  original_sip=$(sip_value)
+fi
 case "$original_sip" in yes) staged_sip=no ;; no) staged_sip=yes ;; *) echo "unexpected allow.reload value: $original_sip" >&2; exit 1 ;; esac
 before=$(observed_at)
 "$root_dir/docker/seed-sip-breaker.sh" "$staged_sip"

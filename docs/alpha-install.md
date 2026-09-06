@@ -9,7 +9,7 @@ Apache.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.1.1.tgz`
+   - `pendingchanges-17.0.1.2.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -30,11 +30,25 @@ is installed on each PBX and does not replace the detached archive signature.
 Install the shared module, then run its embedded watcher installer as root:
 
 ```sh
-sudo tar -xzf pendingchanges-17.0.1.1.tgz -C /var/www/html/admin/modules
-sudo chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
-sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+module_dir="$freepbx_webroot/admin/modules/pendingchanges"
+
+if [ -d "$freepbx_webroot/admin/modules" ]; then
+  sudo tar -xzf pendingchanges-17.0.1.2.tgz -C "$freepbx_webroot/admin/modules"
+  sudo chown -R asterisk:asterisk "$module_dir"
+  sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+  sudo "$module_dir/bin/install-watcher"
+else
+  echo "Could not find FreePBX's module directory beneath: $freepbx_webroot" >&2
+fi
 ```
+
+The first command asks FreePBX for its configured `AMPWEBROOT`; it does not
+assume `/var/www/html`. The watcher installer reads that same authoritative
+setting and writes the corresponding module-tree path into its systemd unit.
 
 The installer reads `/etc/os-release`: Debian-family systems use `/usr/lib`
 and `/lib/systemd/system`; RHEL, CentOS, and Sangoma-family systems use
@@ -60,7 +74,7 @@ sudo systemctl enable --now what-changed-watcher
 
 ```sh
 sudo systemctl status what-changed-watcher --no-pager
-sudo -u asterisk php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor
+sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
 ```
 
 In FreePBX, open **Reports → Pending Changes Tripwire**. The Module Admin
@@ -99,7 +113,11 @@ To remove an embedded watcher, run its explicit uninstaller before removing
 the FreePBX module through Module Admin:
 
 ```sh
-sudo /var/www/html/admin/modules/pendingchanges/bin/uninstall-watcher
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo "$freepbx_webroot/admin/modules/pendingchanges/bin/uninstall-watcher"
 ```
 
 The watcher configuration, SELECT-only database account, and evidence are
