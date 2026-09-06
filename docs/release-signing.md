@@ -1,4 +1,4 @@
-# WhatChanged 0.1.2 signing bundle
+# WhatChanged release signing bundle
 
 This directory contains reviewed, unsigned release candidates built from the
 tagged WhatChanged source. It deliberately contains no secret key.

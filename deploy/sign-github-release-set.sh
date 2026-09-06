@@ -7,8 +7,7 @@ subkey=${WHAT_CHANGED_SIGNING_SUBKEY:-}
 bundle_dir=$(cd "$(dirname "$0")" && pwd)
 unsigned_dir="$bundle_dir/unsigned"
 output_dir="$bundle_dir/signed"
-module_release=12
-watcher_version=0.1.2
+source "$bundle_dir/release-versions.sh"
 
 if [[ ! -t 0 || ! -t 1 ]]; then
   echo 'Run this program from an interactive terminal so GPG pinentry can unlock the key.' >&2
@@ -46,23 +45,21 @@ printf 'WhatChanged release signing preflight\n' |
 sudo gpg --verify "$preflight" >/dev/null
 
 mkdir -p "$work/signed"
-for target in 14 15 16 17; do
-  name="pendingchanges-$target.0.0.$module_release.tgz"
-  source_archive="$unsigned_dir/$name"
-  module_stage="$work/module-$target"
-  test -s "$source_archive"
-  mkdir -p "$module_stage"
-  tar -xzf "$source_archive" -C "$module_stage"
-  test -f "$module_stage/pendingchanges/module.xml"
-  grep -q "<version>$target.0.0.$module_release</version>" \
-    "$module_stage/pendingchanges/module.xml"
-  rm -f "$module_stage/pendingchanges/module.sig"
-  sudo env GPG_TTY="$GPG_TTY" /usr/src/devtools/sign.php \
-    "$module_stage/pendingchanges" --local "$subkey"
-  test -s "$module_stage/pendingchanges/module.sig"
-  sudo gpg --verify "$module_stage/pendingchanges/module.sig" >/dev/null
-  tar -C "$module_stage" -czf "$work/signed/$name" pendingchanges
-done
+name="pendingchanges-$module_version.tgz"
+source_archive="$unsigned_dir/$name"
+module_stage="$work/module-shared"
+test -s "$source_archive"
+mkdir -p "$module_stage"
+tar -xzf "$source_archive" -C "$module_stage"
+test -f "$module_stage/pendingchanges/module.xml"
+grep -q "<version>$module_version</version>" \
+  "$module_stage/pendingchanges/module.xml"
+rm -f "$module_stage/pendingchanges/module.sig"
+sudo env GPG_TTY="$GPG_TTY" /usr/src/devtools/sign.php \
+  "$module_stage/pendingchanges" --local "$subkey"
+test -s "$module_stage/pendingchanges/module.sig"
+sudo gpg --verify "$module_stage/pendingchanges/module.sig" >/dev/null
+tar -C "$module_stage" -czf "$work/signed/$name" pendingchanges
 
 cp "$unsigned_dir/what-changed-watcher-portable_$watcher_version.tar.gz" "$work/signed/"
 cp "$unsigned_dir/what-changed-watcher_${watcher_version}_all.deb" "$work/signed/"
@@ -70,10 +67,7 @@ sudo gpg --armor --export "$primary" > "$work/signed/WHAT_CHANGED_SIGNING_KEY.as
 cp "$bundle_dir/RELEASE-README.md" "$work/signed/README.md"
 
 release_files=(
-  "pendingchanges-14.0.0.$module_release.tgz"
-  "pendingchanges-15.0.0.$module_release.tgz"
-  "pendingchanges-16.0.0.$module_release.tgz"
-  "pendingchanges-17.0.0.$module_release.tgz"
+  "pendingchanges-$module_version.tgz"
   "what-changed-watcher-portable_$watcher_version.tar.gz"
   "what-changed-watcher_${watcher_version}_all.deb"
   WHAT_CHANGED_SIGNING_KEY.asc

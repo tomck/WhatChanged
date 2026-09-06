@@ -4,8 +4,8 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 compose_file="$root_dir/docker/legacy/docker-compose.yml"
 target=${1:-16}
-release_number=$(sed -n 's:.*<version>17\.0\.0\.\([^<]*\)</version>.*:\1:p' "$root_dir/module.xml")
-archive="$root_dir/dist/pendingchanges-$target.0.0.$release_number.tgz"
+source "$root_dir/deploy/release-versions.sh"
+archive="$root_dir/dist/pendingchanges-$module_version.tgz"
 
 case "$target" in
   16)
@@ -76,10 +76,10 @@ fi
 
 docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh -eu -c "
   rm -rf /var/www/html/admin/modules/pendingchanges
-  tar -xzf /artifacts/pendingchanges-$target.0.0.$release_number.tgz -C /var/www/html/admin/modules
+  tar -xzf /artifacts/pendingchanges-$module_version.tgz -C /var/www/html/admin/modules
   chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
   /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-  /var/lib/asterisk/bin/fwconsole ma list | grep -E 'pendingchanges.*$target\\.0\\.0\\.$release_number.*Enabled'
+  /var/lib/asterisk/bin/fwconsole ma list | grep -F '$module_version' | grep -E 'pendingchanges.*Enabled'
 "
 
 docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh -eu -c '

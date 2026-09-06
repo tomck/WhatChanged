@@ -7,3 +7,4 @@ dist/what-changed-watcher*.deb
 dist/what-changed-watcher-portable_*.tar.gz
 dist/what-changed-signing-*.tar.gz
 dist/signed-release/
+dist/validation-*.log

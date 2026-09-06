@@ -27,15 +27,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$target" in
-  14|15) php_version=5.6.0 ;;
-  16|17) php_version=7.4.0 ;;
+  14|15|16|17) : ;; # Accepted for old callers; all targets use the same archive.
   *) echo "unsupported FreePBX target: $target" >&2; exit 2 ;;
 esac
 
 version=$(sed -n 's:.*<rawname>\([^<]*\)</rawname>.*:\1:p' "$root_dir/module.xml" | head -n1)
 source_version=$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "$root_dir/module.xml" | head -n1)
-release_number=${source_version##*.}
-module_version="$target.0.0.$release_number"
+source "$root_dir/deploy/release-versions.sh"
+[[ "$source_version" == "$module_version" ]] || { echo 'Release manifest and module.xml disagree' >&2; exit 1; }
 
 if [[ -z "$version" || -z "$module_version" ]]; then
   echo "module.xml is missing rawname or version" >&2
@@ -52,13 +51,6 @@ mkdir -p "$module_dir"
 for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
   cp -R "$root_dir/$path" "$module_dir/"
 done
-
-sed -i.bak \
-  -e "s#<version>$source_version</version>#<version>$module_version</version>#" \
-  -e "s#<phpversion>[^<]*</phpversion>#<phpversion>$php_version</phpversion>#" \
-  -e "s#<version>17.0</version>#<version>$target.0</version>#" \
-  "$module_dir/module.xml"
-rm -f "$module_dir/module.xml.bak"
 
 tar -C "$temp_dir" -czf "$archive" "$version"
 echo "$archive"

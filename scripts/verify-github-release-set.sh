@@ -4,18 +4,14 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 release_dir=${1:-"$root_dir/dist/signed-release"}
 release_dir=$(cd "$release_dir" && pwd)
-module_release=12
-watcher_version=0.1.2
+source "$root_dir/deploy/release-versions.sh"
 gpg_home=$(mktemp -d)
 module_stage=$(mktemp -d)
 trap 'rm -rf "$gpg_home" "$module_stage"' EXIT HUP INT TERM
 chmod 0700 "$gpg_home"
 
 files=(
-  "pendingchanges-14.0.0.$module_release.tgz"
-  "pendingchanges-15.0.0.$module_release.tgz"
-  "pendingchanges-16.0.0.$module_release.tgz"
-  "pendingchanges-17.0.0.$module_release.tgz"
+  "pendingchanges-$module_version.tgz"
   "what-changed-watcher-portable_$watcher_version.tar.gz"
   "what-changed-watcher_${watcher_version}_all.deb"
   WHAT_CHANGED_SIGNING_KEY.asc
@@ -48,16 +44,14 @@ for name in "${files[@]}" SHA256SUMS; do
     "$release_dir/$name.asc" "$release_dir/$name" >/dev/null
 done
 
-for target in 14 15 16 17; do
-  name="pendingchanges-$target.0.0.$module_release.tgz"
-  target_stage="$module_stage/$target"
-  mkdir -p "$target_stage"
-  tar -xzf "$release_dir/$name" -C "$target_stage"
-  test -s "$target_stage/pendingchanges/module.sig"
-  grep -q "<version>$target.0.0.$module_release</version>" \
-    "$target_stage/pendingchanges/module.xml"
-  gpg --homedir "$gpg_home" --batch --verify \
-    "$target_stage/pendingchanges/module.sig" >/dev/null
-done
+name="pendingchanges-$module_version.tgz"
+target_stage="$module_stage/shared"
+mkdir -p "$target_stage"
+tar -xzf "$release_dir/$name" -C "$target_stage"
+test -s "$target_stage/pendingchanges/module.sig"
+grep -q "<version>$module_version</version>" \
+  "$target_stage/pendingchanges/module.xml"
+gpg --homedir "$gpg_home" --batch --verify \
+  "$target_stage/pendingchanges/module.sig" >/dev/null
 
 echo "Signed GitHub release set verified: $release_dir"
