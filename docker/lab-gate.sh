@@ -17,6 +17,7 @@ docker compose -f "$COMPOSE_FILE" up -d
 "$ROOT_DIR/scripts/package-module.sh" --target 17 --output-dir "$ROOT_DIR/dist" >/dev/null
 "$ROOT_DIR/scripts/package-watcher.sh" >/dev/null
 "$ROOT_DIR/docker/validate-module-archive.sh" "$ROOT_DIR/dist/pendingchanges-$MODULE_VERSION.tgz"
+"$ROOT_DIR/docker/smoke-embedded-watcher.sh"
 "$ROOT_DIR/docker/validate-watcher-package.sh" "$ROOT_DIR/dist/what-changed-watcher_${WATCHER_VERSION}_all.deb"
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python /usr/local/bin/test_watcher.py
 docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc \

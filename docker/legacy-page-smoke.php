@@ -114,7 +114,7 @@ namespace {
     require $argv[1].'/page.pendingchanges.php';
     $html = ob_get_clean();
     $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
-        ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'No drift appears in the available evidence']
+        ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
         : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Current full watcher snapshot', '7001', 'Legacy test', 'legacy_admin'];
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {

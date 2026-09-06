@@ -35,6 +35,13 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
   tar -tzf "$archive" | grep -qx 'pendingchanges/module.xml'
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$module_version</version>"
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$target.0</version>"
+  for payload in bin/install-watcher bin/uninstall-watcher watcher/watcher.py \
+    watcher/what-changed-request-audit.php watcher/99-what-changed-attribution.ini \
+    watcher/what-changed-watcher.service watcher/what-changed-watcher.env \
+    watcher/configure-database.php watcher/what-changed-watcher-configure \
+    watcher/what-changed-watcher-install-sensor; do
+    tar -tzf "$archive" | grep -qx "pendingchanges/$payload"
+  done
 
   docker run --rm \
     -v "$archive:/tmp/pendingchanges.tgz:ro" \

@@ -52,5 +52,21 @@ for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.p
   cp -R "$root_dir/$path" "$module_dir/"
 done
 
+# The signed FreePBX module carries the canonical watcher sources. The
+# explicit root installer in bin/ selects an OS-appropriate filesystem layout;
+# Module Admin itself never performs these privileged system changes.
+mkdir -p "$module_dir/watcher"
+cp "$root_dir/docker/custom-watcher/watcher.py" "$module_dir/watcher/watcher.py"
+cp "$root_dir/deploy/what-changed-request-audit.php" "$module_dir/watcher/what-changed-request-audit.php"
+cp "$root_dir/deploy/99-what-changed-attribution.ini" "$module_dir/watcher/99-what-changed-attribution.ini"
+cp "$root_dir/deploy/what-changed-watcher.service" "$module_dir/watcher/what-changed-watcher.service"
+cp "$root_dir/deploy/what-changed-watcher.env.example" "$module_dir/watcher/what-changed-watcher.env"
+cp "$root_dir/packaging/module-watcher/configure-database.php" "$module_dir/watcher/configure-database.php"
+cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-configure" "$module_dir/watcher/what-changed-watcher-configure"
+cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-install-sensor" "$module_dir/watcher/what-changed-watcher-install-sensor"
+chmod 0755 "$module_dir/bin/install-watcher" "$module_dir/bin/uninstall-watcher" \
+  "$module_dir/watcher/what-changed-watcher-configure" \
+  "$module_dir/watcher/what-changed-watcher-install-sensor"
+
 tar -C "$temp_dir" -czf "$archive" "$version"
 echo "$archive"

@@ -227,6 +227,9 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
   <?php if (!$dataCurrent): ?>
     <div class="alert alert-warning">Current full-scope drift cannot be declared clear while watcher health is degraded. Any evidence below is framework-only or from the last completed watcher observation.</div>
   <?php endif; ?>
+  <?php if (isset($watcherHealth['state']) && ($watcherHealth['state'] === 'not_installed' || $watcherHealth['state'] === 'installed_unconfigured')): ?>
+    <div class="alert alert-info">The watcher is bundled with this module but is not publishing observations. As root, run <code>sudo <?= pendingchanges_h(__DIR__) ?>/bin/install-watcher</code>. The installer detects Debian and RHEL/Sangoma-family layouts. Standalone watcher packages remain available.</div>
+  <?php endif; ?>
   <?php if ($status['pending']): ?>
     <section class="pendingchanges-card">
       <h3>Administrator request evidence (inferred)</h3>
