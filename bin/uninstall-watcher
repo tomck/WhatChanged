@@ -1,0 +1,32 @@
+#!/bin/sh
+# Remove watcher executables installed from the module while preserving local
+# evidence, configuration, and the SELECT-only database account.
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo 'Run this uninstaller as root.' >&2
+  exit 1
+fi
+
+systemctl disable --now what-changed-watcher.service >/dev/null 2>&1 || true
+rm -f /lib/systemd/system/what-changed-watcher.service
+rm -f /etc/systemd/system/what-changed-watcher.service
+rm -f /usr/sbin/what-changed-watcher-configure
+rm -f /usr/sbin/what-changed-watcher-install-sensor
+rm -rf /usr/lib/what-changed-watcher /usr/local/lib/what-changed-watcher
+
+for sensor in /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini /etc/php.d/99-what-changed-attribution.ini; do
+  [ ! -f "$sensor" ] || rm -f "$sensor"
+done
+
+systemctl daemon-reload >/dev/null 2>&1 || true
+if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1; then
+  if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
+    systemctl reload apache2 >/dev/null 2>&1 || true
+  elif systemctl list-unit-files httpd.service >/dev/null 2>&1; then
+    systemctl reload httpd >/dev/null 2>&1 || true
+  fi
+fi
+
+echo 'Watcher executables and Apache sensor removed.'
+echo 'Evidence, /etc/what-changed-watcher.env, and the database account were preserved.'

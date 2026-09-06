@@ -21,9 +21,11 @@ a trusted release announcement before trusting an imported release key. The
 repository and signing bundle deliberately do not prescribe a maintainer's
 personal primary-key or signing-subkey fingerprint.
 
-FreePBX 14-16 use the portable watcher bundle. FreePBX 17 on Debian 12 uses
-the Debian package. Follow the installation guide linked from the unified
-release notes.
+The shared module archive contains the watcher and selects a Debian-family or
+RHEL/CentOS/Sangoma-family service layout when its explicit root installer is
+run. The separately signed Debian and portable watcher packages are optional
+alternatives for operators who prefer operating-system package management.
+Follow the installation guide linked from the unified release notes.
 
 These are alpha diagnostics. They are read-only with respect to FreePBX
 configuration, but they do install a local observer service and Apache request

@@ -21,7 +21,10 @@ docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc "
   archive=/srv/pendingchanges/dist/$archive_name
   test -f \"\$archive\"
   tar -tzf \"\$archive\" | grep -qx 'pendingchanges/module.xml'
-  /var/lib/asterisk/bin/fwconsole ma uninstall pendingchanges || true
+  if /var/lib/asterisk/bin/fwconsole ma list \
+      | grep -Eq '\|[[:space:]]*pendingchanges[[:space:]]*\|'; then
+    /var/lib/asterisk/bin/fwconsole ma uninstall pendingchanges
+  fi
   rm -rf /var/www/html/admin/modules/pendingchanges
   tar -xzf \"\$archive\" -C /var/www/html/admin/modules
   chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges

@@ -5,10 +5,10 @@ deliberately narrower than a support claim.
 
 | FreePBX target | Candidate | Validated runtime | Current evidence | Still required |
 | --- | --- | --- | --- | --- |
-| 14 | `17.0.1.0` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 15 | `17.0.1.0` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 16 | `17.0.1.0` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
-| 17 | `17.0.1.0` shared archive | FreePBX 17, PHP 8.2 | Complete compatibility, installation, watcher, authenticated fixture, breaker, Apply Config, and final clean-state gates | Continued alpha feedback on varied installations |
+| 14 | `17.0.1.1` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 15 | `17.0.1.1` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 16 | `17.0.1.1` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Metadata/syntax/render checks plus real Module Admin install, watcher-to-BMO integration, staged database drift, Apply Config, and clean baseline | Voluntary alpha feedback from maintained real installations |
+| 17 | `17.0.1.1` shared archive | FreePBX 17, PHP 8.2 | Complete compatibility, installation, watcher, authenticated fixture, breaker, Apply Config, and final clean-state gates | Continued alpha feedback on varied installations |
 
 The shared portable watcher additionally passes Python 3.6 compilation,
 cross-version PHP sensor tests, archive-layout checks, and service-path checks.

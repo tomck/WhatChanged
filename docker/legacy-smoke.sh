@@ -80,6 +80,11 @@ docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh 
   chown -R asterisk:asterisk /var/www/html/admin/modules/pendingchanges
   /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   /var/lib/asterisk/bin/fwconsole ma list | grep -F '$module_version' | grep -E 'pendingchanges.*Enabled'
+  /var/www/html/admin/modules/pendingchanges/bin/install-watcher --check \
+    | tee /tmp/what-changed-embedded-check.txt
+  grep -Eq '^layout=(debian|portable)$' /tmp/what-changed-embedded-check.txt
+  grep -qx 'payload=complete' /tmp/what-changed-embedded-check.txt
+  rm -f /tmp/what-changed-embedded-check.txt
 "
 
 docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh -eu -c '

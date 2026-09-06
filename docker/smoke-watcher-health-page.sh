@@ -28,4 +28,8 @@ grep -q 'Watcher health' "$PAGE_FILE"
 grep -q '>Healthy<' "$PAGE_FILE"
 grep -q 'Current full watcher snapshot' "$PAGE_FILE"
 grep -q 'Loaded for this FreePBX web request' "$PAGE_FILE"
+DOCTOR=$(docker compose -f "$ROOT_DIR/docker/docker-compose.yml" exec -T pbx \
+  sh -lc 'su -s /bin/sh asterisk -c "php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor"')
+echo "$DOCTOR" | grep -qx 'watcher_state=healthy'
+echo "$DOCTOR" | grep -qx 'data_current=yes'
 echo 'Authenticated FreePBX watcher-health page passed'

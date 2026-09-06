@@ -1,22 +1,27 @@
-# Shared module release 17.0.1.0
+# Shared module release 17.0.1.1
 
-The default archive, pendingchanges-17.0.1.0.tgz, declares FreePBX 14.0,
+The default archive, pendingchanges-17.0.1.1.tgz, declares FreePBX 14.0,
 15.0, 16.0 and 17.0 support and requires PHP 5.6 or newer.
 The module version is a release identifier, not the minimum FreePBX version.
 
 There is one PHP source tree and one module archive for all four versions.
 The release workflow creates one module tag, signs once, and publishes once.
 
-The watcher remains a separate installation: Debian package for Debian 12,
-portable systemd package for the legacy test platforms. Module compatibility
-does not make the Debian package compatible with every operating system.
+The module now embeds the watcher payload and an explicit root installer. It
+selects Debian-family or RHEL/CentOS/Sangoma-family paths from the operating
+system, not the FreePBX version. Standalone Debian and portable packages remain
+available but are optional.
 
-Validation: the identical 17.0.1.0 archive was installed with Module Admin in
+Validation: the identical 17.0.1.1 archive was installed with Module Admin in
 the existing disposable FreePBX 14, 15, 16 and 17 fixtures. Each reported
-17.0.1.0 Enabled. PHP 5.6, 7.4 and 8.2 syntax, page rendering, watcher-health
+17.0.1.1 Enabled. PHP 5.6, 7.4 and 8.2 syntax, page rendering, watcher-health
 classification and request-audit checks passed. This is packaging and module
 installation validation. The unified archive also passed the FreePBX 14–16
-staged-drift lifecycle gate on September 5, 2026.
+staged-drift lifecycle gate and the complete FreePBX 17 release gate on
+September 5, 2026. Both embedded filesystem layouts and automatic OS-family
+detection were validated in disposable containers. Live systemd activation of
+the embedded portable layout still requires voluntary testing on a maintained
+RHEL/CentOS/Sangoma-family PBX.
 
 FreePBX 17: archive installation, watcher package layout, watcher unit checks,
 request-audit checks and the core watcher smoke lifecycle passed on September 5.

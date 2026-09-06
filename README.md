@@ -1,6 +1,6 @@
 # WhatChanged
 
-The shared `pendingchanges-17.0.1.0.tgz` module supports FreePBX 14–17.
+The shared `pendingchanges-17.0.1.1.tgz` module supports FreePBX 14–17.
 There is one PHP implementation and one release archive for all four versions. See [shared module compatibility](docs/shared-module.md).
 
 `pendingchanges` is a FreePBX diagnostic module. FreePBX 17 is the primary
@@ -114,11 +114,18 @@ Config, `fwconsole reload`, or an Asterisk reload.
 
 ## Public alpha release artifacts
 
-Alpha testers install two separately signed artifacts: the FreePBX module
-archive (`pendingchanges-<version>.tgz`) and the Debian watcher package
-(`what-changed-watcher_<version>_all.deb`). The module archive does **not**
-contain the watcher. Build the watcher package in the disposable Debian 12 lab
-with:
+The FreePBX module archive embeds the complete watcher payload. After Module
+Admin installs the archive, one explicit root command detects the operating
+system, installs the correct service layout, configures a local SELECT-only
+database account, and starts the watcher:
+
+```sh
+sudo /var/www/html/admin/modules/pendingchanges/bin/install-watcher
+```
+
+This privileged step is deliberately not run implicitly by Module Admin.
+Standalone Debian and portable watcher packages remain optional release
+artifacts. Build the Debian package in the disposable Debian 12 lab with:
 
 ```sh
 ./scripts/package-watcher.sh
@@ -139,7 +146,7 @@ signed checksum manifest without moving the secret key into the lab:
 
 ```sh
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
-./deploy/sign-release-artifacts.sh pendingchanges-17.0.1.0.tgz what-changed-watcher_0.1.2_all.deb
+./deploy/sign-release-artifacts.sh pendingchanges-17.0.1.1.tgz what-changed-watcher_0.1.2_all.deb
 ```
 
 The unified FreePBX 14–17 GitHub prerelease has a stricter two-stage workflow.
@@ -194,6 +201,7 @@ Run within a FreePBX installation as the Asterisk user:
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges status
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges seed
 php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges feedback
+php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor
 ```
 
 `seed` refuses to replace the baseline while a reload is pending. Capture a
@@ -228,7 +236,7 @@ pilot operator:
 
 ```sh
 scripts/package-module.sh
-./docker/validate-module-archive.sh dist/pendingchanges-17.0.1.0.tgz
+./docker/validate-module-archive.sh dist/pendingchanges-17.0.1.1.tgz
 ```
 
 Before that pilot, verify in the Docker lab that:
