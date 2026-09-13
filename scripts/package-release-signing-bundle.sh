@@ -30,8 +30,10 @@ done
 
 cp "$root_dir/deploy/sign-github-release-set.sh" "$bundle/sign.sh"
 cp "$root_dir/deploy/release-versions.sh" "$bundle/release-versions.sh"
+cp "$root_dir/scripts/check-module-signature-manifest.sh" \
+  "$bundle/check-module-signature-manifest.sh"
 cp "$root_dir/docs/release-signing.md" "$bundle/README.md"
 cp "$root_dir/docs/release-assets.md" "$bundle/RELEASE-README.md"
-chmod 0755 "$bundle/sign.sh"
+chmod 0755 "$bundle/sign.sh" "$bundle/check-module-signature-manifest.sh"
 COPYFILE_DISABLE=1 tar --no-xattrs -C "$stage" -czf "$archive" "$bundle_name"
 echo "$archive"

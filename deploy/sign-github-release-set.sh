@@ -55,10 +55,17 @@ test -f "$module_stage/pendingchanges/module.xml"
 grep -q "<version>$module_version</version>" \
   "$module_stage/pendingchanges/module.xml"
 rm -f "$module_stage/pendingchanges/module.sig"
+# A distributable archive must use FreePBX's normal module signature.  The
+# --local mode is deliberately host-specific: it creates a second signature
+# under /etc/freepbx.secure and makes module.sig refer to that sidecar.  Such an
+# archive reports "pendingchanges.sig missing" when installed on another PBX.
 sudo env GPG_TTY="$GPG_TTY" /usr/src/devtools/sign.php \
-  "$module_stage/pendingchanges" --local "$subkey"
+  "$module_stage/pendingchanges" "$subkey"
 test -s "$module_stage/pendingchanges/module.sig"
 sudo gpg --verify "$module_stage/pendingchanges/module.sig" >/dev/null
+manifest="$work/module-signature-manifest.txt"
+sudo gpg --batch --decrypt "$module_stage/pendingchanges/module.sig" > "$manifest"
+"$bundle_dir/check-module-signature-manifest.sh" "$manifest"
 tar -C "$module_stage" -czf "$work/signed/$name" pendingchanges
 
 cp "$unsigned_dir/what-changed-watcher-portable_$watcher_version.tar.gz" "$work/signed/"
