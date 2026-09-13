@@ -63,5 +63,9 @@ grep -q "<version>$module_version</version>" \
   "$target_stage/pendingchanges/module.xml"
 gpg --homedir "$gpg_home" --batch --verify \
   "$target_stage/pendingchanges/module.sig" >/dev/null
+manifest="$module_stage/module-signature-manifest.txt"
+gpg --homedir "$gpg_home" --batch --decrypt \
+  "$target_stage/pendingchanges/module.sig" > "$manifest"
+"$root_dir/scripts/check-module-signature-manifest.sh" "$manifest"
 
 echo "Signed GitHub release set verified: $release_dir"

@@ -9,7 +9,7 @@ Apache.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.1.3.tgz`
+   - `pendingchanges-17.0.1.4.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -20,10 +20,11 @@ for that Python, a MariaDB/MySQL client, and the normal `asterisk` service
 account. The installer checks these prerequisites before changing the host and
 prints the distribution-specific PyMySQL package name if it is absent.
 
-The release publisher creates `SHA256SUMS`, `SHA256SUMS.asc`, and one `.asc`
-detached signature per release artifact with the approved signing subkey. A
-FreePBX local module signature is different: it is generated after the module
-is installed on each PBX and does not replace the detached archive signature.
+The release publisher creates `SHA256SUMS`, `SHA256SUMS.asc`, one `.asc`
+detached signature per release artifact, and a distributable FreePBX
+`module.sig` inside the module archive. FreePBX's `--local` signing mode is
+different: it creates a PBX-specific sidecar under `/etc/freepbx.secure` and
+must not be used to build a portable release archive.
 
 ## Install
 
@@ -37,7 +38,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.3.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.4.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -77,9 +78,11 @@ sudo systemctl status what-changed-watcher --no-pager
 sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
 ```
 
-In FreePBX, open **Reports → Pending Changes Tripwire**. The Module Admin
-status may say **Unsigned** until the module is locally signed on that PBX;
-that is expected for an alpha archive and does not prevent operation.
+In FreePBX, open **Reports → Pending Changes Tripwire**. The release archive
+contains `module.sig`. Until the maintainer's key is certified by Sangoma, a
+stock PBX may report that the signature uses an untrusted or invalid key. It
+must not report a missing `pendingchanges.sig` file; that indicates a broken
+host-local release signature.
 
 The Watcher health card must say **Healthy**, **Current full watcher snapshot**,
 and **Baseline: Continuity verified** before an empty drift report can be treated as meaningful. A running
@@ -92,13 +95,13 @@ Do one normal, known Apply Config only when you were already ready to apply
 the PBX's existing pending work. The watcher then captures its first clean
 baseline automatically. Do not seed a baseline while changes are pending.
 
-## Optional local FreePBX module signature
+## Optional local signing for private modifications
 
-FreePBX local signatures belong to the installed module directory, not the
-`.tgz` file. After reviewing and installing the module, an operator with a
-trusted local signing key can run the project's interactive signing helper on
-that PBX. This does not sign the watcher `.deb`; use the detached release
-signature or signed APT repository metadata for that artifact.
+If an operator modifies the installed module, FreePBX's `--local` signing mode
+can attest that private copy on that one PBX. Its sidecar under
+`/etc/freepbx.secure` is intentionally not portable and must never be copied
+into a public release archive. This does not sign the watcher `.deb`; use the
+detached release signature or signed APT repository metadata for that artifact.
 
 ## Alpha feedback and uninstall
 

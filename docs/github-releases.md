@@ -8,7 +8,7 @@ archives are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-17.0.1.3` | 14–17 | `pendingchanges-17.0.1.3.tgz` with embedded watcher | Optional Debian and portable 0.1.3 packages |
+| `pendingchanges-17.0.1.4` | 14–17 | `pendingchanges-17.0.1.4.tgz` with embedded watcher | Optional Debian and portable 0.1.3 packages |
 
 One module tag identifies the source commit. The release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
@@ -23,12 +23,12 @@ will be transferred to the isolated signing host:
 ```sh
 ./docker/legacy-compatibility-gate.sh
 ./docker/legacy-real-image-gate.sh
-git tag -a pendingchanges-17.0.1.3 -m 'Pending Changes Tripwire 17.0.1.3 alpha'
+git tag -a pendingchanges-17.0.1.4 -m 'Pending Changes Tripwire 17.0.1.4 alpha'
 ./scripts/package-watcher.sh
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-17.0.1.3.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-17.0.1.4.tar.gz`. It contains
 the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -38,8 +38,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-17.0.1.3.tar.gz
-cd what-changed-signing-17.0.1.3
+tar -xzf what-changed-signing-17.0.1.4.tar.gz
+cd what-changed-signing-17.0.1.4
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
@@ -50,9 +50,10 @@ unlocks that key through a real terminal, then creates a FreePBX `module.sig`
 inside the module archive, detached OpenPGP signatures for every release
 asset, and a signed checksum manifest. The output is the `signed/` directory.
 Until the maintainer's primary key is certified by Sangoma, stock FreePBX
-systems may still describe these module signatures as locally signed or
-untrusted; the cryptographic signature and checksum can still be verified
-independently.
+systems may still describe the distributable module signature as using an
+untrusted or invalid key; the cryptographic signature and checksum can still
+be verified independently. A release must never use FreePBX's `--local` mode,
+because that makes the archive depend on a PBX-specific sidecar.
 
 ## 3. Retrieve and verify
 

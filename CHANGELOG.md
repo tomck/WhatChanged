@@ -1,5 +1,15 @@
 # Changelog
 
+## Module 17.0.1.4
+
+- Generate distributable FreePBX `module.sig` files without `--local`, so the
+  archive no longer depends on a PBX-specific
+  `/etc/freepbx.secure/pendingchanges.sig` sidecar.
+- Reject release sets whose embedded signature is host-local or references a
+  missing `pendingchanges.sig` file.
+- Clarify the difference between a distributable module signature and optional
+  host-local signing.
+
 ## 0.1.3 / module 17.0.1.3
 
 - Replace sensitive database and AstDB values with installation-keyed HMAC
