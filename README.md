@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.1.4**.
+candidate is **17.0.1.5**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.1.4**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.4.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.1.5.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.4.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.5.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -46,7 +46,9 @@ The last command is intentionally explicit because it installs a system service
 and an Apache request sensor as root. It detects Debian-family and
 RHEL/CentOS/Sangoma-family systems and chooses the corresponding service paths.
 It never runs Apply Config or reloads Asterisk. Installing the request sensor
-does validate and reload Apache.
+validates the complete Apache configuration and reloads Apache. Apache may
+print warnings from existing virtual hosts or modules during that check;
+WhatChanged does not create or modify Apache `DocumentRoot` directives.
 
 The watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL, a
 MariaDB/MySQL client, and the normal `asterisk` service account. For a local
@@ -65,8 +67,17 @@ experimental pending broader testing on maintained installations.
 
 ```sh
 sudo systemctl status what-changed-watcher --no-pager
-sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo -u asterisk \
+  "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" doctor
 ```
+
+The CLI doctor can confirm that the Apache sensor is configured, but PHP CLI
+cannot prove that an Apache web request loaded it. Confirm the runtime line
+**Loaded for this FreePBX web request** on the report page.
 
 Then open **Reports → Pending Changes Tripwire** in FreePBX. Before treating an
 empty report as meaningful, require all three:
@@ -136,7 +147,12 @@ Alpha testers can export a privacy-preserving summary of what the watcher
 recognized:
 
 ```sh
-sudo -u asterisk /var/lib/asterisk/bin/pendingchanges feedback \
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo -u asterisk \
+  "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" feedback \
   > whatchanged-feedback.json
 ```
 

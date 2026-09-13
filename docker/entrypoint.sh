@@ -76,9 +76,6 @@ fi
 for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
   cp -R "/srv/pendingchanges/$path" /var/www/html/admin/modules/pendingchanges/
 done
-if [ ! -e /var/lib/asterisk/bin/pendingchanges ]; then
-  ln -sf /var/www/html/admin/modules/pendingchanges/bin/pendingchanges /var/lib/asterisk/bin/pendingchanges
-fi
 # Re-register the synchronized source on every start. This keeps Module Admin's
 # recorded version aligned when a persisted web volume survives a module bump.
 # A registration failure must not take down the PBX: the source remains

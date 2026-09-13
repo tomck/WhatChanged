@@ -85,6 +85,10 @@ for layout in debian portable; do
   test -s "$root$library/what-changed-request-audit.php"
   test -x "$root/usr/sbin/what-changed-watcher-configure"
   test -x "$root/usr/sbin/what-changed-watcher-install-sensor"
+  grep -q 'Validating the complete Apache configuration on this host' \
+    "$root/usr/sbin/what-changed-watcher-install-sensor"
+  grep -q 'WhatChanged does not create or modify Apache DocumentRoot directives' \
+    "$root/usr/sbin/what-changed-watcher-install-sensor"
   test -s "$root$service"
   test -s "$root/etc/what-changed-watcher.env"
   grep -q "ExecStart=/usr/bin/python3 $library/watcher.py" "$root$service"

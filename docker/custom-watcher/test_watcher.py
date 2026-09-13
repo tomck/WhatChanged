@@ -145,6 +145,26 @@ with tempfile.TemporaryDirectory() as temporary:
     assert watcher.PROTECTED_VALUE_PREFIX not in public
     assert 'marker-secret-one' not in public and 'marker-secret-two' not in public
 
+    # The observation loop must compare a protected AstDB baseline with the
+    # protected current snapshot. Comparing with raw AstDB values would report
+    # every unchanged AMPUSER password as redacted-to-redacted drift forever.
+    same_current = watcher.protect_state(raw_state)
+    same_astdb_diff, deferred = watcher.comparable_astdb(
+        protected, same_current, scope_changed=False, pending_reload=False,
+    )
+    assert not deferred and not same_astdb_diff
+    changed_astdb = json.loads(json.dumps(raw_state))
+    changed_astdb['astdb']['rows']['/AMPUSER/100/voicemail_pin']['value'] = '1357'
+    protected_changed_astdb = watcher.protect_state(changed_astdb)
+    astdb_secret_diff, deferred = watcher.comparable_astdb(
+        protected, protected_changed_astdb,
+        scope_changed=False, pending_reload=False,
+    )
+    assert not deferred
+    assert astdb_secret_diff['updated'][0]['fields']['value'] == {
+        'before': '[redacted]', 'after': '[redacted]',
+    }
+
 # On process startup, unchanged state proves continuity. A witnessed pending
 # flag clear or authenticated Apply can refresh the baseline; any unexplained
 # changed state becomes explicitly uncertain instead of receiving false trust.
@@ -166,6 +186,13 @@ action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_s
 assert action == 'refresh' and provenance['reason'] == 'successful_web_apply_observed_during_interruption'
 action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_state, True, None, [apply_event], 100)
 assert action == 'keep' and provenance['state'] == 'uncertain'
+assert watcher.observed_apply_reason(True, False, [], 100) == 'pending_reload_cleared_while_observed'
+assert watcher.observed_apply_reason(False, False, [apply_event], 100) == 'successful_web_apply_observed'
+assert watcher.observed_apply_reason(False, True, [apply_event], 100) is None
+assert watcher.observed_apply_reason(False, False, [apply_event], 120) is None
+assert watcher.observed_apply_reason(False, False, [
+    {**apply_event, 'finished_at': 121, 'http_status': 500},
+], 120) is None
 
 # A transient database failure must not kill the long-running sensor. The
 # supervisor retries after the probe interval; an explicit stop still exits.
