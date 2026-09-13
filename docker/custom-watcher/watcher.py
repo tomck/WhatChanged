@@ -613,6 +613,16 @@ def comparable_tables(baseline, current, scope_changed, pending_reload):
         added_coverage,
     )
 
+def comparable_astdb(baseline, current_state, scope_changed, pending_reload):
+    """Compare private baseline fingerprints with the protected current state."""
+    deferred = scope_changed and pending_reload and 'astdb' not in baseline
+    if deferred:
+        return {}, True
+    return astdb_diff(
+        baseline.get('astdb', {'keys': ['key'], 'rows': {}}),
+        current_state['astdb'],
+    ), False
+
 def publish(payload):
     # The polling service may be joined by a one-shot diagnostic invocation.
     # A shared `status.tmp` name lets one writer rename the other writer's
@@ -681,6 +691,19 @@ def startup_baseline_recovery(baseline, current, need_reload, runtime, events,
         'reason': 'state_changed_while_watcher_continuity_was_unavailable',
         'detail': 'The saved baseline may predate an Apply Config completed while the watcher was unavailable.',
     }
+
+def observed_apply_reason(previous_reload, need_reload, events, baseline_captured_at):
+    """Return why a running watcher can safely refresh an applied baseline."""
+    if need_reload:
+        return None
+    if previous_reload:
+        return 'pending_reload_cleared_while_observed'
+    boundary = float(baseline_captured_at or 0)
+    applies = [event for event in events
+               if event.get('operation') == 'apply'
+               and int(event.get('http_status', 200)) < 400
+               and float(event.get('finished_at', 0)) > boundary]
+    return 'successful_web_apply_observed' if applies else None
 
 def observe_forever():
     previous_reload = None
@@ -757,9 +780,15 @@ def observe_forever():
             if baseline_provenance.get('state') == 'trusted':
                 save_baseline(state)
                 baseline_provenance = {'state': 'trusted', 'reason': 'clean_scope_upgrade'}
-        elif previous_reload and not database['need_reload']:
+        refresh_reason = observed_apply_reason(
+            previous_reload,
+            database['need_reload'],
+            events,
+            BASELINE.stat().st_mtime if BASELINE.exists() else 0,
+        )
+        if BASELINE.exists() and refresh_reason:
             save_baseline(state)
-            baseline_provenance = {'state': 'trusted', 'reason': 'pending_reload_cleared_while_observed'}
+            baseline_provenance = {'state': 'trusted', 'reason': refresh_reason}
         baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
         if baseline and baseline == state:
             baseline_provenance = {'state': 'trusted', 'reason': 'baseline_matches_current_state'}
@@ -771,8 +800,11 @@ def observe_forever():
                 without_module_owned_rows(before_tables),
                 without_module_owned_rows(after_tables),
             )
-            astdb_deferred = scope_changed and database['need_reload'] and 'astdb' not in baseline
-            astdb_drift = {} if astdb_deferred else astdb_diff(baseline.get('astdb', {'keys': ['key'], 'rows': {}}), astdb)
+            # Baselines contain keyed fingerprints for sensitive AstDB values;
+            # the comparison helper must receive the equally protected state.
+            astdb_drift, astdb_deferred = comparable_astdb(
+                baseline, state, scope_changed, database['need_reload'],
+            )
         else:
             deferred_coverage = []
             database_drift = {}

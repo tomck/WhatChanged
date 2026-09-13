@@ -30,7 +30,7 @@ function pendingchanges_identity($table, array $row) {
         $user = (string) (isset($row['username']) ? $row['username'] : ('User '.(isset($row['uid']) ? $row['uid'] : 'record')));
         return $user.' — '.(string) (isset($row['module']) ? $row['module'] : 'setting').' / '.(string) (isset($row['key']) ? $row['key'] : 'value');
     }
-    foreach (['extension', 'id', 'account', 'grpnum', 'device', 'user'] as $field) {
+    foreach (['extension', 'id', 'account', 'grpnum', 'device', 'user', 'key'] as $field) {
         if (array_key_exists($field, $row) && $row[$field] !== '') {
             $label = (string) $row[$field];
             if (!empty($row['name'])) {
@@ -143,7 +143,7 @@ function pendingchanges_render_record($kind, $table, array $item) {
       <span class="pendingchanges-symbol" aria-hidden="true"><?= $symbols[$kind] ?></span>
       <strong><?= pendingchanges_h($title) ?></strong>
       <span class="pendingchanges-kind"><?= pendingchanges_h(ucfirst($kind)) ?></span>
-      <details><summary>Evidence</summary><pre><?= pendingchanges_h(json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
+      <details class="pendingchanges-evidence"><summary>Evidence</summary><pre><?= pendingchanges_h(json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
     </div>
     <?php
 }
@@ -156,7 +156,7 @@ function pendingchanges_render_extension($kind, array $item) {
       <span class="pendingchanges-symbol" aria-hidden="true"><?= $symbols[$kind] ?></span>
       <strong><?= pendingchanges_h($title) ?></strong>
       <span class="pendingchanges-kind"><?= pendingchanges_h(ucfirst($kind)) ?></span>
-      <details><summary>Extension and endpoint evidence</summary><pre><?= pendingchanges_h(json_encode($item['evidence'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
+      <details class="pendingchanges-evidence"><summary>Extension and endpoint evidence</summary><pre><?= pendingchanges_h(json_encode($item['evidence'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) ?></pre></details>
     </div>
     <?php
 }
@@ -204,12 +204,16 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
   .pendingchanges-health-state-success { color:#218739; }
   .pendingchanges-health-state-warning { color:#a86d00; }
   .pendingchanges-health-state-danger { color:#bb2d3b; }
+  .pendingchanges-evidence-controls { display:none; gap:8px; margin:12px 0; }
 </style>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
   <p class="text-muted">Read-only comparison against the last applied baseline, with cautious correlation to authenticated administrator write requests.</p>
   <?= $notice ?>
   <div class="alert <?= $messageClass ?>"><?= pendingchanges_h($status['message']) ?></div>
+  <div class="pendingchanges-evidence-controls" id="pendingchanges-evidence-controls">
+    <button class="btn btn-default" id="pendingchanges-toggle-evidence" type="button" aria-expanded="false">Expand all evidence</button>
+  </div>
   <section class="pendingchanges-card">
     <h3>Watcher health</h3>
     <div class="pendingchanges-health">
@@ -255,7 +259,7 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
         <p><?= pendingchanges_h(isset($attribution['note']) ? $attribution['note'] : 'No authenticated request evidence is available.') ?></p>
         <p class="text-muted"><?= pendingchanges_h(isset($attribution['caveat']) ? $attribution['caveat'] : 'This is correlation, not proof of causation.') ?></p>
         <?php if (!empty($attribution['requests'])): ?>
-          <details><summary>Matching authenticated write requests (<?= (int) (isset($attribution['request_count']) ? $attribution['request_count'] : count($attribution['requests'])) ?>)</summary>
+          <details class="pendingchanges-evidence"><summary>Matching authenticated write requests (<?= (int) (isset($attribution['request_count']) ? $attribution['request_count'] : count($attribution['requests'])) ?>)</summary>
             <table class="table table-striped table-condensed">
               <thead><tr><th>Time</th><th>Administrator</th><th>Area</th><th>Method</th></tr></thead>
               <tbody>
@@ -354,3 +358,22 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
     <?php endif; ?>
   <?php endif; ?>
 </div>
+<script>
+(function () {
+  var controls = document.getElementById('pendingchanges-evidence-controls');
+  var toggle = document.getElementById('pendingchanges-toggle-evidence');
+  var evidence = document.querySelectorAll('details.pendingchanges-evidence');
+  if (!controls || !toggle || evidence.length === 0) {
+    return;
+  }
+  controls.style.display = 'flex';
+  toggle.addEventListener('click', function () {
+    var expand = toggle.getAttribute('aria-expanded') !== 'true';
+    for (var index = 0; index < evidence.length; index += 1) {
+      evidence[index].open = expand;
+    }
+    toggle.setAttribute('aria-expanded', expand ? 'true' : 'false');
+    toggle.textContent = expand ? 'Collapse all evidence' : 'Expand all evidence';
+  });
+}());
+</script>

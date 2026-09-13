@@ -1,6 +1,6 @@
-# Shared module release 17.0.1.4
+# Shared module release 17.0.1.5
 
-The default archive, pendingchanges-17.0.1.4.tgz, declares FreePBX 14.0,
+The default archive, pendingchanges-17.0.1.5.tgz, declares FreePBX 14.0,
 15.0, 16.0 and 17.0 support and requires PHP 5.6 or newer.
 The module version is a release identifier, not the minimum FreePBX version.
 
@@ -13,9 +13,9 @@ the FreePBX version. It also reads FreePBX's configured `AMPWEBROOT` so
 module-file monitoring follows nonstandard web roots. Standalone Debian and
 portable packages remain available but are optional.
 
-Validation: the identical 17.0.1.4 archive was installed with Module Admin in
+Validation: the identical 17.0.1.5 archive was installed with Module Admin in
 the existing disposable FreePBX 14, 15, 16 and 17 fixtures. Each reported
-17.0.1.4 Enabled. PHP 5.6, 7.4 and 8.2 syntax, page rendering, watcher-health
+17.0.1.5 Enabled. PHP 5.6, 7.4 and 8.2 syntax, page rendering, watcher-health
 classification and request-audit checks passed. This is packaging and module
 installation validation. The unified archive also passed the FreePBX 14–16
 staged-drift lifecycle gate and the complete FreePBX 17 release gate on

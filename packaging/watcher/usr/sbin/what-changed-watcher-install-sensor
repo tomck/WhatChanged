@@ -25,7 +25,14 @@ fi
 install -o root -g root -m 0644 \
   "$sensor_source" \
   "$target/99-what-changed-attribution.ini"
-apachectl configtest
+echo 'Validating the complete Apache configuration on this host before reloading Apache.'
+echo 'Apache may print warnings from existing virtual hosts or modules during this check.'
+if ! apachectl configtest; then
+  echo 'Apache configuration validation failed; Apache was not reloaded.' >&2
+  exit 1
+fi
+echo 'Apache configuration validation passed.'
+echo 'WhatChanged does not create or modify Apache DocumentRoot directives.'
 if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
   systemctl reload apache2
 elif systemctl list-unit-files httpd.service >/dev/null 2>&1; then

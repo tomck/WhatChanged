@@ -1,5 +1,24 @@
 # Changelog
 
+## Module 17.0.1.5 / watcher 0.1.4
+
+- Identify Apache's pre-reload check as validation of the host's complete
+  configuration and explain that warnings can come from existing virtual hosts
+  or modules. WhatChanged does not create or modify `DocumentRoot` directives.
+- Make the command-line doctor report whether the attribution sensor is
+  configured without falsely claiming it is unloaded. Only an Apache-served
+  FreePBX request can verify that the web-request sensor is loaded.
+- Resolve the command-line utility through FreePBX's configured module path in
+  user instructions instead of relying on a Docker-only convenience symlink.
+- Compare protected AstDB snapshots consistently so unchanged AMPUSER password
+  values no longer appear as permanent redacted-to-redacted drift after Apply
+  Config.
+- Add one control to expand or collapse every evidence panel on the report.
+- Name the affected AstDB key so a legitimate sensitive-value change remains
+  identifiable even though its before/after values stay redacted.
+- Refresh the baseline from a successful authenticated Apply Config breadcrumb
+  when the global reload flag turns on and off between watcher scans.
+
 ## Module 17.0.1.4
 
 - Generate distributable FreePBX `module.sig` files without `--local`, so the

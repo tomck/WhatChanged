@@ -13,6 +13,27 @@ try {
     } elseif ($command === 'doctor') {
         $status = $service->status();
         $health = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : array();
+        $sensorConfigured = false;
+        $sensorCandidates = array('/etc/php.d/99-what-changed-attribution.ini');
+        $debianCandidates = glob('/etc/php/*/apache2/conf.d/99-what-changed-attribution.ini');
+        if (is_array($debianCandidates)) {
+            $sensorCandidates = array_merge($sensorCandidates, $debianCandidates);
+        }
+        foreach ($sensorCandidates as $sensorCandidate) {
+            if (!is_readable($sensorCandidate)) {
+                continue;
+            }
+            $sensorConfiguration = file_get_contents($sensorCandidate);
+            if (is_string($sensorConfiguration)
+                && preg_match('/^\s*auto_prepend_file\s*=\s*([^\r\n]+)$/m', $sensorConfiguration, $matches)
+            ) {
+                $sensorPath = trim($matches[1], " \t\n\r\0\x0B\"'");
+                if ($sensorPath !== '' && is_readable($sensorPath)) {
+                    $sensorConfigured = true;
+                    break;
+                }
+            }
+        }
         $lines = array(
             'watcher_state=' . (isset($health['state']) ? $health['state'] : 'unknown'),
             'watcher_label=' . (isset($health['label']) ? $health['label'] : 'Unknown'),
@@ -22,7 +43,9 @@ try {
                 isset($status['baseline_provenance']['state'])
                     ? $status['baseline_provenance']['state'] : 'unknown'
             ),
-            'sensor_loaded=' . (!empty($health['sensor_loaded']) ? 'yes' : 'no'),
+            'sensor_configured=' . ($sensorConfigured ? 'yes' : 'no'),
+            'sensor_loaded=not_applicable_cli',
+            'sensor_runtime_check=FreePBX_Reports_Pending_Changes_Tripwire',
             'pending_reload=' . (!empty($status['pending']) ? 'yes' : 'no'),
         );
         if (isset($health['observation_age_seconds'])) {

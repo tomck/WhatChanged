@@ -2,14 +2,17 @@
 
 This alpha supports FreePBX 14–17 with one shared module archive. It is an
 observer: installation, configuration, and removal do not Apply Config or
-reload Asterisk. Installing the attribution sensor does validate and reload
-Apache.
+reload Asterisk. Installing the attribution sensor validates Apache's complete
+host configuration and then reloads Apache. Apache may print warnings from
+existing virtual hosts or modules during that validation. WhatChanged does not
+create or modify Apache `DocumentRoot` directives; `Syntax OK` followed by the
+installer's validation-passed message means the reload preflight succeeded.
 
 ## Before installing
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.1.4.tgz`
+   - `pendingchanges-17.0.1.5.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -38,7 +41,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.4.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.5.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -75,8 +78,19 @@ sudo systemctl enable --now what-changed-watcher
 
 ```sh
 sudo systemctl status what-changed-watcher --no-pager
-sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo -u asterisk \
+  "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" doctor
 ```
+
+The command-line doctor reports `sensor_configured=yes` when it finds the
+Apache PHP sensor configuration. It deliberately reports
+`sensor_loaded=not_applicable_cli`: PHP CLI does not load Apache's PHP
+configuration and therefore cannot prove that the sensor ran in a web request.
+The FreePBX page is the authoritative runtime check.
 
 In FreePBX, open **Reports → Pending Changes Tripwire**. The release archive
 contains `module.sig`. Until the maintainer's key is certified by Sangoma, a
@@ -109,7 +123,13 @@ The watcher does not upload anything. To share its privacy-preserving
 recognition summary voluntarily:
 
 ```sh
-sudo -u asterisk /var/lib/asterisk/bin/pendingchanges feedback > whatchanged-feedback.json
+freepbx_webroot=$(
+  sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
+    sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
+)
+sudo -u asterisk \
+  "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" feedback \
+  > whatchanged-feedback.json
 ```
 
 To remove an embedded watcher, run its explicit uninstaller before removing

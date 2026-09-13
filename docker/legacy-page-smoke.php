@@ -69,7 +69,15 @@ namespace {
                         ]],
                     ],
                 ],
-                'astdb' => ['added' => [], 'removed' => [], 'updated' => []],
+                'astdb' => [
+                    'added' => [],
+                    'removed' => [],
+                    'updated' => [[
+                        'key' => '/AMPUSER/7001/password',
+                        'identity' => ['key' => '/AMPUSER/7001/password'],
+                        'fields' => ['value' => ['before' => '[redacted]', 'after' => '[redacted]']],
+                    ]],
+                ],
                 'generated_files' => [],
                 'module_files' => [],
                 'coverage_limitations' => [],
@@ -120,7 +128,7 @@ namespace {
     $html = ob_get_clean();
     $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
         ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
-        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Current full watcher snapshot', '7001', 'Legacy test', 'legacy_admin'];
+        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin'];
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);

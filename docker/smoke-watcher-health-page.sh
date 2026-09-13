@@ -29,9 +29,14 @@ grep -q '>Healthy<' "$PAGE_FILE"
 grep -q 'Current full watcher snapshot' "$PAGE_FILE"
 grep -q 'Continuity verified' "$PAGE_FILE"
 grep -q 'Loaded for this FreePBX web request' "$PAGE_FILE"
+grep -q 'Expand all evidence' "$PAGE_FILE"
+grep -q 'Collapse all evidence' "$PAGE_FILE"
 DOCTOR=$(docker compose -f "$ROOT_DIR/docker/docker-compose.yml" exec -T pbx \
   sh -lc 'su -s /bin/sh asterisk -c "php /var/www/html/admin/modules/pendingchanges/bin/pendingchanges doctor"')
 echo "$DOCTOR" | grep -qx 'watcher_state=healthy'
 echo "$DOCTOR" | grep -qx 'data_current=yes'
 echo "$DOCTOR" | grep -qx 'baseline_provenance=trusted'
+echo "$DOCTOR" | grep -qx 'sensor_configured=yes'
+echo "$DOCTOR" | grep -qx 'sensor_loaded=not_applicable_cli'
+echo "$DOCTOR" | grep -qx 'sensor_runtime_check=FreePBX_Reports_Pending_Changes_Tripwire'
 echo 'Authenticated FreePBX watcher-health page passed'

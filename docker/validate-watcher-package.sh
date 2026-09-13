@@ -43,6 +43,10 @@ test -x "$stage/usr/sbin/what-changed-watcher-configure"
 test -x "$stage/usr/sbin/what-changed-watcher-install-sensor"
 sh -n "$stage/usr/sbin/what-changed-watcher-configure"
 sh -n "$stage/usr/sbin/what-changed-watcher-install-sensor"
+grep -q 'Validating the complete Apache configuration on this host' \
+  "$stage/usr/sbin/what-changed-watcher-install-sensor"
+grep -q 'WhatChanged does not create or modify Apache DocumentRoot directives' \
+  "$stage/usr/sbin/what-changed-watcher-install-sensor"
 php -l "$stage/usr/lib/what-changed-watcher/configure-database.php"
 python3 -m py_compile "$stage/usr/lib/what-changed-watcher/watcher.py"
 grep -q 'ExecStart=/usr/bin/python3 /usr/lib/what-changed-watcher/watcher.py' \
