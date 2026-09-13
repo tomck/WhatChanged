@@ -15,6 +15,10 @@ namespace {
                     'pending' => false,
                     'baseline' => true,
                     'watcher' => false,
+                    'baseline_provenance' => [
+                        'state' => 'degraded',
+                        'detail' => 'The external watcher is unavailable.',
+                    ],
                     'message' => 'Watcher health is degraded; current full-scope configuration state is unknown.',
                     'captured_at' => 1700000000,
                     'database' => [],
@@ -40,6 +44,7 @@ namespace {
                 'pending' => true,
                 'baseline' => true,
                 'watcher' => true,
+                'baseline_provenance' => ['state' => 'trusted'],
                 'message' => 'Configuration drift detected since the applied baseline.',
                 'captured_at' => 1700000000,
                 'watcher_observed_at' => 1700000030,

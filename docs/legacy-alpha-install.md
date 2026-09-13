@@ -4,7 +4,7 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use `pendingchanges-17.0.1.2.tgz`.
+All four FreePBX versions use `pendingchanges-17.0.1.3.tgz`.
 
 The module archive embeds the same watcher for all three versions. A separate
 portable watcher bundle remains available as an optional packaging choice.
@@ -43,7 +43,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.2.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.3.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -63,8 +63,8 @@ remains available but is not required.
 
 Then open **Reports -> Pending Changes Tripwire**. Establish a baseline only
 after a known, reviewed Apply Config has completed and the PBX is clean.
-Before relying on an empty report, require **Healthy** and **Current full
-watcher snapshot** in the Watcher health card. An installed or running service
+Before relying on an empty report, require **Healthy**, **Current full watcher
+snapshot**, and **Baseline: Continuity verified** in the Watcher health card. An installed or running service
 without a recent completed observation is shown as degraded, never as all
 clear. On legacy distributions, also confirm the attribution sensor is loaded
 if administrator-request correlation is expected.

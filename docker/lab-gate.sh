@@ -26,6 +26,7 @@ docker compose -f "$COMPOSE_FILE" up -d
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python /usr/local/bin/test_watcher.py
 docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc \
   'php /srv/pendingchanges/docker/test-request-audit.php /tmp/what-changed-request-audit-test.jsonl && rm -f /tmp/what-changed-request-audit-test.jsonl'
+docker compose -f "$COMPOSE_FILE" exec -T pbx php /srv/pendingchanges/docker/test-framework-fallback.php
 docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-freepbx-http.sh"
 "$ROOT_DIR/docker/smoke-breakers.sh"
@@ -36,10 +37,13 @@ docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-outbound-route.sh"
 "$ROOT_DIR/docker/smoke-trunk.sh"
 "$ROOT_DIR/docker/smoke-watcher-health-page.sh"
+"$ROOT_DIR/docker/smoke-redaction.sh"
+"$ROOT_DIR/docker/smoke-watcher-recovery.sh"
 
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python -c '
 import json
 status = json.load(open("/var/lib/pendingchanges-watcher/status.json"))
 assert not status["need_reload"] and not status["database_drift"] and not status["astdb_drift"] and not status["file_drift"]
+assert status.get("baseline_provenance", {}).get("state") == "trusted"
 print("WhatChanged Docker release gate passed")
 '

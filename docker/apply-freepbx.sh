@@ -17,12 +17,17 @@ set +a
 
 COOKIE_JAR=$(mktemp)
 RESPONSE=$(mktemp)
-trap 'rm -f "$COOKIE_JAR" "$RESPONSE"' EXIT HUP INT TERM
+LOGIN_PAGE=$(mktemp)
+trap 'rm -f "$COOKIE_JAR" "$RESPONSE" "$LOGIN_PAGE"' EXIT HUP INT TERM
 curl -fsS -c "$COOKIE_JAR" "$BASE_URL/admin/config.php" >/dev/null
 curl -fsS -L -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
   --data-urlencode "username=$FREEPBX_LAB_ADMIN_USER" \
   --data-urlencode "password=$FREEPBX_LAB_ADMIN_PASSWORD" \
-  -o /dev/null "$BASE_URL/admin/config.php"
+  -o "$LOGIN_PAGE" "$BASE_URL/admin/config.php"
+if grep -q 'id="loginform"' "$LOGIN_PAGE"; then
+  echo 'Disposable FreePBX authentication failed.' >&2
+  exit 1
+fi
 curl -fsS --max-time 1800 -b "$COOKIE_JAR" -X POST \
   --referer "$BASE_URL/admin/config.php" \
   -H 'X-Requested-With: XMLHttpRequest' \

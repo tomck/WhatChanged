@@ -63,6 +63,9 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
    A running unit without a recent completed observation is not healthy.
 2. Perform a known, normal Apply Changes. Wait for the watcher to record a
    clean baseline; retain only that baseline and its current status document.
+   Require the page to report **Baseline: Continuity verified**. If continuity
+   is uncertain after watcher downtime, perform a reviewed Apply Config before
+   treating subsequent comparisons as authoritative.
 3. Make one documented, reversible test change without Apply Changes. Verify
    the page/CLI reports the correct added, updated, or removed record.
 4. Revert or apply that test change through the normal FreePBX workflow. Verify

@@ -46,6 +46,8 @@ assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
 assert watcher.redact_row({'keyword': 'RINGTIMER', 'value': '16'})['value'] == '16'
 assert watcher.redact_row({'keyword': 'API_TOKEN', 'value': 'private'})['value'] == '[redacted]'
 assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
+assert watcher.redact_row({'variable': 'TURN_PASSWORD', 'data': 'private'})['data'] == '[redacted]'
+assert watcher.redact_row({'name': 'secretary', 'value': 'visible'})['value'] == 'visible'
 class KeyCursor:
     def execute(self, *_): pass
     def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
@@ -110,6 +112,80 @@ assert watcher.observation_due(100, 105, False, True, 0, 0)
 assert watcher.observation_due(100, 105, False, False, 1, 2)
 assert watcher.observation_due(100, 130, False, False, 1, 1)
 assert not watcher.observation_due(100, 129.9, False, False, 1, 1)
+
+# Persisted baselines retain equality through keyed fingerprints without ever
+# containing a raw secret or exposing a guessable digest in public output.
+with tempfile.TemporaryDirectory() as temporary:
+    watcher.STATE_DIR = Path(temporary)
+    watcher.REDACTION_KEY = watcher.STATE_DIR / 'redaction.key'
+    watcher.REDACTION_KEY_CACHE = None
+    raw_state = {
+        'scope': {'watch_tables': ['settings']},
+        'tables': {'settings': {'keys': ['variable'], 'rows': {
+            'API_TOKEN': {'variable': 'API_TOKEN', 'value': 'marker-secret-one'},
+        }}},
+        'astdb': {'keys': ['key'], 'rows': {
+            '/AMPUSER/100/voicemail_pin': {
+                'key': '/AMPUSER/100/voicemail_pin', 'value': '2468',
+            },
+        }, 'limitations': []},
+        'files': {},
+    }
+    protected = watcher.protect_state(raw_state)
+    serialized = json.dumps(protected)
+    assert 'marker-secret-one' not in serialized and '2468' not in serialized
+    assert watcher.PROTECTED_VALUE_PREFIX in serialized
+    assert (watcher.REDACTION_KEY.stat().st_mode & 0o777) == 0o600
+    changed_state = json.loads(json.dumps(raw_state))
+    changed_state['tables']['settings']['rows']['API_TOKEN']['value'] = 'marker-secret-two'
+    changed = watcher.protect_state(changed_state)
+    protected_diff = watcher.database_diff(protected['tables'], changed['tables'])
+    public = json.dumps(protected_diff)
+    assert '[redacted]' in public
+    assert watcher.PROTECTED_VALUE_PREFIX not in public
+    assert 'marker-secret-one' not in public and 'marker-secret-two' not in public
+
+# On process startup, unchanged state proves continuity. A witnessed pending
+# flag clear or authenticated Apply can refresh the baseline; any unexplained
+# changed state becomes explicitly uncertain instead of receiving false trust.
+baseline_state = {'scope': {}, 'tables': {'users': {'keys': ['id'], 'rows': {}}}, 'astdb': {'keys': ['key'], 'rows': {}, 'limitations': []}, 'files': {}}
+changed_state = {**baseline_state, 'files': {'generated/extensions.conf': 'new'}}
+action, provenance = watcher.startup_baseline_recovery(baseline_state, baseline_state, False, None, [], 100)
+assert action == 'keep' and provenance['state'] == 'trusted'
+action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_state, False, None, [], 100)
+assert action == 'keep' and provenance['state'] == 'uncertain'
+runtime = {
+    'schema': 1, 'observed_at': 110, 'need_reload': True,
+    'state_fingerprint': watcher.state_fingerprint(baseline_state),
+    'baseline_provenance': {'state': 'trusted'},
+}
+action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_state, False, runtime, [], 100)
+assert action == 'refresh' and provenance['state'] == 'trusted'
+apply_event = {'operation': 'apply', 'finished_at': 120}
+action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_state, False, None, [apply_event], 100)
+assert action == 'refresh' and provenance['reason'] == 'successful_web_apply_observed_during_interruption'
+action, provenance = watcher.startup_baseline_recovery(baseline_state, changed_state, True, None, [apply_event], 100)
+assert action == 'keep' and provenance['state'] == 'uncertain'
+
+# A transient database failure must not kill the long-running sensor. The
+# supervisor retries after the probe interval; an explicit stop still exits.
+retry_calls = []
+def transient_then_stop():
+    retry_calls.append('observe')
+    if len(retry_calls) == 1:
+        raise RuntimeError('transient database reset')
+    raise KeyboardInterrupt()
+try:
+    watcher.run_resilient(
+        transient_then_stop,
+        lambda delay: retry_calls.append(delay),
+        lambda: retry_calls.append('reported'),
+    )
+except KeyboardInterrupt:
+    pass
+assert retry_calls == [
+    'observe', 'reported', max(watcher.PROBE_INTERVAL, 1.0), 'observe',
+]
 
 with tempfile.TemporaryDirectory() as temporary:
     content = (b'what-changed-streaming-digest' * 100000)
