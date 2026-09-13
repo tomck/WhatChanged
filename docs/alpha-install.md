@@ -9,7 +9,7 @@ Apache.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.1.2.tgz`
+   - `pendingchanges-17.0.1.3.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -37,7 +37,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.2.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.3.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -81,8 +81,8 @@ In FreePBX, open **Reports → Pending Changes Tripwire**. The Module Admin
 status may say **Unsigned** until the module is locally signed on that PBX;
 that is expected for an alpha archive and does not prevent operation.
 
-The Watcher health card must say **Healthy** and **Current full watcher
-snapshot** before an empty drift report can be treated as meaningful. A running
+The Watcher health card must say **Healthy**, **Current full watcher snapshot**,
+and **Baseline: Continuity verified** before an empty drift report can be treated as meaningful. A running
 systemd unit alone is not sufficient. Delayed, stale, invalid, unreadable,
 unconfigured, or absent states are deliberately degraded and cannot produce an
 all-clear result. The attribution sensor line should say **Loaded for this

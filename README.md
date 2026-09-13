@@ -6,9 +6,9 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current public
-alpha is **17.0.1.2**.
+alpha is **17.0.1.3**.
 
-[Download the alpha](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.2)
+[Download the alpha](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.3)
 · [Full installation guide](docs/alpha-install.md)
 · [Compatibility evidence](docs/legacy-test-matrix.md)
 · [Contributing](CONTRIBUTING.md)
@@ -21,8 +21,8 @@ alpha is **17.0.1.2**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.2.tgz` from the
-[17.0.1.2 alpha release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.2),
+Download `pendingchanges-17.0.1.3.tgz` from the
+[17.0.1.3 alpha release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.1.3),
 copy it to the PBX, and run:
 
 ```sh
@@ -33,7 +33,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.2.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.3.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -70,10 +70,11 @@ sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor
 ```
 
 Then open **Reports → Pending Changes Tripwire** in FreePBX. Before treating an
-empty report as meaningful, require both:
+empty report as meaningful, require all three:
 
 - **Watcher health: Healthy**
 - **Current full watcher snapshot**
+- **Baseline: Continuity verified**
 
 A running service alone is not enough. Missing, delayed, stale, malformed, or
 unconfigured watcher states are shown as degraded and never produce an
@@ -97,8 +98,9 @@ used for subsequent comparisons.
   labelled **likely** or **possible**, never presented as definitive authorship.
 - Watcher health, observation age, and explicit coverage limitations.
 
-Password-, secret-, token-, PIN-, and key-like fields are redacted. CDR, CEL,
-queue logs, call traffic, and unknown add-on tables are deliberately excluded.
+Password-, secret-, token-, PIN-, and key-like values are converted to keyed
+fingerprints before baseline persistence and displayed only as `[redacted]`.
+CDR, CEL, queue logs, call traffic, and unknown add-on tables are deliberately excluded.
 The watcher never uploads telemetry.
 
 FreePBX itself stores Apply Config as a single `admin.need_reload` flag. It does

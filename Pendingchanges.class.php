@@ -3,6 +3,8 @@ namespace FreePBX\modules;
 
 class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     const BASELINE_TABLE = 'pendingchanges_baseline';
+    const REDACTION_KEY_PATH = '/var/lib/asterisk/pendingchanges-redaction.key';
+    const PROTECTED_VALUE_PREFIX = '[protected hmac-sha256:';
     // Keep the framework-only fallback bounded too. The external watcher is
     // preferred in production, but an unreadable watcher status must never
     // turn this page into an unbounded scan of CDR/CEL/add-on tables.
@@ -16,6 +18,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
     ];
     const MAX_TABLE_ROWS = 5000;
+    private $redactionKeyCache;
 
     public function doConfigPageInit($page) {}
 
@@ -48,8 +51,22 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         if (!$row) {
             return null;
         }
+        $database = json_decode($row['database_snapshot'], true) ?: [];
+        $protected = [];
+        foreach ($database as $table => $rows) {
+            $protected[$table] = [];
+            foreach ($rows as $snapshotRow) {
+                $protected[$table][] = $this->protectSensitiveRow($snapshotRow);
+            }
+        }
+        if ($protected !== $database) {
+            $statement = \FreePBX::Database()->prepare(
+                'UPDATE '.self::BASELINE_TABLE.' SET database_snapshot = ? WHERE id = 1'
+            );
+            $statement->execute([json_encode($protected, JSON_UNESCAPED_SLASHES)]);
+        }
         return [
-            'database' => json_decode($row['database_snapshot'], true) ?: [],
+            'database' => $protected,
             'files' => json_decode($row['file_snapshot'], true) ?: [],
             'captured_at' => $row['captured_at'],
         ];
@@ -73,12 +90,21 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         if ($watcher !== null) {
             $files = $watcher['file_drift'];
             $current = $health['state'] === 'healthy';
+            $provenance = isset($watcher['baseline_provenance']) && is_array($watcher['baseline_provenance'])
+                ? $watcher['baseline_provenance']
+                : [
+                    'state' => 'uncertain',
+                    'reason' => 'watcher_status_does_not_report_baseline_provenance',
+                    'detail' => 'This watcher version cannot prove baseline continuity across service interruptions.',
+                ];
             $pending = $current ? $watcher['need_reload'] : $this->needReload();
             $message = $watcher['message'];
             if ($health['state'] === 'delayed') {
                 $message = 'Watcher observation is delayed; current configuration state may be incomplete.';
             } elseif ($health['state'] === 'stale') {
                 $message = 'Watcher results are stale. Current configuration state is unknown.';
+            } elseif ((isset($provenance['state']) ? $provenance['state'] : '') !== 'trusted') {
+                $message = 'Baseline provenance is uncertain after a watcher interruption; reported drift may span an Apply Config.';
             }
             return [
                 'pending' => $pending,
@@ -92,6 +118,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'attribution' => isset($watcher['attribution']) ? $watcher['attribution'] : [],
                 'message' => $message,
                 'baseline' => $watcher['baseline_available'],
+                'baseline_provenance' => $provenance,
                 'captured_at' => isset($watcher['baseline_captured_at']) ? $watcher['baseline_captured_at'] : null,
                 'watcher_observed_at' => $watcher['observed_at'],
                 'watcher' => true,
@@ -114,6 +141,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'coverage' => [],
                 'attribution' => $this->unavailableAttribution($pending),
                 'baseline' => false,
+                'baseline_provenance' => ['state' => 'unavailable', 'reason' => 'baseline_not_available'],
                 'captured_at' => null,
                 'message' => 'No applied baseline has been seeded; full watcher coverage is unavailable.',
                 'watcher' => false,
@@ -148,6 +176,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             ],
             'attribution' => $this->unavailableAttribution($pending),
             'baseline' => true,
+            'baseline_provenance' => [
+                'state' => 'degraded',
+                'reason' => 'framework_only_fallback',
+                'detail' => 'The external watcher is unavailable; full baseline continuity cannot be proven.',
+            ],
             'captured_at' => $baseline['captured_at'],
             'watcher' => false,
             'watcher_health' => $health,
@@ -298,7 +331,8 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     private function attributionSensorLoaded() {
-        return strpos((string) ini_get('auto_prepend_file'), 'what-changed-request-audit.php') !== false;
+        return defined('WHAT_CHANGED_ATTRIBUTION_SENSOR_ACTIVE')
+            && WHAT_CHANGED_ATTRIBUTION_SENSOR_ACTIVE === true;
     }
 
     private function unavailableAttribution($pending) {
@@ -338,9 +372,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted.$where)->fetchAll(\PDO::FETCH_ASSOC);
             $normalized = [];
             foreach ($rows as $row) {
-                if ($table === 'userman_users_settings' && preg_match('/password|secret|token|pin|(^|_)key($|_)/i', (string) (isset($row['module']) ? $row['module'] : '').' '.(string) (isset($row['key']) ? $row['key'] : ''))) {
-                    $row['val'] = '[redacted sha256:'.hash('sha256', (string) (isset($row['val']) ? $row['val'] : '')).']';
-                }
+                $row = $this->protectSensitiveRow($row);
                 ksort($row);
                 $normalized[] = $row;
             }
@@ -361,7 +393,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 $snapshot['generated/'.substr($path, strlen($root) + 1)] = hash_file('sha256', $path);
             }
         }
-        $moduleRoot = '/var/www/html/admin/modules';
+        $moduleRoot = $this->configuredModuleRoot();
         foreach (glob($moduleRoot.'/*', GLOB_ONLYDIR) ?: [] as $module) {
             if (basename($module) === 'pendingchanges') {
                 continue;
@@ -398,14 +430,119 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             }
             $oldMap = array_fill_keys(array_map('json_encode', $old), true);
             $newMap = array_fill_keys(array_map('json_encode', $new), true);
+            $added = [];
+            foreach (array_keys(array_diff_key($newMap, $oldMap)) as $encoded) {
+                $added[] = $this->publicRow(json_decode($encoded, true));
+            }
+            $removed = [];
+            foreach (array_keys(array_diff_key($oldMap, $newMap)) as $encoded) {
+                $removed[] = $this->publicRow(json_decode($encoded, true));
+            }
             $diff[$table] = [
-                'added' => array_values(array_map('json_decode', array_keys(array_diff_key($newMap, $oldMap)))),
-                'removed' => array_values(array_map('json_decode', array_keys(array_diff_key($oldMap, $newMap)))),
+                'added' => $added,
+                'removed' => $removed,
                 'before_count' => count($old),
                 'after_count' => count($new),
             ];
         }
         return $diff;
+    }
+
+    private function configuredModuleRoot() {
+        $webroot = isset($GLOBALS['amp_conf']['AMPWEBROOT'])
+            ? (string) $GLOBALS['amp_conf']['AMPWEBROOT'] : '/var/www/html';
+        $webroot = $webroot === '/' ? '/' : rtrim($webroot, '/');
+        if ($webroot === '' || $webroot[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $webroot)
+            || preg_match('#(?:^|/)\.\.(?:/|$)#', $webroot)) {
+            throw new \RuntimeException('FreePBX AMPWEBROOT is not safe for module scanning.');
+        }
+        return ($webroot === '/' ? '' : $webroot).'/admin/modules';
+    }
+
+    private static function semanticNameSensitive($value) {
+        return preg_match(
+            '/(^|[_.|\/\s\-])(password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|auth_key|authkey)($|[_.|\/\s\-])/i',
+            (string) $value
+        ) === 1;
+    }
+
+    private static function sensitiveField($field, array $row) {
+        $name = strtolower((string) $field);
+        if (preg_match('/password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|auth_key|authkey/i', $name)) {
+            return true;
+        }
+        if (substr($name, -4) === '_key' || strpos($name, 'key_') === 0) {
+            return true;
+        }
+        if (in_array($name, ['value', 'val', 'data'], true)) {
+            $semantic = [];
+            foreach (['module', 'keyword', 'key', 'variable', 'setting', 'option', 'name'] as $semanticField) {
+                $semantic[] = isset($row[$semanticField]) ? $row[$semanticField] : '';
+            }
+            return self::semanticNameSensitive(implode(' ', $semantic));
+        }
+        return false;
+    }
+
+    private function redactionKey() {
+        if (is_string($this->redactionKeyCache) && strlen($this->redactionKeyCache) >= 32) {
+            return $this->redactionKeyCache;
+        }
+        $path = self::REDACTION_KEY_PATH;
+        $encoded = @file_get_contents($path);
+        if (is_string($encoded) && preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
+            $this->redactionKeyCache = pack('H*', trim($encoded));
+            return $this->redactionKeyCache;
+        }
+        if (function_exists('random_bytes')) {
+            $key = random_bytes(32);
+        } elseif (function_exists('openssl_random_pseudo_bytes')) {
+            $key = openssl_random_pseudo_bytes(32);
+        } else {
+            throw new \RuntimeException('No secure random source is available for fallback redaction.');
+        }
+        if (!is_string($key) || strlen($key) < 32) {
+            throw new \RuntimeException('Could not generate the fallback redaction key.');
+        }
+        $handle = @fopen($path, 'x');
+        if ($handle !== false) {
+            fwrite($handle, bin2hex($key));
+            fclose($handle);
+            @chmod($path, 0600);
+        } else {
+            $encoded = @file_get_contents($path);
+            if (!is_string($encoded) || !preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
+                throw new \RuntimeException('Could not create the fallback redaction key.');
+            }
+            $key = pack('H*', trim($encoded));
+        }
+        $this->redactionKeyCache = $key;
+        return $key;
+    }
+
+    private function protectSensitiveRow(array $row) {
+        foreach ($row as $field => $value) {
+            if (!self::sensitiveField($field, $row)) {
+                continue;
+            }
+            if (is_string($value) && strpos($value, self::PROTECTED_VALUE_PREFIX) === 0) {
+                continue;
+            }
+            $serialized = json_encode($value, JSON_UNESCAPED_SLASHES);
+            $row[$field] = self::PROTECTED_VALUE_PREFIX
+                .hash_hmac('sha256', $serialized === false ? (string) $value : $serialized, $this->redactionKey()).']';
+        }
+        return $row;
+    }
+
+    private function publicRow(array $row) {
+        foreach ($row as $field => $value) {
+            if (self::sensitiveField($field, $row)
+                || (is_string($value) && strpos($value, self::PROTECTED_VALUE_PREFIX) !== false)) {
+                $row[$field] = '[redacted]';
+            }
+        }
+        return $row;
     }
 
     private function fileDiff(array $before, array $after) {

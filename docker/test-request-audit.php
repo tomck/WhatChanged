@@ -4,6 +4,13 @@ putenv('WHAT_CHANGED_ATTRIBUTION_LOG='.$path);
 @unlink($path);
 require __DIR__.'/../deploy/what-changed-request-audit.php';
 
+if (!whatchanged_is_freepbx_admin_script('/srv/freepbx-web/admin/config.php', '/admin/config.php')) {
+    throw new RuntimeException('Custom AMPWEBROOT admin request was not recognized');
+}
+if (whatchanged_is_freepbx_admin_script('/srv/other-app/index.php', '/index.php')) {
+    throw new RuntimeException('Non-FreePBX request was recognized as an admin request');
+}
+
 $_SESSION = ['AMP_user' => (object) ['username' => 'smoke_admin']];
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_SERVER['SCRIPT_NAME'] = '/admin/config.php';

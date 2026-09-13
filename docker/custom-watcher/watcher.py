@@ -1,9 +1,11 @@
 import hashlib
+import hmac
 import json
 import os
 import re
 import sqlite3
 import time
+import traceback
 from pathlib import Path
 
 import pymysql
@@ -11,6 +13,8 @@ import pymysql
 STATE_DIR = Path(os.environ.get('STATE_DIR', '/var/lib/pendingchanges-watcher'))
 OUTPUT = STATE_DIR / 'status.json'
 BASELINE = STATE_DIR / 'baseline.json'
+RUNTIME = STATE_DIR / 'runtime.json'
+REDACTION_KEY = STATE_DIR / 'redaction.key'
 FEEDBACK = STATE_DIR / 'feedback.jsonl'
 FEEDBACK_MAX_EVENTS = int(os.environ.get('FEEDBACK_MAX_EVENTS', '500'))
 ATTRIBUTION_LOG = Path(os.environ.get(
@@ -67,7 +71,14 @@ def table_row_limits():
 
 TABLE_ROW_LIMITS = table_row_limits()
 EXCLUDED_MODULES = {'pendingchanges'}
-SENSITIVE_FIELD_MARKERS = ('password', 'secret', 'token', 'value_digest', 'pin')
+SENSITIVE_FIELD_MARKERS = (
+    'password', 'passwd', 'secret', 'token', 'value_digest', 'pin',
+    'credential', 'private_key', 'api_key', 'apikey', 'auth_key', 'authkey',
+)
+SENSITIVE_VALUE_FIELDS = ('value', 'val', 'data')
+SENSITIVE_SEMANTIC_FIELDS = ('module', 'keyword', 'key', 'variable', 'setting', 'option', 'name')
+PROTECTED_VALUE_PREFIX = '[protected hmac-sha256:'
+REDACTION_KEY_CACHE = None
 # Some older Core tables lack a declared primary key.  These identifiers are
 # stable logical keys used only as a fallback, so updates remain updates rather
 # than misleading remove/add pairs.
@@ -319,8 +330,8 @@ def snapshot_rows(cursor, table):
     # `sip` is a normal FreePBX configuration table despite its historic
     # name.  Its rows identify an endpoint, option, and option value.  Capture
     # that structure so a review can explain *which* setting changed.  The
-    # public status document is redacted below; only the 0600 baseline retains
-    # raw values needed for an accurate comparison.
+    # public status document is redacted below; the private baseline retains
+    # only keyed fingerprints for sensitive values needed for comparison.
     if table == 'userman_users_settings':
         cursor.execute(
             "SELECT s.*, u.username FROM `userman_users_settings` s "
@@ -346,6 +357,87 @@ def snapshot_rows(cursor, table):
                 row[key] = None
         normalized.append(row)
     return normalized
+
+def semantic_name_sensitive(value):
+    """Recognize secret-like setting names without matching words such as secretary."""
+    normalized = str(value or '').lower()
+    return any(re.search(r'(^|[_.|/\s\-]){}($|[_.|/\s\-])'.format(re.escape(marker)), normalized)
+               for marker in SENSITIVE_FIELD_MARKERS)
+
+def sensitive_field(field, row=None):
+    name = field.lower()
+    if any(marker in name for marker in SENSITIVE_FIELD_MARKERS):
+        return True
+    # Avoid treating innocent field names such as `keyword` as a secret while
+    # still protecting conventional API/private-key columns.
+    if name.endswith('_key') or name.startswith('key_'):
+        return True
+    # Several FreePBX schemas put the sensitive setting name in one column and
+    # its material in a generic value/val/data column.
+    if name in SENSITIVE_VALUE_FIELDS and row:
+        setting = ' '.join(str(row.get(key, '')) for key in SENSITIVE_SEMANTIC_FIELDS)
+        return semantic_name_sensitive(setting)
+    return False
+
+def redaction_key():
+    """Return a stable local key used only for non-reversible baseline fingerprints."""
+    global REDACTION_KEY_CACHE
+    if REDACTION_KEY_CACHE is not None:
+        return REDACTION_KEY_CACHE
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        key = bytes.fromhex(REDACTION_KEY.read_text().strip())
+    except (OSError, ValueError):
+        key = os.urandom(32)
+        try:
+            descriptor = os.open(str(REDACTION_KEY), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            key = bytes.fromhex(REDACTION_KEY.read_text().strip())
+        else:
+            with os.fdopen(descriptor, 'w') as destination:
+                destination.write(key.hex() + '\n')
+            os.chmod(REDACTION_KEY, 0o600)
+    if len(key) < 32:
+        raise RuntimeError('WhatChanged redaction key is invalid')
+    REDACTION_KEY_CACHE = key
+    return key
+
+def protect_value(value):
+    if isinstance(value, str) and value.startswith(PROTECTED_VALUE_PREFIX):
+        return value
+    encoded = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    digest = hmac.new(redaction_key(), encoded, hashlib.sha256).hexdigest()
+    return '{}{}]'.format(PROTECTED_VALUE_PREFIX, digest)
+
+def protect_row(row):
+    return {
+        field: protect_value(value) if sensitive_field(field, row) else value
+        for field, value in row.items()
+    }
+
+def protect_table_snapshot(snapshot):
+    protected = {}
+    for table, table_data in snapshot.items():
+        keys = table_data.get('keys', [])
+        rows = {}
+        for row in table_data.get('rows', {}).values():
+            safe_row = protect_row(row)
+            rows[row_key(safe_row, keys)] = safe_row
+        protected[table] = {'keys': keys, 'rows': rows}
+    return protected
+
+def protect_state(state):
+    """Remove raw sensitive values before state can be persisted as a baseline."""
+    protected = dict(state)
+    protected['tables'] = protect_table_snapshot(state.get('tables', {}))
+    astdb = state.get('astdb', {'keys': ['key'], 'rows': {}, 'limitations': []})
+    protected_astdb = dict(astdb)
+    protected_astdb['rows'] = {
+        row_key(safe_row, astdb.get('keys', ['key'])): safe_row
+        for safe_row in (protect_row(row) for row in astdb.get('rows', {}).values())
+    }
+    protected['astdb'] = protected_astdb
+    return protected
 
 def database_snapshot():
     connection = pymysql.connect(host=os.environ['DB_HOST'], user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'], cursorclass=pymysql.cursors.DictCursor)
@@ -440,29 +532,9 @@ def astdb_snapshot():
     values = {key: {'key': key, 'value': value} for key, value in rows}
     return {'keys': ['key'], 'rows': values, 'limitations': []}
 
-def sensitive_field(field, row=None):
-    name = field.lower()
-    if any(marker in name for marker in SENSITIVE_FIELD_MARKERS):
-        return True
-    # Avoid treating innocent field names such as `keyword` as a secret while
-    # still protecting conventional API/private-key columns.
-    if name.endswith('_key') or name.startswith('key_'):
-        return True
-    # FreePBX's endpoint-option schema places the sensitive option name in
-    # `keyword` and its material in `data`.
-    if name == 'data' and row:
-        option = str(row.get('keyword', '')).lower()
-        return any(marker in option for marker in SENSITIVE_FIELD_MARKERS) or option == 'key' or option.endswith('_key')
-    # The FreePBX settings table stores the setting name separately from its
-    # value.  Preserve ordinary setting values (so a breaker is reviewable),
-    # but do not disclose a password/token setting merely because its column
-    # is generically named `value`.
-    if name in ('value', 'val') and row:
-        setting = '{} {}'.format(row.get('module', ''), row.get('keyword', row.get('key', ''))).lower()
-        return any(marker in setting for marker in SENSITIVE_FIELD_MARKERS) or setting == 'key' or setting.endswith('_key')
-    return False
-
 def redact(field, value, row=None):
+    if isinstance(value, str) and PROTECTED_VALUE_PREFIX in value:
+        return '[redacted]'
     return '[redacted]' if sensitive_field(field, row) else value
 
 def redact_row(row):
@@ -489,7 +561,8 @@ def database_diff(before, after):
                     for field in IDENTITY_CONTEXT_FIELDS
                     if field in new_rows[key] and new_rows[key].get(field) not in (None, '')
                 }
-                entry = {'key': key, 'fields': changed}
+                public_key = '[redacted]' if PROTECTED_VALUE_PREFIX in key else key
+                entry = {'key': public_key, 'fields': changed}
                 if identity:
                     entry['identity'] = identity
                 updated.append(entry)
@@ -550,13 +623,66 @@ def publish(payload):
     os.chmod(temporary, 0o644)
     temporary.replace(OUTPUT)
 
-def save_baseline(state):
-    BASELINE.write_text(json.dumps(state, sort_keys=True))
-    # Baselines include raw configuration values; only the watcher service
-    # account may read them. The separate status document is redacted.
-    os.chmod(BASELINE, 0o600)
+def save_json_private(path, payload):
+    temporary = path.with_name('.{}.{}.tmp'.format(path.name, os.getpid()))
+    temporary.write_text(json.dumps(payload, sort_keys=True))
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
 
-def main():
+def save_baseline(state, captured_at=None):
+    save_json_private(BASELINE, state)
+    if captured_at is not None:
+        os.utime(BASELINE, (captured_at, captured_at))
+
+def state_fingerprint(state):
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+def load_runtime():
+    try:
+        runtime = json.loads(RUNTIME.read_text())
+    except (OSError, TypeError, ValueError):
+        return None
+    return runtime if isinstance(runtime, dict) and runtime.get('schema') == 1 else None
+
+def save_runtime(state, need_reload, observed_at, provenance):
+    save_json_private(RUNTIME, {
+        'schema': 1,
+        'observed_at': observed_at,
+        'need_reload': bool(need_reload),
+        'state_fingerprint': state_fingerprint(state),
+        'baseline_provenance': provenance,
+    })
+
+def startup_baseline_recovery(baseline, current, need_reload, runtime, events,
+                              baseline_captured_at):
+    """Prove continuity after a service interruption or return an unknown state."""
+    trusted = {'state': 'trusted', 'reason': 'baseline_matches_current_state'}
+    if baseline == current:
+        return 'keep', trusted
+    if runtime:
+        same_observation = (
+            runtime.get('state_fingerprint') == state_fingerprint(current) and
+            bool(runtime.get('need_reload')) == bool(need_reload)
+        )
+        prior = runtime.get('baseline_provenance', {})
+        if same_observation and prior.get('state') == 'trusted':
+            return 'keep', {'state': 'trusted', 'reason': 'continuous_with_last_completed_observation'}
+        if bool(runtime.get('need_reload')) and not need_reload:
+            return 'refresh', {'state': 'trusted', 'reason': 'pending_reload_cleared_during_interruption'}
+        event_boundary = float(runtime.get('observed_at') or baseline_captured_at or 0)
+    else:
+        event_boundary = float(baseline_captured_at or 0)
+    applies = [event for event in events
+               if event.get('operation') == 'apply' and float(event.get('finished_at', 0)) > event_boundary]
+    if applies and not need_reload:
+        return 'refresh', {'state': 'trusted', 'reason': 'successful_web_apply_observed_during_interruption'}
+    return 'keep', {
+        'state': 'uncertain',
+        'reason': 'state_changed_while_watcher_continuity_was_unavailable',
+        'detail': 'The saved baseline may predate an Apply Config completed while the watcher was unavailable.',
+    }
+
+def observe_forever():
     previous_reload = None
     previous_feedback_signature = None
     last_observation = None
@@ -564,6 +690,9 @@ def main():
     cached_module_files = None
     last_module_scan = None
     last_module_scan_wall = 0.0
+    startup = True
+    runtime = load_runtime()
+    baseline_provenance = {'state': 'unavailable', 'reason': 'baseline_not_available'}
     while True:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         now = time.monotonic()
@@ -603,15 +732,37 @@ def main():
             }
             last_module_scan = time.monotonic()
             last_module_scan_wall = time.time()
-        state = {'scope': scope, 'tables': database['tables'], 'astdb': astdb, 'files': files}
+        state = protect_state({'scope': scope, 'tables': database['tables'], 'astdb': astdb, 'files': files})
         existing = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
+        if existing:
+            baseline_timestamp = BASELINE.stat().st_mtime
+            protected_existing = protect_state(existing)
+            if protected_existing != existing:
+                # Migrate 0.1.2 and older plaintext baselines in place without
+                # pretending that the migration was a new Apply Config.
+                save_baseline(protected_existing, baseline_timestamp)
+                existing = protected_existing
+        if startup and existing:
+            action, baseline_provenance = startup_baseline_recovery(
+                existing, state, database['need_reload'], runtime, events,
+                BASELINE.stat().st_mtime,
+            )
+            if action == 'refresh':
+                save_baseline(state)
+                existing = state
         if not BASELINE.exists() and not database['need_reload']:
             save_baseline(state)
+            baseline_provenance = {'state': 'trusted', 'reason': 'initial_clean_baseline'}
         elif existing and existing.get('scope') != scope and not database['need_reload']:
-            save_baseline(state)
+            if baseline_provenance.get('state') == 'trusted':
+                save_baseline(state)
+                baseline_provenance = {'state': 'trusted', 'reason': 'clean_scope_upgrade'}
         elif previous_reload and not database['need_reload']:
             save_baseline(state)
+            baseline_provenance = {'state': 'trusted', 'reason': 'pending_reload_cleared_while_observed'}
         baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else None
+        if baseline and baseline == state:
+            baseline_provenance = {'state': 'trusted', 'reason': 'baseline_matches_current_state'}
         scope_changed = bool(baseline and baseline.get('scope') != scope)
         if baseline:
             before_tables, after_tables, deferred_coverage = comparable_tables(
@@ -650,6 +801,7 @@ def main():
             'need_reload': database['need_reload'],
             'baseline_available': baseline is not None,
             'baseline_captured_at': baseline_captured_at,
+            'baseline_provenance': baseline_provenance,
             'database_drift': database_drift,
             'astdb_drift': astdb_drift,
             'file_drift': file_drift,
@@ -663,9 +815,11 @@ def main():
                 'request_attribution': 'authenticated FreePBX web write metadata; inferred correlation only',
             },
             'attribution': attribution,
-            'message': 'Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
-                       ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
-                        ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.')),
+            'message': 'Baseline provenance is uncertain after a watcher interruption; reported drift may span an Apply Config.'
+                       if baseline_provenance.get('state') == 'uncertain' else
+                       ('Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
+                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
+                         ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.'))),
         }
         # A smoke driver or administrator may Apply Config as soon as the
         # published status shows pending drift. Record that transition in
@@ -678,8 +832,25 @@ def main():
         # snapshot, the next lightweight probe notices it and scans again.
         previous_request_mtime = current_request_mtime
         publish(observation)
+        save_runtime(state, database['need_reload'], observation['observed_at'], baseline_provenance)
+        startup = False
+        runtime = None
         previous_feedback_signature = append_feedback(observation, previous_feedback_signature)
         time.sleep(PROBE_INTERVAL)
+
+def run_resilient(observe, sleeper, reporter=traceback.print_exc):
+    """Keep the sensor alive across transient database and filesystem faults."""
+    while True:
+        try:
+            observe()
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            reporter()
+            sleeper(max(PROBE_INTERVAL, 1.0))
+
+def main():
+    run_resilient(observe_forever, time.sleep)
 
 if __name__ == '__main__':
     main()

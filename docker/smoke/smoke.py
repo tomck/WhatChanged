@@ -18,10 +18,10 @@ def observation():
     return json.loads(STATUS.read_text())
 
 
-# The production watcher begins an idle full scan within 30 seconds. Allow
-# additional time for the bounded module-tree walk itself; the prior 35-second
-# assertion could expire one or two seconds before a valid observation landed.
-def wait_for(description, predicate, timeout=60):
+# The production watcher begins an idle full scan within 30 seconds. A large
+# installed-module tree can take another minute to hash on Docker Desktop, so
+# allow the observation to finish without weakening any state assertion.
+def wait_for(description, predicate, timeout=120):
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:

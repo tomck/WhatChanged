@@ -11,11 +11,11 @@ fi
 
 "$root_dir/scripts/package-legacy-test-releases.sh"
 
-portable="$root_dir/dist/what-changed-watcher-portable_0.1.2.tar.gz"
+portable="$root_dir/dist/what-changed-watcher-portable_$watcher_version.tar.gz"
 portable_stage=$(mktemp -d)
 trap 'rm -rf "$portable_stage"' EXIT
 tar -xzf "$portable" -C "$portable_stage"
-portable_root="$portable_stage/what-changed-watcher-portable-0.1.2"
+portable_root="$portable_stage/what-changed-watcher-portable-$watcher_version"
 test -x "$portable_root/install.sh"
 test -x "$portable_root/uninstall.sh"
 sh -n "$portable_root/install.sh" "$portable_root/uninstall.sh"
@@ -47,6 +47,8 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
     -v "$archive:/tmp/pendingchanges.tgz:ro" \
     -v "$root_dir/docker/legacy-page-smoke.php:/tmp/legacy-page-smoke.php:ro" \
     -v "$root_dir/docker/watcher-health-smoke.php:/tmp/watcher-health-smoke.php:ro" \
+    -v "$root_dir/docker/test-framework-fallback.php:/tmp/test-framework-fallback.php:ro" \
+    -v "$root_dir/Pendingchanges.class.php:/Pendingchanges.class.php:ro" \
     "php:$php_version-cli" sh -eu -c '
       work=$(mktemp -d)
       tar -xzf /tmp/pendingchanges.tgz -C "$work"
@@ -55,6 +57,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
       php /tmp/legacy-page-smoke.php "$work/pendingchanges"
       php /tmp/legacy-page-smoke.php "$work/pendingchanges" degraded
       php /tmp/watcher-health-smoke.php "$work/pendingchanges"
+      php /tmp/test-framework-fallback.php
     '
   echo "FreePBX $target candidate passed PHP $php_version syntax and metadata checks"
 done

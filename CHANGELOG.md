@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.3 / module 17.0.1.3
+
+- Replace sensitive database and AstDB values with installation-keyed HMAC
+  fingerprints before watcher or framework-fallback baseline persistence.
+- Keep all user-visible sensitive values as the constant `[redacted]`; never
+  expose the internal fingerprint in status, feedback, or rendered diffs.
+- Recognize secret-like semantic names stored alongside generic `value`, `val`,
+  and `data` columns in both observation paths.
+- Follow FreePBX's configured `AMPWEBROOT` in the framework module scanner and
+  make the attribution sensor validate the actual `/admin/` request path
+  without assuming `/var/www/html`.
+- Persist watcher continuity metadata and explicitly mark baseline provenance
+  uncertain when state changes across an unobserved interruption.
+- Recover trust after an observed pending-to-clean transition or successful
+  authenticated web Apply Config, and add adversarial regression coverage.
+- Keep the long-running watcher alive across transient database or filesystem
+  failures instead of requiring an operator restart.
+
+Security hardening was prompted by an independent static review produced by
+[@kierknoby](https://github.com/kierknoby)'s ChatGPT.
+
 ## 0.1.2 / module 14-17.0.0.12
 
 - Add an explicit watcher-health contract based on the age of a completed

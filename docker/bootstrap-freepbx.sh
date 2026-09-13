@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ENV_FILE=${FREEPBX_LAB_ENV_FILE:-"$ROOT_DIR/.env.lab"}
 BASE_URL=${FREEPBX_LAB_URL:-http://127.0.0.1:8080}
+COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 
 if [ ! -r "$ENV_FILE" ]; then
   echo "Missing local lab credentials: $ENV_FILE" >&2
@@ -35,6 +36,18 @@ if printf '%s' "$INITIAL_PAGE" | grep -q 'name=.action. value=.setup_admin.'; th
   echo "FreePBX local lab administrator created."
 fi
 
+# Ordinary container recreation intentionally preserves the FreePBX database.
+# Reconcile the disposable administrator when a developer replaces .env.lab;
+# otherwise a 200 response containing the login form can masquerade as a
+# successful authenticated fixture run.
+case "$FREEPBX_LAB_ADMIN_USER" in
+  ''|*[!A-Za-z0-9_.-]*) echo 'Unsafe disposable administrator name.' >&2; exit 2 ;;
+esac
+password_sha1=$(python3 -c 'import hashlib, os; print(hashlib.sha1(os.environ["FREEPBX_LAB_ADMIN_PASSWORD"].encode()).hexdigest())')
+docker compose -f "$COMPOSE_FILE" exec -T database mariadb \
+  -uasterisk -plocal-freepbx asterisk \
+  -e "UPDATE ampusers SET password_sha1='$password_sha1' WHERE username='$FREEPBX_LAB_ADMIN_USER'"
+
 # Authenticate even on a resumed lab, then complete any module-provided OOBE
 # step. A first login can otherwise appear successful while every requested
 # module page is replaced by the locale selector.
@@ -52,7 +65,7 @@ if printf '%s' "$ADMIN_PAGE" | grep -q 'id="localeForm"'; then
 fi
 
 FINAL_PAGE=$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/admin/config.php")
-if printf '%s' "$FINAL_PAGE" | grep -q 'name=.action. value=.setup_admin.\|id="localeForm"'; then
+if printf '%s' "$FINAL_PAGE" | grep -q 'name=.action. value=.setup_admin.\|id="localeForm"\|id="loginform"'; then
   echo 'FreePBX local lab setup did not complete.' >&2
   exit 1
 fi

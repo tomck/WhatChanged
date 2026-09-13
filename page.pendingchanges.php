@@ -175,9 +175,12 @@ $watcherHealth = isset($status['watcher_health']) && is_array($status['watcher_h
     'observation_age_seconds' => null,
 ];
 $dataCurrent = !empty($status['data_current']);
+$baselineProvenance = isset($status['baseline_provenance']) && is_array($status['baseline_provenance'])
+    ? $status['baseline_provenance'] : ['state' => 'uncertain'];
+$baselineTrusted = (isset($baselineProvenance['state']) ? $baselineProvenance['state'] : '') === 'trusted';
 $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] === 'danger'
     ? 'alert-danger'
-    : ((isset($watcherHealth['severity']) && $watcherHealth['severity'] === 'warning') || $status['pending'] ? 'alert-warning' : 'alert-success');
+    : ((isset($watcherHealth['severity']) && $watcherHealth['severity'] === 'warning') || !$baselineTrusted || $status['pending'] ? 'alert-warning' : 'alert-success');
 ?>
 <style>
   .pendingchanges-summary { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
@@ -220,12 +223,22 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
       </div>
       <div class="pendingchanges-health-label">Coverage</div>
       <div><?= $dataCurrent ? 'Current full watcher snapshot' : 'Reduced or last-known coverage; do not treat an empty result as all clear' ?></div>
+      <div class="pendingchanges-health-label">Baseline</div>
+      <div>
+        <?= $baselineTrusted ? 'Continuity verified' : 'Continuity uncertain; wait for an observed successful Apply Config before treating the baseline as authoritative' ?>
+        <?php if (!$baselineTrusted && !empty($baselineProvenance['detail'])): ?>
+          — <?= pendingchanges_h($baselineProvenance['detail']) ?>
+        <?php endif; ?>
+      </div>
       <div class="pendingchanges-health-label">Attribution sensor</div>
       <div><?= !empty($watcherHealth['sensor_loaded']) ? 'Loaded for this FreePBX web request' : 'Not loaded for this FreePBX web request; administrator correlation may be unavailable' ?></div>
     </div>
   </section>
   <?php if (!$dataCurrent): ?>
     <div class="alert alert-warning">Current full-scope drift cannot be declared clear while watcher health is degraded. Any evidence below is framework-only or from the last completed watcher observation.</div>
+  <?php endif; ?>
+  <?php if ($dataCurrent && !$baselineTrusted): ?>
+    <div class="alert alert-warning">The current snapshot is fresh, but the watcher could not prove that its saved baseline follows the latest Apply Config. Evidence is shown conservatively; an observed successful Apply Config will establish a new trusted baseline.</div>
   <?php endif; ?>
   <?php if (isset($watcherHealth['state']) && ($watcherHealth['state'] === 'not_installed' || $watcherHealth['state'] === 'installed_unconfigured')): ?>
     <div class="alert alert-info">The watcher is bundled with this module but is not publishing observations. As root, run <code>sudo <?= pendingchanges_h(__DIR__) ?>/bin/install-watcher</code>. The installer detects Debian and RHEL/Sangoma-family layouts. Standalone watcher packages remain available.</div>
@@ -298,10 +311,10 @@ $messageClass = isset($watcherHealth['severity']) && $watcherHealth['severity'] 
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
-    <?php if ($dataCurrent && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+    <?php if ($dataCurrent && $baselineTrusted && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
-    <?php elseif (!$dataCurrent && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
-      <p class="text-muted">No drift appears in the available evidence, but watcher health must be restored before this can be treated as a current result.</p>
+    <?php elseif ((!$dataCurrent || !$baselineTrusted) && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+      <p class="text-muted">No drift appears in the available evidence, but watcher health and baseline continuity must both be verified before this can be treated as an authoritative result.</p>
     <?php endif; ?>
     <?php if (!empty($extensionChanges)): ?>
       <section class="pendingchanges-card">

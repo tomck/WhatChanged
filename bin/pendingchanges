@@ -18,6 +18,10 @@ try {
             'watcher_label=' . (isset($health['label']) ? $health['label'] : 'Unknown'),
             'data_current=' . (!empty($status['data_current']) ? 'yes' : 'no'),
             'coverage_mode=' . (isset($status['coverage_mode']) ? $status['coverage_mode'] : 'unknown'),
+            'baseline_provenance=' . (
+                isset($status['baseline_provenance']['state'])
+                    ? $status['baseline_provenance']['state'] : 'unknown'
+            ),
             'sensor_loaded=' . (!empty($health['sensor_loaded']) ? 'yes' : 'no'),
             'pending_reload=' . (!empty($status['pending']) ? 'yes' : 'no'),
         );
@@ -29,7 +33,9 @@ try {
             $lines[] = 'remedy=sudo ' . dirname(__FILE__) . '/install-watcher';
         }
         echo implode(PHP_EOL, $lines) . PHP_EOL;
-        exit(empty($status['data_current']) ? 2 : 0);
+        $trusted = isset($status['baseline_provenance']['state'])
+            && $status['baseline_provenance']['state'] === 'trusted';
+        exit(empty($status['data_current']) || !$trusted ? 2 : 0);
     } else {
         throw new RuntimeException('Usage: pendingchanges [status|seed|feedback|doctor]');
     }

@@ -145,10 +145,22 @@ if (!function_exists('whatchanged_audit_scalar')) {
         fclose($handle);
         @chmod($path, 0640);
     }
+
+    function whatchanged_is_freepbx_admin_script($scriptFilename, $scriptName)
+    {
+        $filename = str_replace('\\', '/', (string) $scriptFilename);
+        $name = str_replace('\\', '/', (string) $scriptName);
+        return preg_match('#/admin(?:/|$)#', $filename) === 1
+            && preg_match('#^/admin(?:/|$)#', $name) === 1;
+    }
 }
 
 // auto_prepend_file runs before FreePBX restores authentication. The shutdown
 // callback runs after gui_auth.php and the requested module handler complete.
-if (PHP_SAPI !== 'cli' && strncmp((string) (isset($_SERVER['SCRIPT_FILENAME']) ? $_SERVER['SCRIPT_FILENAME'] : ''), '/var/www/html/admin/', 20) === 0) {
+if (PHP_SAPI !== 'cli' && whatchanged_is_freepbx_admin_script(
+    isset($_SERVER['SCRIPT_FILENAME']) ? $_SERVER['SCRIPT_FILENAME'] : '',
+    isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : ''
+)) {
+    define('WHAT_CHANGED_ATTRIBUTION_SENSOR_ACTIVE', true);
     register_shutdown_function('whatchanged_audit_request');
 }

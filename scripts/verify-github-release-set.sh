@@ -28,8 +28,18 @@ if grep -R -l -- 'BEGIN PGP PRIVATE KEY BLOCK' "$release_dir" >/dev/null; then
   exit 1
 fi
 
-gpg --homedir "$gpg_home" --batch --import \
-  "$release_dir/WHAT_CHANGED_SIGNING_KEY.asc" >/dev/null 2>&1
+# Some macOS GPGTools builds import the public key successfully but return 2
+# when their optional agent is unavailable in an isolated temporary home.
+# Accept that narrow condition only when the fresh keyring now contains an
+# imported fingerprint; every artifact signature is still verified below.
+if ! gpg --homedir "$gpg_home" --batch --import \
+    "$release_dir/WHAT_CHANGED_SIGNING_KEY.asc" >/dev/null 2>&1; then
+  gpg --homedir "$gpg_home" --batch --list-keys --with-colons 2>/dev/null \
+    | grep -q '^fpr:' || {
+      echo 'Could not import the release signing public key.' >&2
+      exit 1
+    }
+fi
 
 (
   cd "$release_dir"

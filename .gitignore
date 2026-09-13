@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
+.DS_Store
 .env.lab
 /uisp_inventory.py
 dist/pendingchanges-*.tgz
@@ -7,4 +8,5 @@ dist/what-changed-watcher*.deb
 dist/what-changed-watcher-portable_*.tar.gz
 dist/what-changed-signing-*.tar.gz
 dist/signed-release/
+dist/signed-release-*/
 dist/validation-*.log
