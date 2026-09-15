@@ -3,10 +3,8 @@ set -eu
 
 case "${1:-configure}" in
   configure)
-    install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-watcher
-    install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-attribution
+    /usr/sbin/what-changed-watcher-configure --paths-only
     /usr/sbin/what-changed-watcher-install-sensor
-    systemctl daemon-reload
     # A fresh package deliberately remains inactive until its dedicated,
     # read-only database account has been configured.
     if grep -q '^DB_PASSWORD=replace-with-generated-secret$' /etc/what-changed-watcher.env; then

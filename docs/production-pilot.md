@@ -40,8 +40,8 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
 - The watcher has a dedicated MariaDB account limited to `SELECT` on the
   FreePBX configuration database. It must not have write, DDL, or reload
   permissions.
-- `/etc/asterisk`, FreePBX's configured `AMPWEBROOT/admin/modules`, and (when enabled)
-  `/var/lib/asterisk/astdb.sqlite3` are mounted/readable
+- FreePBX's configured `ASTETCDIR`, `AMPWEBROOT/admin/modules`, and (when enabled)
+  `ASTVARLIBDIR/astdb.sqlite3` are mounted/readable
   read-only by the watcher. Its state directory is writable only by its own
   service account.
 - The module uses the same status document read-only. Keep it unavailable if
@@ -85,7 +85,7 @@ handling.
 
 Treat a clean report as “no drift detected in the named coverage,” never as
 proof that no PBX state changed. The watcher reads only its explicit database
-table allowlist, generated Asterisk files, module tree digests, and these
+table allowlist, generated Asterisk files, module release markers, and these
 explicit AstDB families: `AMPUSER`, `DEVICE`, `CF`, `CFB`, `CFU`, `CFNA`,
 `DND`, `CW`, `FOLLOWME`, and `BLKVM`. Other AstDB data, arbitrary custom
 modules, and runtime state are out of scope unless deliberately added and

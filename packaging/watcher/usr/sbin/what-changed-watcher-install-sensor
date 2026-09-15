@@ -17,7 +17,14 @@ if [ -z "$target" ]; then
   exit 1
 fi
 
-install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-attribution
+attribution_log=/var/lib/asterisk/pendingchanges-attribution/requests.jsonl
+if [ -r /etc/what-changed-watcher.env ]; then
+  configured_log=$(sed -n 's/^ATTRIBUTION_LOG=//p' /etc/what-changed-watcher.env | tail -n 1)
+  case "$configured_log" in
+    /*) attribution_log=$configured_log ;;
+  esac
+fi
+install -d -o asterisk -g asterisk -m 0750 "$(dirname "$attribution_log")"
 sensor_source=/usr/lib/what-changed-watcher/99-what-changed-attribution.ini
 if [ ! -f "$sensor_source" ]; then
   sensor_source=/usr/local/lib/what-changed-watcher/99-what-changed-attribution.ini

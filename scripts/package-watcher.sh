@@ -33,16 +33,19 @@ cp "$root/docker/custom-watcher/watcher.py" "$stage/usr/lib/what-changed-watcher
 cp "$root/deploy/what-changed-request-audit.php" "$stage/usr/lib/what-changed-watcher/what-changed-request-audit.php"
 cp "$root/deploy/99-what-changed-attribution.ini" "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
 cp "$root/deploy/what-changed-watcher.service" "$stage/lib/systemd/system/what-changed-watcher.service"
+cp "$root/deploy/what-changed-watcher.service" "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service"
 cp "$root/deploy/what-changed-watcher.env.example" "$stage/etc/what-changed-watcher.env"
 # Distribution-managed packages use /usr/lib; the reviewed manual/portable
 # installation deliberately remains under /usr/local/lib.
 sed -i 's#/usr/local/lib/what-changed-watcher#/usr/lib/what-changed-watcher#g' \
   "$stage/lib/systemd/system/what-changed-watcher.service" \
+  "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service" \
   "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
 chmod 0644 "$stage/usr/lib/what-changed-watcher/watcher.py" \
   "$stage/usr/lib/what-changed-watcher/what-changed-request-audit.php" \
   "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini" \
   "$stage/lib/systemd/system/what-changed-watcher.service" \
+  "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service" \
   "$stage/etc/what-changed-watcher.env" \
   "$stage/usr/share/doc/what-changed-watcher/copyright"
 chmod 0755 "$stage/DEBIAN/postinst" "$stage/DEBIAN/prerm" "$stage/DEBIAN/postrm"

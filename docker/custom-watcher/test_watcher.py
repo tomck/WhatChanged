@@ -319,24 +319,29 @@ sip_changes = {entry['key']: entry['fields']['data'] for entry in sip_diff}
 assert sip_changes['7001|callerid'] == {'before': 'Desk <7001>', 'after': 'Lobby <7001>'}
 assert sip_changes['7001|secret'] == {'before': '[redacted]', 'after': '[redacted]'}
 
-# The file-hash cache must not change existing module digest values; otherwise
-# a watcher update would obscure live pending database evidence with noise.
+# Module monitoring uses only stable release markers. Module Admin state is
+# already captured from the modules table and FreePBX's signature verifier is
+# responsible for exhaustive per-file integrity checks. Large node_modules
+# trees must therefore have no effect on WhatChanged's scan cost or result.
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     module = root / 'core'
     module.mkdir()
-    (module / 'a.php').write_text('one')
-    (module / 'nested').mkdir()
-    (module / 'nested' / 'b.php').write_text('two')
-    old = hashlib.sha256()
-    for path in sorted(module.rglob('*')):
-        if path.is_file():
-            old.update(str(path.relative_to(module)).encode())
-            old.update(hashlib.sha256(path.read_bytes()).digest())
+    (module / 'module.xml').write_text('<version>1.0</version>')
+    (module / 'module.sig').write_text('signature-one')
+    (module / 'node_modules').mkdir()
+    ignored = module / 'node_modules' / 'large.js'
+    ignored.write_text('one')
     watcher.ROOT = root / 'asterisk'
     watcher.MODULE_ROOT = root
     watcher.CONTENT_HASH_CACHE.clear()
-    assert watcher.digest_files()['module/core'] == old.hexdigest()
+    first = watcher.digest_files()['module/core']
+    ignored.write_text('two')
+    watcher.CONTENT_HASH_CACHE.clear()
+    assert watcher.digest_files()['module/core'] == first
+    (module / 'module.xml').write_text('<version>1.1</version>')
+    watcher.CONTENT_HASH_CACHE.clear()
+    assert watcher.digest_files()['module/core'] != first
 
 # Immediate FreePBX state is deliberately bounded to named AstDB families.
 # A recording preference is visible, while an unrelated application family is

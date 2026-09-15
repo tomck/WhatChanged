@@ -84,6 +84,14 @@ if (!function_exists('whatchanged_audit_scalar')) {
         }
 
         $path = getenv('WHAT_CHANGED_ATTRIBUTION_LOG');
+        if (!$path && isset($GLOBALS['amp_conf']) && is_array($GLOBALS['amp_conf'])) {
+            $astvarlib = isset($GLOBALS['amp_conf']['ASTVARLIBDIR'])
+                ? $GLOBALS['amp_conf']['ASTVARLIBDIR']
+                : (isset($GLOBALS['amp_conf']['ASTVARLIB']) ? $GLOBALS['amp_conf']['ASTVARLIB'] : '');
+            if (is_string($astvarlib) && $astvarlib !== '' && $astvarlib[0] === '/') {
+                $path = rtrim($astvarlib, '/').'/pendingchanges-attribution/requests.jsonl';
+            }
+        }
         if (!$path) {
             $path = '/var/lib/asterisk/pendingchanges-attribution/requests.jsonl';
         }
