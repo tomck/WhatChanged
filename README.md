@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.1.5**.
+candidate is **17.0.1.6**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.1.5**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.5.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.1.6.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.5.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.6.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -102,7 +102,7 @@ used for subsequent comparisons.
   module activation, User Management/UCP, fax, SIP, and Advanced Settings data.
 - Selected immediate AstDB state, displayed separately because some form
   submissions take effect before Apply Config.
-- Generated Asterisk configuration-file drift and module-tree changes,
+- Generated Asterisk configuration-file drift and module release/state changes,
   separated from normal FreePBX database changes.
 - Authenticated administrator write requests during the pending interval,
   labelled **likely** or **possible**, never presented as definitive authorship.
@@ -121,9 +121,11 @@ but no covered difference can explain it, WhatChanged reports
 ## Coverage and limitations
 
 WhatChanged watches an explicit, bounded collection of FreePBX database tables,
-selected AstDB families, generated `/etc/asterisk/*.conf` files, and installed
-module trees. The complete list is displayed on the module's Coverage contract
-panel.
+selected AstDB families, generated files beneath FreePBX's configured
+`ASTETCDIR`, and installed-module database state plus `module.xml`/`module.sig`
+release markers. FreePBX's own module-signature checker remains responsible for
+exhaustive file-integrity verification. The complete list is displayed on the
+module's Coverage contract panel.
 
 Important limits:
 

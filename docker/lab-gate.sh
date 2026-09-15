@@ -27,6 +27,7 @@ docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python /usr/local/bin/t
 docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc \
   'php /srv/pendingchanges/docker/test-request-audit.php /tmp/what-changed-request-audit-test.jsonl && rm -f /tmp/what-changed-request-audit-test.jsonl'
 docker compose -f "$COMPOSE_FILE" exec -T pbx php /srv/pendingchanges/docker/test-framework-fallback.php
+docker compose -f "$COMPOSE_FILE" exec -T pbx php /srv/pendingchanges/docker/test-baseline-migration.php
 docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-freepbx-http.sh"
 "$ROOT_DIR/docker/smoke-breakers.sh"

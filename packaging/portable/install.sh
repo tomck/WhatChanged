@@ -29,12 +29,11 @@ python3 -c 'import pymysql' >/dev/null 2>&1 || {
 
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")/files" && pwd)
 install -d -o root -g root -m 0755 /usr/local/lib/what-changed-watcher
-install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-watcher
-install -d -o asterisk -g asterisk -m 0750 /var/lib/asterisk/pendingchanges-attribution
 install -m 0644 "$source_dir/watcher.py" /usr/local/lib/what-changed-watcher/watcher.py
 install -m 0644 "$source_dir/what-changed-request-audit.php" /usr/local/lib/what-changed-watcher/what-changed-request-audit.php
 install -m 0644 "$source_dir/99-what-changed-attribution.ini" /usr/local/lib/what-changed-watcher/99-what-changed-attribution.ini
 install -m 0644 "$source_dir/configure-database.php" /usr/local/lib/what-changed-watcher/configure-database.php
+install -m 0644 "$source_dir/what-changed-watcher.service" /usr/local/lib/what-changed-watcher/what-changed-watcher.service
 install -m 0755 "$source_dir/what-changed-watcher-configure" /usr/sbin/what-changed-watcher-configure
 install -m 0755 "$source_dir/what-changed-watcher-install-sensor" /usr/sbin/what-changed-watcher-install-sensor
 install -m 0644 "$source_dir/what-changed-watcher.service" /etc/systemd/system/what-changed-watcher.service
@@ -42,6 +41,7 @@ if [ ! -f /etc/what-changed-watcher.env ]; then
   install -m 0600 "$source_dir/what-changed-watcher.env" /etc/what-changed-watcher.env
 fi
 
+/usr/sbin/what-changed-watcher-configure --paths-only
 /usr/sbin/what-changed-watcher-install-sensor
 /usr/sbin/what-changed-watcher-configure
 echo 'WhatChanged portable watcher installation completed.'

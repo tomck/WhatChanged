@@ -25,6 +25,16 @@ namespace {
     if ($moduleRoot->invoke($instance) !== '/srv/freepbx-web/admin/modules') {
         throw new RuntimeException('Framework fallback ignored AMPWEBROOT');
     }
+    $configRoot = $class->getMethod('configuredAsteriskConfigRoot');
+    $configRoot->setAccessible(true);
+    $variableRoot = $class->getMethod('configuredAsteriskVariableRoot');
+    $variableRoot->setAccessible(true);
+    $GLOBALS['amp_conf']['ASTETCDIR'] = '/srv/asterisk-config';
+    $GLOBALS['amp_conf']['ASTVARLIBDIR'] = '/srv/asterisk-data';
+    if ($configRoot->invoke($instance) !== '/srv/asterisk-config'
+        || $variableRoot->invoke($instance) !== '/srv/asterisk-data') {
+        throw new RuntimeException('Framework fallback ignored configured Asterisk paths');
+    }
 
     $prefix = '[protected hmac-sha256:';
     $before = ['settings' => [[

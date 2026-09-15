@@ -73,7 +73,7 @@ fi
 # Synchronize only the module payload on every disposable-lab start.  Copying
 # the whole checkout also traverses .git and build artifacts; Docker Desktop
 # file sharing can reject that traversal while the checkout changes.
-for path in LICENSE module.xml functions.inc.php Pendingchanges.class.php page.pendingchanges.php bin; do
+for path in LICENSE module.xml Pendingchanges.class.php page.pendingchanges.php bin; do
   cp -R "/srv/pendingchanges/$path" /var/www/html/admin/modules/pendingchanges/
 done
 # Re-register the synchronized source on every start. This keeps Module Admin's

@@ -3,7 +3,7 @@ namespace FreePBX\modules;
 
 class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     const BASELINE_TABLE = 'pendingchanges_baseline';
-    const REDACTION_KEY_PATH = '/var/lib/asterisk/pendingchanges-redaction.key';
+    const BASELINE_CONFIG_KEY = 'framework_fallback_baseline';
     const PROTECTED_VALUE_PREFIX = '[protected hmac-sha256:';
     // Keep the framework-only fallback bounded too. The external watcher is
     // preferred in production, but an unreadable watcher status must never
@@ -23,15 +23,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     public function doConfigPageInit($page) {}
 
     public function install() {
-        \FreePBX::Database()->exec('CREATE TABLE IF NOT EXISTS '.self::BASELINE_TABLE.' (
-            id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-            database_snapshot LONGTEXT NOT NULL,
-            file_snapshot LONGTEXT NOT NULL,
-            captured_at DATETIME NOT NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $this->migrateLegacyBaseline();
     }
 
     public function uninstall() {
+        $this->delConfig(self::BASELINE_CONFIG_KEY);
         \FreePBX::Database()->exec('DROP TABLE IF EXISTS '.self::BASELINE_TABLE);
     }
 
@@ -46,12 +42,16 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     public function baseline() {
-        $statement = \FreePBX::Database()->query('SELECT database_snapshot, file_snapshot, captured_at FROM '.self::BASELINE_TABLE.' WHERE id = 1');
-        $row = $statement->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) {
+        $encoded = $this->getConfig(self::BASELINE_CONFIG_KEY);
+        if (!$encoded) {
+            $this->migrateLegacyBaseline();
+            $encoded = $this->getConfig(self::BASELINE_CONFIG_KEY);
+        }
+        $baseline = is_string($encoded) ? json_decode($encoded, true) : $encoded;
+        if (!is_array($baseline) || !isset($baseline['database'], $baseline['files'], $baseline['captured_at'])) {
             return null;
         }
-        $database = json_decode($row['database_snapshot'], true) ?: [];
+        $database = is_array($baseline['database']) ? $baseline['database'] : [];
         $protected = [];
         foreach ($database as $table => $rows) {
             $protected[$table] = [];
@@ -60,15 +60,13 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
             }
         }
         if ($protected !== $database) {
-            $statement = \FreePBX::Database()->prepare(
-                'UPDATE '.self::BASELINE_TABLE.' SET database_snapshot = ? WHERE id = 1'
-            );
-            $statement->execute([json_encode($protected, JSON_UNESCAPED_SLASHES)]);
+            $baseline['database'] = $protected;
+            $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode($baseline, JSON_UNESCAPED_SLASHES));
         }
         return [
             'database' => $protected,
-            'files' => json_decode($row['file_snapshot'], true) ?: [],
-            'captured_at' => $row['captured_at'],
+            'files' => is_array($baseline['files']) ? $baseline['files'] : [],
+            'captured_at' => $baseline['captured_at'],
         ];
     }
 
@@ -78,8 +76,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         }
         $database = $this->databaseSnapshot();
         $files = $this->fileSnapshot();
-        $stmt = \FreePBX::Database()->prepare('REPLACE INTO '.self::BASELINE_TABLE.' (id, database_snapshot, file_snapshot, captured_at) VALUES (1, ?, ?, NOW())');
-        $stmt->execute([json_encode($database, JSON_UNESCAPED_SLASHES), json_encode($files, JSON_UNESCAPED_SLASHES)]);
+        $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode([
+            'database' => $database,
+            'files' => $files,
+            'captured_at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES));
         return ['tables' => count($database), 'files' => count($files)];
     }
 
@@ -171,8 +172,8 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 'database_tables' => self::WATCH_TABLES,
                 'database_exclusions' => ['modules.modulename=pendingchanges'],
                 'astdb_families' => [],
-                'generated_files' => '/etc/asterisk/*.conf',
-                'module_tree_digests' => 'all modules except pendingchanges',
+                'generated_files' => $this->configuredAsteriskConfigRoot().'/*.conf',
+                'module_release_markers' => 'module.xml and module.sig for all modules except pendingchanges',
             ],
             'attribution' => $this->unavailableAttribution($pending),
             'baseline' => true,
@@ -190,7 +191,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     public function feedback() {
-        $path = '/var/lib/asterisk/pendingchanges-watcher/feedback.jsonl';
+        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-watcher/feedback.jsonl';
         if (!is_readable($path)) {
             return ['schema' => 1, 'events' => [], 'message' => 'No local watcher feedback ledger is available.'];
         }
@@ -209,7 +210,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     private function watcherProbe() {
-        $path = '/var/lib/asterisk/pendingchanges-watcher/status.json';
+        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-watcher/status.json';
         $installed = $this->watcherInstalled();
         $sensorLoaded = $this->attributionSensorLoaded();
         if (!is_readable($path)) {
@@ -386,7 +387,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     private function fileSnapshot() {
-        $root = '/etc/asterisk';
+        $root = $this->configuredAsteriskConfigRoot();
         $snapshot = [];
         foreach (glob($root.'/*.conf') ?: [] as $path) {
             if (is_file($path) && is_readable($path)) {
@@ -399,16 +400,18 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
                 continue;
             }
             $digest = hash_init('sha256');
-            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($module, \FilesystemIterator::SKIP_DOTS));
-            $paths = iterator_to_array($iterator);
-            ksort($paths, SORT_STRING);
-            foreach ($paths as $path) {
-                if ($path->isFile()) {
-                    hash_update($digest, $path->getRelativePathname());
-                    hash_update_file($digest, $path->getPathname());
+            $present = false;
+            foreach (['module.xml', 'module.sig'] as $marker) {
+                $path = $module.'/'.$marker;
+                if (is_file($path) && is_readable($path)) {
+                    hash_update($digest, $marker);
+                    hash_update($digest, hash_file('sha256', $path, true));
+                    $present = true;
                 }
             }
-            $snapshot['module/'.basename($module)] = hash_final($digest);
+            if ($present) {
+                $snapshot['module/'.basename($module)] = hash_final($digest);
+            }
         }
         ksort($snapshot);
         return $snapshot;
@@ -449,14 +452,59 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
     }
 
     private function configuredModuleRoot() {
-        $webroot = isset($GLOBALS['amp_conf']['AMPWEBROOT'])
-            ? (string) $GLOBALS['amp_conf']['AMPWEBROOT'] : '/var/www/html';
-        $webroot = $webroot === '/' ? '/' : rtrim($webroot, '/');
-        if ($webroot === '' || $webroot[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $webroot)
-            || preg_match('#(?:^|/)\.\.(?:/|$)#', $webroot)) {
-            throw new \RuntimeException('FreePBX AMPWEBROOT is not safe for module scanning.');
-        }
+        $webroot = $this->configuredPath('AMPWEBROOT', '/var/www/html');
         return ($webroot === '/' ? '' : $webroot).'/admin/modules';
+    }
+
+    private function configuredAsteriskConfigRoot() {
+        return $this->configuredPath('ASTETCDIR', '/etc/asterisk');
+    }
+
+    private function configuredAsteriskVariableRoot() {
+        if (isset($GLOBALS['amp_conf']['ASTVARLIBDIR'])) {
+            return $this->configuredPath('ASTVARLIBDIR', '/var/lib/asterisk');
+        }
+        return $this->configuredPath('ASTVARLIB', '/var/lib/asterisk');
+    }
+
+    private function configuredPath($setting, $default) {
+        $path = isset($GLOBALS['amp_conf'][$setting]) ? (string) $GLOBALS['amp_conf'][$setting] : $default;
+        $path = $path === '/' ? '/' : rtrim($path, '/');
+        if ($path === '' || $path[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $path)
+            || preg_match('#(?:^|/)\.\.(?:/|$)#', $path)) {
+            throw new \RuntimeException('FreePBX '.$setting.' is not a safe absolute path.');
+        }
+        return $path;
+    }
+
+    private function migrateLegacyBaseline() {
+        if ($this->getConfig(self::BASELINE_CONFIG_KEY)) {
+            return;
+        }
+        $database = \FreePBX::Database();
+        try {
+            $statement = $database->prepare('SHOW TABLES LIKE ?');
+            $statement->execute([self::BASELINE_TABLE]);
+            if (!$statement->fetchColumn()) {
+                return;
+            }
+            $row = $database->query(
+                'SELECT database_snapshot, file_snapshot, captured_at FROM '.self::BASELINE_TABLE.' WHERE id = 1'
+            )->fetch(\PDO::FETCH_ASSOC);
+            if ($row) {
+                $baseline = [
+                    'database' => json_decode($row['database_snapshot'], true) ?: [],
+                    'files' => json_decode($row['file_snapshot'], true) ?: [],
+                    'captured_at' => $row['captured_at'],
+                ];
+                $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode($baseline, JSON_UNESCAPED_SLASHES));
+            }
+            $database->exec('DROP TABLE IF EXISTS '.self::BASELINE_TABLE);
+        } catch (\Exception $error) {
+            // A legacy-table migration failure must not prevent Module Admin
+            // from installing the read-only module. The watcher remains the
+            // primary source and the old table is retained for another try.
+        }
     }
 
     private static function semanticNameSensitive($value) {
@@ -488,7 +536,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
         if (is_string($this->redactionKeyCache) && strlen($this->redactionKeyCache) >= 32) {
             return $this->redactionKeyCache;
         }
-        $path = self::REDACTION_KEY_PATH;
+        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-redaction.key';
         $encoded = @file_get_contents($path);
         if (is_string($encoded) && preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
             $this->redactionKeyCache = pack('H*', trim($encoded));

@@ -32,7 +32,7 @@ fi
 # The embedded installer must be able to inspect that configuration so it can
 # install files and leave the service disabled for manual SELECT-only setup.
 database=$(php "$module/watcher/configure-database.php" --describe)
-printf '%s\n' "$database" | grep -q "$(printf '\t')asterisk$(printf '\t')/var/www/html$"
+printf '%s\n' "$database" | grep -q "$(printf '\t')asterisk$(printf '\t')/var/www/html$(printf '\t')/etc/asterisk$(printf '\t')/var/lib/asterisk$"
 db_host=${database%%"$(printf '\t')"*}
 case "$db_host" in
   localhost|127.0.0.1)
@@ -69,8 +69,13 @@ for layout in debian portable; do
   root="$stage/root-$layout"
   mkdir -p "$root"
   test_webroot=/srv/freepbx-web
+  test_astetc=/srv/asterisk-config
+  test_astvarlib=/srv/asterisk-data
   WHAT_CHANGED_INSTALL_TESTING=1 WHAT_CHANGED_INSTALL_ROOT="$root" \
     WHAT_CHANGED_INSTALL_WEBROOT="$test_webroot" \
+    WHAT_CHANGED_INSTALL_ASTETCDIR="$test_astetc" \
+    WHAT_CHANGED_INSTALL_ASTVARLIBDIR="$test_astvarlib" \
+    WHAT_CHANGED_INSTALL_DBPORT=3307 \
     sh "$module/bin/install-watcher" --layout "$layout" >/dev/null
 
   if [ "$layout" = debian ]; then
@@ -82,6 +87,7 @@ for layout in debian portable; do
   fi
 
   test -s "$root$library/watcher.py"
+  test -s "$root$library/what-changed-watcher.service"
   test -s "$root$library/what-changed-request-audit.php"
   test -x "$root/usr/sbin/what-changed-watcher-configure"
   test -x "$root/usr/sbin/what-changed-watcher-install-sensor"
@@ -92,8 +98,13 @@ for layout in debian portable; do
   test -s "$root$service"
   test -s "$root/etc/what-changed-watcher.env"
   grep -q "ExecStart=/usr/bin/python3 $library/watcher.py" "$root$service"
-  grep -q "Environment=MODULE_PATH=$test_webroot/admin/modules" "$root$service"
   grep -q "ReadOnlyPaths=.* $test_webroot/admin/modules " "$root$service"
+  grep -q "ReadOnlyPaths=$test_astetc $test_astvarlib " "$root$service"
+  grep -qx 'DB_PORT=3307' "$root/etc/what-changed-watcher.env"
+  grep -qx "WATCH_PATH=$test_astetc" "$root/etc/what-changed-watcher.env"
+  grep -qx "MODULE_PATH=$test_webroot/admin/modules" "$root/etc/what-changed-watcher.env"
+  grep -qx "ASTDB_PATH=$test_astvarlib/astdb.sqlite3" "$root/etc/what-changed-watcher.env"
+  grep -qx "STATE_DIR=$test_astvarlib/pendingchanges-watcher" "$root/etc/what-changed-watcher.env"
   grep -q "auto_prepend_file=$library/what-changed-request-audit.php" \
     "$root$library/99-what-changed-attribution.ini"
   cmp "$root$library/watcher.py" "$module/watcher/watcher.py"

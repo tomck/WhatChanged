@@ -27,6 +27,7 @@ MODULE_SCAN_INTERVAL = float(os.environ.get('MODULE_SCAN_INTERVAL', '300'))
 ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
 ASTDB_PATH = Path(os.environ.get('ASTDB_PATH', '/var/lib/asterisk/astdb.sqlite3'))
+DB_PORT = int(os.environ.get('DB_PORT', '3306'))
 # AstDB contains both FreePBX configuration-adjacent state and arbitrary
 # application/runtime data.  Observe only named FreePBX families; never use a
 # broad `database show` scrape as evidence that *everything* changed.
@@ -270,21 +271,24 @@ def digest_files(cached_module_files=None):
     if cached_module_files is not None:
         files.update(cached_module_files)
         return files
-    # Module Admin changes many files per package. A module-level tree digest
-    # keeps the status document compact while still detecting any altered,
-    # added, or removed file inside a module. Module-owned files are excluded.
+    # Normal Module Admin installs change the modules table and the module's
+    # release markers. Hash those markers rather than recursively walking
+    # dependency trees such as UCP/PM2 node_modules. FreePBX's own module
+    # signature verifier remains responsible for exhaustive file-integrity
+    # checking; this watcher reports release/update evidence, not a duplicate
+    # tamper audit. Module-owned files are excluded.
     if MODULE_ROOT.is_dir():
         for module in sorted(MODULE_ROOT.iterdir()):
             if not module.is_dir() or module.name in EXCLUDED_MODULES:
                 continue
             digest = hashlib.sha256()
-            for path in sorted(module.rglob('*')):
-                if path.is_file():
-                    digest.update(str(path.relative_to(module)).encode())
-                    # Preserve the original module-tree digest format (raw
-                    # SHA-256 bytes) so introducing the cache does not make
-                    # every existing baseline look like file drift.
-                    digest.update(bytes.fromhex(content_digest(path)))
+            markers = [module / name for name in ('module.xml', 'module.sig')]
+            present = [path for path in markers if path.is_file()]
+            if not present:
+                continue
+            for path in present:
+                digest.update(path.name.encode())
+                digest.update(bytes.fromhex(content_digest(path)))
             files[f'module/{module.name}'] = digest.hexdigest()
     return files
 
@@ -440,7 +444,11 @@ def protect_state(state):
     return protected
 
 def database_snapshot():
-    connection = pymysql.connect(host=os.environ['DB_HOST'], user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'], cursorclass=pymysql.cursors.DictCursor)
+    connection = pymysql.connect(
+        host=os.environ['DB_HOST'], port=DB_PORT, user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
+        cursorclass=pymysql.cursors.DictCursor,
+    )
     with connection.cursor() as cursor:
         cursor.execute("SELECT value FROM admin WHERE variable = 'need_reload'")
         row = cursor.fetchone()
@@ -472,7 +480,7 @@ def database_snapshot():
 def reload_requested():
     """Read only FreePBX's lightweight global reload flag."""
     connection = pymysql.connect(
-        host=os.environ['DB_HOST'], user=os.environ['DB_USER'],
+        host=os.environ['DB_HOST'], port=DB_PORT, user=os.environ['DB_USER'],
         password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
         cursorclass=pymysql.cursors.DictCursor,
     )
@@ -741,6 +749,7 @@ def observe_forever():
             'table_row_limits': TABLE_ROW_LIMITS,
             'astdb_families': list(ASTDB_FAMILIES),
             'astdb_max_rows': ASTDB_MAX_ROWS,
+            'module_file_mode': 'release_markers_v1',
         }
         scan_modules = (
             cached_module_files is None or last_module_scan is None or
@@ -842,8 +851,8 @@ def observe_forever():
                 'database_tables': list(WATCH_TABLES),
                 'database_exclusions': ['modules.modulename=pendingchanges'],
                 'astdb_families': list(ASTDB_FAMILIES),
-                'generated_files': '/etc/asterisk/*.conf',
-                'module_tree_digests': 'all modules except pendingchanges',
+                'generated_files': str(ROOT / '*.conf'),
+                'module_release_markers': 'module.xml and module.sig for all modules except pendingchanges',
                 'request_attribution': 'authenticated FreePBX web write metadata; inferred correlation only',
             },
             'attribution': attribution,

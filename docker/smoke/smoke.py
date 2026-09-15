@@ -9,7 +9,8 @@ import pymysql
 STATUS = Path('/var/lib/pendingchanges-watcher/status.json')
 BASELINE = Path('/var/lib/pendingchanges-watcher/baseline.json')
 GENERATED_FIXTURE = Path('/etc/asterisk/pc-smoke.conf')
-MODULE_FIXTURE = Path('/var/www/html/admin/modules/core/pc-smoke-module-drift.txt')
+MODULE_MARKER = Path('/var/www/html/admin/modules/core/module.xml')
+LEGACY_MODULE_FIXTURE = Path('/var/www/html/admin/modules/core/pc-smoke-module-drift.txt')
 OWN_MODULE_FIXTURE = Path('/var/www/html/admin/modules/pendingchanges/pc-smoke-owned.txt')
 TABLE = 'pc_smoke_fixture'
 
@@ -45,7 +46,7 @@ def reset_baseline(cursor):
     """Remove test-only state and wait for a fresh clean watcher baseline."""
     set_reload(cursor, False)
     cursor.execute(f'DROP TABLE IF EXISTS `{TABLE}`')
-    for path in (GENERATED_FIXTURE, MODULE_FIXTURE, OWN_MODULE_FIXTURE, BASELINE):
+    for path in (GENERATED_FIXTURE, LEGACY_MODULE_FIXTURE, OWN_MODULE_FIXTURE, BASELINE):
         path.unlink(missing_ok=True)
     previous_observation = observation().get('observed_at', 0) if STATUS.exists() else 0
     set_reload(cursor, True)
@@ -113,13 +114,16 @@ try:
         assert not state['database_drift'] and not state['need_reload']
 
         reset_baseline(cursor)
-        MODULE_FIXTURE.write_text('disposable module-file fixture\n')
-        OWN_MODULE_FIXTURE.write_text('must be excluded\n')
-        state = wait_for('module file drift was not reported', lambda item:
-                         'module/core' in item['file_drift'])
-        assert 'module/pendingchanges' not in state['file_drift']
-        assert not state['database_drift'] and not state['need_reload']
-
+        original_marker = MODULE_MARKER.read_bytes()
+        try:
+            MODULE_MARKER.write_bytes(original_marker + b'\n<!-- disposable release-marker fixture -->\n')
+            OWN_MODULE_FIXTURE.write_text('must be excluded\n')
+            state = wait_for('module release-marker drift was not reported', lambda item:
+                             'module/core' in item['file_drift'])
+            assert 'module/pendingchanges' not in state['file_drift']
+            assert not state['database_drift'] and not state['need_reload']
+        finally:
+            MODULE_MARKER.write_bytes(original_marker)
         reset_baseline(cursor)
     print('watcher smoke lifecycle passed')
 finally:

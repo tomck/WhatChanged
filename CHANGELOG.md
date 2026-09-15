@@ -1,5 +1,20 @@
 # Changelog
 
+## Module 17.0.1.6 / watcher 0.1.5
+
+- Follow FreePBX's configured `ASTETCDIR`, `ASTVARLIBDIR` (or legacy
+  `ASTVARLIB`), and `AMPDBPORT` instead of assuming standard Asterisk paths or
+  MariaDB port 3306.
+- Replace recursive hashing of every installed module file with the modules
+  database state plus stable `module.xml` and `module.sig` release markers.
+  FreePBX's module-signature verifier remains the exhaustive tamper checker.
+- Store the framework-only fallback baseline in the module's BMO key/value
+  store, migrating and then removing the legacy one-row custom table.
+- Remove the obsolete `functions.inc.php` install/uninstall bootstrap; supported
+  FreePBX versions use the BMO class lifecycle.
+- Keep watcher environment paths and systemd filesystem protections aligned
+  when the watcher is installed, upgraded, or reconfigured.
+
 ## Module 17.0.1.5 / watcher 0.1.4
 
 - Identify Apache's pre-reload check as validation of the host's complete
