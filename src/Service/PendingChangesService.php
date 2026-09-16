@@ -162,6 +162,9 @@ class PendingChangesService
             $message = 'Watcher observation is delayed; current configuration state may be incomplete.';
         } elseif ($health['state'] === 'stale') {
             $message = 'Watcher results are stale. Current configuration state is unknown.';
+        } elseif (strpos($health['state'], 'payload_') === 0) {
+            $message = 'The installed watcher payload does not match this module; '
+                . 'current full-scope coverage cannot be confirmed.';
         } elseif ((isset($provenance['state']) ? $provenance['state'] : '') !== 'trusted') {
             $message = 'Baseline provenance is uncertain after a watcher interruption; '
                 . 'reported drift may span an Apply Config.';

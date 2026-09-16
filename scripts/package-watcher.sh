@@ -9,6 +9,8 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 compose_file="$root_dir/docker/docker-compose.yml"
 control="$root_dir/packaging/watcher/DEBIAN/control"
 version=$(sed -n 's/^Version: //p' "$control")
+payload_version=$(tr -d '[:space:]' < "$root_dir/docker/custom-watcher/VERSION")
+source "$root_dir/deploy/release-versions.sh"
 package=what-changed-watcher
 archive="${package}_${version}_all.deb"
 
@@ -16,6 +18,10 @@ if [[ -z "$version" ]]; then
   echo 'Package version is missing.' >&2
   exit 1
 fi
+[[ "$version" == "$watcher_version" && "$payload_version" == "$watcher_version" ]] || {
+  echo 'Watcher package, payload, and release-manifest versions disagree.' >&2
+  exit 1
+}
 
 docker compose -f "$compose_file" up -d pbx
 docker compose -f "$compose_file" exec -T pbx sh -s -- "$archive" <<'SH'
@@ -29,6 +35,7 @@ cp -a "$root/packaging/watcher/." "$stage/"
 mkdir -p "$stage/usr/lib/what-changed-watcher" \
   "$stage/lib/systemd/system" "$stage/etc" \
   "$stage/usr/share/doc/what-changed-watcher"
+cp "$root/docker/custom-watcher/VERSION" "$stage/usr/lib/what-changed-watcher/VERSION"
 cp "$root/docker/custom-watcher/watcher.py" "$stage/usr/lib/what-changed-watcher/watcher.py"
 cp "$root/deploy/what-changed-request-audit.php" "$stage/usr/lib/what-changed-watcher/what-changed-request-audit.php"
 cp "$root/deploy/99-what-changed-attribution.ini" "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
@@ -41,7 +48,8 @@ sed -i 's#/usr/local/lib/what-changed-watcher#/usr/lib/what-changed-watcher#g' \
   "$stage/lib/systemd/system/what-changed-watcher.service" \
   "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service" \
   "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
-chmod 0644 "$stage/usr/lib/what-changed-watcher/watcher.py" \
+chmod 0644 "$stage/usr/lib/what-changed-watcher/VERSION" \
+  "$stage/usr/lib/what-changed-watcher/watcher.py" \
   "$stage/usr/lib/what-changed-watcher/what-changed-request-audit.php" \
   "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini" \
   "$stage/lib/systemd/system/what-changed-watcher.service" \

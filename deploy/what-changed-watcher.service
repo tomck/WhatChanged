@@ -11,7 +11,6 @@ EnvironmentFile=/etc/what-changed-watcher.env
 Environment=PROBE_INTERVAL=5
 Environment=FULL_SCAN_INTERVAL=30
 Environment=MODULE_SCAN_INTERVAL=300
-Environment=PYTHONPATH=/usr/local/lib/what-changed-watcher/vendor
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /usr/local/lib/what-changed-watcher/watcher.py
 Restart=on-failure

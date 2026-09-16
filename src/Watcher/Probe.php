@@ -18,11 +18,16 @@ class Probe
         $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-watcher/status.json';
         $installed = $this->installed();
         $sensorLoaded = $this->attributionSensorLoaded();
+        $payloadInspector = new PayloadInspector($this->paths);
+        $payload = $payloadInspector->inspect();
 
         if (!is_readable($path)) {
             return array(
                 'status' => null,
-                'health' => HealthClassifier::missingStatus($installed, $sensorLoaded),
+                'health' => $this->withPayload(
+                    HealthClassifier::missingStatus($installed, $sensorLoaded),
+                    $payload
+                ),
             );
         }
 
@@ -30,11 +35,14 @@ class Probe
         if ($contents === false) {
             return array(
                 'status' => null,
-                'health' => HealthClassifier::failure(
-                    'unreadable',
-                    'Watcher status exists but could not be read.',
-                    $installed,
-                    $sensorLoaded
+                'health' => $this->withPayload(
+                    HealthClassifier::failure(
+                        'unreadable',
+                        'Watcher status exists but could not be read.',
+                        $installed,
+                        $sensorLoaded
+                    ),
+                    $payload
                 ),
             );
         }
@@ -52,19 +60,42 @@ class Probe
         ) {
             return array(
                 'status' => null,
-                'health' => HealthClassifier::failure(
-                    'invalid',
-                    'Watcher status is malformed or incomplete.',
-                    $installed,
-                    $sensorLoaded
+                'health' => $this->withPayload(
+                    HealthClassifier::failure(
+                        'invalid',
+                        'Watcher status is malformed or incomplete.',
+                        $installed,
+                        $sensorLoaded
+                    ),
+                    $payload
                 ),
             );
         }
 
+        $payload = $payloadInspector->inspect(
+            isset($status['watcher_version']) ? $status['watcher_version'] : null
+        );
+
         return array(
             'status' => $status,
-            'health' => HealthClassifier::classify($status, time(), $installed, $sensorLoaded),
+            'health' => $this->withPayload(
+                HealthClassifier::classify($status, time(), $installed, $sensorLoaded),
+                $payload
+            ),
         );
+    }
+
+    private function withPayload(array $health, array $payload)
+    {
+        $health['payload'] = $payload;
+        if ($health['state'] === 'healthy' && !$payload['current']) {
+            $health['state'] = 'payload_' . $payload['state'];
+            $health['label'] = $payload['label'];
+            $health['severity'] = $payload['severity'];
+            $health['detail'] = 'Watcher observations are current, but ' . lcfirst($payload['detail']);
+        }
+
+        return $health;
     }
 
     private function installed()

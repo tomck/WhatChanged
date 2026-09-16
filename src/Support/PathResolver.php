@@ -11,6 +11,11 @@ class PathResolver
         return ($webroot === '/' ? '' : $webroot) . '/admin/modules';
     }
 
+    public function pendingChangesModuleRoot()
+    {
+        return $this->moduleRoot() . '/pendingchanges';
+    }
+
     public function asteriskConfigRoot()
     {
         return $this->configuredPath('ASTETCDIR', '/etc/asterisk');

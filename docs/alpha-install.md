@@ -12,7 +12,7 @@ installer's validation-passed message means the reload preflight succeeded.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.2.0.tgz`
+   - `pendingchanges-17.0.2.1.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -20,8 +20,10 @@ installer's validation-passed message means the reload preflight succeeded.
 
 The embedded watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL
 for that Python, a MariaDB/MySQL client, and the normal `asterisk` service
-account. The installer checks these prerequisites before changing the host and
-prints the distribution-specific PyMySQL package name if it is absent.
+account. The installer checks these prerequisites before changing the host,
+shows the distribution-specific package command if PyMySQL is absent, and asks
+before installing it. Accepting the prompt installs the dependency and
+continues the same watcher installation.
 
 The release publisher creates `SHA256SUMS`, `SHA256SUMS.asc`, one `.asc`
 detached signature per release artifact, and a distributable FreePBX
@@ -41,7 +43,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.0.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.1.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -64,6 +66,8 @@ sensor, and starts the watcher. Existing watcher configuration and evidence
 are preserved during upgrades. A configured `AMPDBSOCK` is used for local
 Unix-socket connections; otherwise the watcher follows `AMPDBHOST` and
 `AMPDBPORT` for TCP.
+An existing install keeps the filesystem and systemd-unit layout used by its
+active service, even when that is the portable `/usr/local` layout on Debian.
 
 Standalone `.deb` and portable watcher packages remain available for operators
 who prefer operating-system package management, but are not required.
@@ -84,15 +88,21 @@ freepbx_webroot=$(
   sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
     sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
 )
+sudo "$freepbx_webroot/admin/modules/pendingchanges/bin/install-watcher" --check
 sudo -u asterisk \
   "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" doctor
 ```
 
-The command-line doctor reports `sensor_configured=yes` when it finds the
+The installer check reports `payload_state=current` when its bundled and
+installed watcher versions match. The command-line doctor reports
+`sensor_configured=yes` when it finds the
 Apache PHP sensor configuration. It deliberately reports
 `sensor_loaded=not_applicable_cli`: PHP CLI does not load Apache's PHP
 configuration and therefore cannot prove that the sensor ran in a web request.
 The FreePBX page is the authoritative runtime check.
+The doctor also reports `watcher_payload_current=yes` when the installed
+watcher matches the module. Otherwise it prints `watcher_update_command` with
+the exact full command to run.
 
 In FreePBX, open **Reports → Pending Changes Tripwire**. The release archive
 contains `module.sig`. Until the maintainer's key is certified by Sangoma, a
@@ -100,8 +110,9 @@ stock PBX may report that the signature uses an untrusted or invalid key. It
 must not report a missing `pendingchanges.sig` file; that indicates a broken
 host-local release signature.
 
-The Watcher health card must say **Healthy**, **Current full watcher snapshot**,
-and **Baseline: Continuity verified** before an empty drift report can be treated as meaningful. A running
+The Watcher health card must say **Healthy**, **Watcher payload: Current**,
+**Current full watcher snapshot**, and **Baseline: Continuity verified** before
+an empty drift report can be treated as meaningful. A running
 systemd unit alone is not sufficient. Delayed, stale, invalid, unreadable,
 unconfigured, or absent states are deliberately degraded and cannot produce an
 all-clear result. The attribution sensor line should say **Loaded for this

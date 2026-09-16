@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.2.0**.
+candidate is **17.0.2.1**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.2.0**.
 
 ## Install
 
-Download `pendingchanges-17.0.2.0.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.2.1.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.0.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.1.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -59,6 +59,12 @@ supplies a reviewed SELECT-only credential. Database transport follows
 FreePBX's configured `AMPDBSOCK` when present, or `AMPDBHOST` and `AMPDBPORT`
 for TCP.
 
+If PyMySQL is missing, the installer shows the operating-system package
+command and asks before running it. Answering yes installs the dependency and
+continues the same installation; it never installs packages without explicit
+confirmation. On an upgrade, the installer preserves the active watcher's
+existing Debian or portable filesystem layout.
+
 Before installing on a real PBX, make a current backup and verify the release
 checksum and OpenPGP signatures. See the
 [complete alpha installation and verification guide](docs/alpha-install.md).
@@ -73,18 +79,25 @@ freepbx_webroot=$(
   sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
     sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
 )
+sudo "$freepbx_webroot/admin/modules/pendingchanges/bin/install-watcher" --check
 sudo -u asterisk \
   "$freepbx_webroot/admin/modules/pendingchanges/bin/pendingchanges" doctor
 ```
 
-The CLI doctor can confirm that the Apache sensor is configured, but PHP CLI
+The installer check reports `payload_state=current` when its bundled and
+installed watcher versions match. The CLI doctor can confirm that the Apache
+sensor is configured, but PHP CLI
 cannot prove that an Apache web request loaded it. Confirm the runtime line
 **Loaded for this FreePBX web request** on the report page.
+It also reports the bundled and installed watcher versions. If they do not
+match, it prints the exact full-path `install-watcher` command needed to update
+the payload.
 
 Then open **Reports → Pending Changes Tripwire** in FreePBX. Before treating an
-empty report as meaningful, require all three:
+empty report as meaningful, require all four:
 
 - **Watcher health: Healthy**
+- **Watcher payload: Current**
 - **Current full watcher snapshot**
 - **Baseline: Continuity verified**
 

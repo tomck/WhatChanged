@@ -56,6 +56,17 @@
       </div>
       <div class="pendingchanges-health-label">Attribution sensor</div>
       <div><?= !empty($watcherHealth['sensor_loaded']) ? 'Loaded for this FreePBX web request' : 'Not loaded for this FreePBX web request; administrator correlation may be unavailable' ?></div>
+      <div class="pendingchanges-health-label">Watcher payload</div>
+      <div>
+        <span class="pendingchanges-health-state pendingchanges-health-state-<?= $presenter->escape(isset($watcherPayload['severity']) ? $watcherPayload['severity'] : 'danger') ?>"><?= $presenter->escape(isset($watcherPayload['label']) ? $watcherPayload['label'] : 'Unknown') ?></span>
+        — <?= $presenter->escape(isset($watcherPayload['detail']) ? $watcherPayload['detail'] : '') ?>
+        <?php if (!empty($watcherPayload['embedded_version'])): ?>
+          Bundled: <?= $presenter->escape($watcherPayload['embedded_version']) ?>.
+        <?php endif; ?>
+        <?php if (!empty($watcherPayload['installed_version'])): ?>
+          Installed: <?= $presenter->escape($watcherPayload['installed_version']) ?>.
+        <?php endif; ?>
+      </div>
     </div>
   </section>
   <?php if (!$dataCurrent): ?>
@@ -66,6 +77,11 @@
   <?php endif; ?>
   <?php if (isset($watcherHealth['state']) && ($watcherHealth['state'] === 'not_installed' || $watcherHealth['state'] === 'installed_unconfigured')): ?>
     <div class="alert alert-info">The watcher is bundled with this module but is not publishing observations. As root, run <code>sudo <?= $presenter->escape($modulePath) ?>/bin/install-watcher</code>. The installer detects Debian and RHEL/Sangoma-family layouts. Standalone watcher packages remain available.</div>
+  <?php endif; ?>
+  <?php if ((isset($watcherPayload['state']) ? $watcherPayload['state'] : '') === 'newer'): ?>
+    <div class="alert alert-warning">The installed watcher is newer than this module's bundled payload. Update the Pending Changes module before changing the watcher.</div>
+  <?php elseif (empty($watcherPayload['current']) && !in_array(isset($watcherHealth['state']) ? $watcherHealth['state'] : '', array('not_installed', 'installed_unconfigured'), true)): ?>
+    <div class="alert alert-warning">The bundled and installed watcher payloads do not match. Run <code><?= $presenter->escape(isset($watcherPayload['update_command']) ? $watcherPayload['update_command'] : 'sudo ' . $modulePath . '/bin/install-watcher') ?></code> as an administrator. The installer can offer to install a missing PyMySQL package before continuing.</div>
   <?php endif; ?>
   <?php if ($status['pending']): ?>
     <section class="pendingchanges-card">

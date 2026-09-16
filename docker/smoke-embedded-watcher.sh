@@ -17,6 +17,7 @@ stage=$(mktemp -d /tmp/what-changed-embedded.XXXXXX)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
 tar -xzf "$archive" -C "$stage"
 module="$stage/pendingchanges"
+watcher_version=$(tr -d '[:space:]' < "$module/watcher/VERSION")
 printf 'ID=debian\nID_LIKE=debian\n' > "$stage/os-release-debian"
 printf 'ID=sangoma\nID_LIKE="rhel fedora"\n' > "$stage/os-release-sangoma"
 printf 'ID=unknown\n' > "$stage/os-release-unknown"
@@ -63,6 +64,8 @@ expected_socket_database="localhost$(printf '\t')4406$(printf '\t')asterisk$(pri
 detected=$(sh "$module/bin/install-watcher" --check)
 echo "$detected" | grep -qx 'layout=debian'
 echo "$detected" | grep -qx 'payload=complete'
+echo "$detected" | grep -qx "embedded_version=$watcher_version"
+echo "$detected" | grep -qx 'update_command=sudo '"$module"'/bin/install-watcher'
 
 detected=$(WHAT_CHANGED_INSTALL_TESTING=1 \
   WHAT_CHANGED_OS_RELEASE="$stage/os-release-debian" \
@@ -76,6 +79,64 @@ if WHAT_CHANGED_INSTALL_TESTING=1 \
   WHAT_CHANGED_OS_RELEASE="$stage/os-release-unknown" \
   sh "$module/bin/install-watcher" --check >/dev/null 2>&1; then
   echo 'Unknown operating-system detection unexpectedly succeeded.' >&2
+  exit 1
+fi
+
+# Preserve the filesystem layout referenced by the active unit. PBX3 is a
+# Debian host with an older portable /etc unit; writing a second /lib unit
+# would not update the service systemd actually runs.
+existing_root="$stage/root-existing-portable"
+mkdir -p "$existing_root/etc/systemd/system"
+cat > "$existing_root/etc/systemd/system/what-changed-watcher.service" <<'UNIT'
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/what-changed-watcher/watcher.py
+UNIT
+detected=$(WHAT_CHANGED_INSTALL_TESTING=1 \
+  WHAT_CHANGED_INSTALL_ROOT="$existing_root" \
+  WHAT_CHANGED_OS_RELEASE="$stage/os-release-debian" \
+  sh "$module/bin/install-watcher" --check)
+echo "$detected" | grep -qx 'layout=portable'
+echo "$detected" | grep -qx 'service=/etc/systemd/system/what-changed-watcher.service'
+
+# Missing dependencies are never installed silently. A declined prompt fails
+# before staging files; acceptance runs the reviewed OS package command in
+# simulation and then continues the normal test-root installation.
+dependency_root="$stage/root-dependency"
+if WHAT_CHANGED_INSTALL_TESTING=1 \
+  WHAT_CHANGED_INSTALL_ROOT="$dependency_root" \
+  WHAT_CHANGED_INSTALL_WEBROOT=/srv/freepbx-web \
+  WHAT_CHANGED_PYMYSQL_STATE=missing \
+  WHAT_CHANGED_INSTALL_PROMPT_RESPONSE=no \
+  WHAT_CHANGED_OS_RELEASE="$stage/os-release-debian" \
+  sh "$module/bin/install-watcher" >"$stage/dependency-declined.out" 2>&1; then
+  echo 'Declining automatic PyMySQL installation unexpectedly succeeded.' >&2
+  exit 1
+fi
+grep -q 'Proposed command: apt-get update && apt-get install -y python3-pymysql' \
+  "$stage/dependency-declined.out"
+test ! -e "$dependency_root/usr/lib/what-changed-watcher/watcher.py"
+
+accepted=$(WHAT_CHANGED_INSTALL_TESTING=1 \
+  WHAT_CHANGED_INSTALL_ROOT="$dependency_root" \
+  WHAT_CHANGED_INSTALL_WEBROOT=/srv/freepbx-web \
+  WHAT_CHANGED_PYMYSQL_STATE=missing \
+  WHAT_CHANGED_INSTALL_PROMPT_RESPONSE=yes \
+  WHAT_CHANGED_OS_RELEASE="$stage/os-release-debian" \
+  sh "$module/bin/install-watcher")
+echo "$accepted" | grep -qx \
+  'test_dependency_command=apt-get update && apt-get install -y python3-pymysql'
+test -s "$dependency_root/usr/lib/what-changed-watcher/VERSION"
+
+newer_root="$stage/root-newer"
+mkdir -p "$newer_root/usr/lib/what-changed-watcher"
+printf '# fixture\n' > "$newer_root/usr/lib/what-changed-watcher/watcher.py"
+printf '99.0.0\n' > "$newer_root/usr/lib/what-changed-watcher/VERSION"
+detected=$(WHAT_CHANGED_INSTALL_TESTING=1 WHAT_CHANGED_INSTALL_ROOT="$newer_root" \
+  sh "$module/bin/install-watcher" --layout debian --check)
+echo "$detected" | grep -qx 'payload_state=newer'
+echo "$detected" | grep -qx 'module_update_required=yes'
+if echo "$detected" | grep -q '^update_command='; then
+  echo 'A newer installed watcher was offered a downgrade command.' >&2
   exit 1
 fi
 
@@ -103,6 +164,7 @@ for layout in debian portable; do
   fi
 
   test -s "$root$library/watcher.py"
+  test -s "$root$library/VERSION"
   test -s "$root$library/what-changed-watcher.service"
   test -s "$root$library/what-changed-request-audit.php"
   test -x "$root/usr/sbin/what-changed-watcher-configure"
@@ -125,6 +187,12 @@ for layout in debian portable; do
   grep -q "auto_prepend_file=$library/what-changed-request-audit.php" \
     "$root$library/99-what-changed-attribution.ini"
   cmp "$root$library/watcher.py" "$module/watcher/watcher.py"
+  cmp "$root$library/VERSION" "$module/watcher/VERSION"
+
+  detected=$(WHAT_CHANGED_INSTALL_TESTING=1 WHAT_CHANGED_INSTALL_ROOT="$root" \
+    sh "$module/bin/install-watcher" --layout "$layout" --check)
+  echo "$detected" | grep -qx "installed_version=$watcher_version"
+  echo "$detected" | grep -qx 'payload_state=current'
 done
 
 echo 'Embedded watcher Debian/portable layout validation passed'

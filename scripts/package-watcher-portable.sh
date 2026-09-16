@@ -3,12 +3,19 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 version=$(sed -n 's/^Version: //p' "$root_dir/packaging/watcher/DEBIAN/control")
+payload_version=$(tr -d '[:space:]' < "$root_dir/docker/custom-watcher/VERSION")
+source "$root_dir/deploy/release-versions.sh"
+[[ "$version" == "$watcher_version" && "$payload_version" == "$watcher_version" ]] || {
+  echo 'Watcher package, payload, and release-manifest versions disagree.' >&2
+  exit 1
+}
 archive="$root_dir/dist/what-changed-watcher-portable_$version.tar.gz"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 bundle="$stage/what-changed-watcher-portable-$version"
 
 mkdir -p "$bundle/files" "$root_dir/dist"
+cp "$root_dir/docker/custom-watcher/VERSION" "$bundle/files/VERSION"
 cp "$root_dir/docker/custom-watcher/watcher.py" "$bundle/files/watcher.py"
 cp "$root_dir/deploy/what-changed-request-audit.php" "$bundle/files/what-changed-request-audit.php"
 cp "$root_dir/deploy/99-what-changed-attribution.ini" "$bundle/files/99-what-changed-attribution.ini"

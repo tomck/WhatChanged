@@ -35,6 +35,17 @@ namespace {
                         'detail' => 'The external watcher is not installed; framework-only coverage is reduced.',
                         'sensor_loaded' => false,
                         'observation_age_seconds' => null,
+                        'payload' => [
+                            'state' => 'not_installed',
+                            'label' => 'Not installed',
+                            'severity' => 'warning',
+                            'detail' => 'No installed watcher payload was found.',
+                            'current' => false,
+                            'embedded_version' => '0.1.7',
+                            'installed_version' => null,
+                            'update_command' => 'sudo '
+                                . $GLOBALS['argv'][1] . '/bin/install-watcher',
+                        ],
                     ],
                     'data_current' => false,
                     'coverage_mode' => 'framework',
@@ -55,6 +66,17 @@ namespace {
                     'detail' => 'A completed watcher observation is current.',
                     'sensor_loaded' => true,
                     'observation_age_seconds' => 5,
+                    'payload' => [
+                        'state' => 'current',
+                        'label' => 'Current',
+                        'severity' => 'success',
+                        'detail' => 'The installed watcher matches the payload bundled with this module.',
+                        'current' => true,
+                        'embedded_version' => '0.1.7',
+                        'installed_version' => '0.1.7',
+                        'update_command' => 'sudo '
+                            . $GLOBALS['argv'][1] . '/bin/install-watcher',
+                    ],
                 ],
                 'data_current' => true,
                 'coverage_mode' => 'watcher',
@@ -128,7 +150,7 @@ namespace {
     $html = ob_get_clean();
     $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
         ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
-        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin'];
+        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin'];
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);

@@ -1,5 +1,21 @@
 # Changelog
 
+## Module 17.0.2.1 / watcher 0.1.7
+
+- Record the embedded and installed watcher payload versions and show whether
+  they match in the Reports page, command-line doctor, and installer check.
+- Print the exact full-path updater command when the watcher is absent,
+  unversioned, or older than the payload bundled with the installed module.
+- Offer to install PyMySQL with the reviewed Debian- or RHEL-family system
+  package command after explicit administrator confirmation, then continue the
+  watcher installation automatically.
+- Preserve the filesystem and systemd-unit layout used by an existing watcher
+  so upgrading a portable installation on Debian updates the service that is
+  actually active instead of installing an unused second unit.
+- Remove the obsolete vendored-Python search path from newly installed service
+  units; supported installations now use the declared operating-system
+  PyMySQL dependency.
+
 ## Module 17.0.2.0 / watcher 0.1.6
 
 - Refactor the FreePBX module into a PSR-4-style internal class structure while

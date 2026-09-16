@@ -4,7 +4,7 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use `pendingchanges-17.0.2.0.tgz`.
+All four FreePBX versions use `pendingchanges-17.0.2.1.tgz`.
 
 The module archive embeds the same watcher for all three versions. A separate
 portable watcher bundle remains available as an optional packaging choice.
@@ -18,7 +18,9 @@ The embedded watcher requires systemd, Python 3.6 or newer, PyMySQL for that
 Python, a MariaDB/MySQL client, and an `asterisk` service account. Automatic
 credential setup also requires a local MariaDB/MySQL server. On a FreePBX
 Distro/SNG7 host the PyMySQL package may be available as
-`python3-PyMySQL`; on Debian it is normally `python3-pymysql`.
+`python3-PyMySQL`; on Debian it is normally `python3-pymysql`. If it is
+missing, the embedded installer shows the appropriate command and asks before
+installing it and continuing.
 
 Verify before installing:
 
@@ -43,7 +45,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.0.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.1.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -70,8 +72,9 @@ Apache `DocumentRoot` directives.
 
 Then open **Reports -> Pending Changes Tripwire**. Establish a baseline only
 after a known, reviewed Apply Config has completed and the PBX is clean.
-Before relying on an empty report, require **Healthy**, **Current full watcher
-snapshot**, and **Baseline: Continuity verified** in the Watcher health card. An installed or running service
+Before relying on an empty report, require **Healthy**, **Watcher payload:
+Current**, **Current full watcher snapshot**, and **Baseline: Continuity
+verified** in the Watcher health card. An installed or running service
 without a recent completed observation is shown as degraded, never as all
 clear. On legacy distributions, also confirm that the report page says
 **Loaded for this FreePBX web request** if administrator-request correlation is

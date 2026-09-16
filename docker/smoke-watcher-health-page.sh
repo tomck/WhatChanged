@@ -2,6 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+WATCHER_VERSION=$(sed -n 's/^watcher_version=//p' "$ROOT_DIR/deploy/release-versions.sh")
 ENV_FILE=${FREEPBX_LAB_ENV_FILE:-"$ROOT_DIR/.env.lab"}
 BASE_URL=${FREEPBX_LAB_URL:-http://127.0.0.1:8080}
 
@@ -27,6 +28,8 @@ curl -fsS -b "$COOKIE_JAR" -o "$PAGE_FILE" \
 grep -q 'Watcher health' "$PAGE_FILE"
 grep -q '>Healthy<' "$PAGE_FILE"
 grep -q 'Current full watcher snapshot' "$PAGE_FILE"
+grep -q 'Watcher payload' "$PAGE_FILE"
+grep -q '>Current<' "$PAGE_FILE"
 grep -q 'Continuity verified' "$PAGE_FILE"
 grep -q 'Loaded for this FreePBX web request' "$PAGE_FILE"
 grep -q 'Expand all evidence' "$PAGE_FILE"
@@ -39,4 +42,8 @@ echo "$DOCTOR" | grep -qx 'baseline_provenance=trusted'
 echo "$DOCTOR" | grep -qx 'sensor_configured=yes'
 echo "$DOCTOR" | grep -qx 'sensor_loaded=not_applicable_cli'
 echo "$DOCTOR" | grep -qx 'sensor_runtime_check=FreePBX_Reports_Pending_Changes_Tripwire'
+echo "$DOCTOR" | grep -qx 'watcher_payload_state=current'
+echo "$DOCTOR" | grep -qx "embedded_watcher_version=$WATCHER_VERSION"
+echo "$DOCTOR" | grep -qx "installed_watcher_version=$WATCHER_VERSION"
+echo "$DOCTOR" | grep -qx 'watcher_payload_current=yes'
 echo 'Authenticated FreePBX watcher-health page passed'
