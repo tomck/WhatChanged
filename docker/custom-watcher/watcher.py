@@ -10,6 +10,11 @@ from pathlib import Path
 
 import pymysql
 
+try:
+    WATCHER_VERSION = Path(__file__).with_name('VERSION').read_text().strip()
+except OSError:
+    WATCHER_VERSION = 'unknown'
+
 STATE_DIR = Path(os.environ.get('STATE_DIR', '/var/lib/pendingchanges-watcher'))
 OUTPUT = STATE_DIR / 'status.json'
 BASELINE = STATE_DIR / 'baseline.json'
@@ -843,6 +848,7 @@ def observe_forever():
         )
         observation = {
             'observed_at': int(time.time()),
+            'watcher_version': WATCHER_VERSION,
             'watcher_health': watcher_health_metadata(),
             'need_reload': database['need_reload'],
             'baseline_available': baseline is not None,

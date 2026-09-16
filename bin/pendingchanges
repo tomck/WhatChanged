@@ -13,6 +13,10 @@ try {
     } elseif ($command === 'doctor') {
         $status = $service->status();
         $health = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : array();
+        $payload = isset($health['payload']) && is_array($health['payload'])
+            ? $health['payload']
+            : array();
+        $payloadCurrent = !empty($payload['current']);
         $sensorConfigured = false;
         $sensorCandidates = array('/etc/php.d/99-what-changed-attribution.ini');
         $debianCandidates = glob('/etc/php/*/apache2/conf.d/99-what-changed-attribution.ini');
@@ -47,18 +51,36 @@ try {
             'sensor_loaded=not_applicable_cli',
             'sensor_runtime_check=FreePBX_Reports_Pending_Changes_Tripwire',
             'pending_reload=' . (!empty($status['pending']) ? 'yes' : 'no'),
+            'watcher_payload_state=' . (isset($payload['state']) ? $payload['state'] : 'unknown'),
+            'embedded_watcher_version=' . (
+                isset($payload['embedded_version']) ? $payload['embedded_version'] : 'unknown'
+            ),
+            'installed_watcher_version=' . (
+                isset($payload['installed_version']) ? $payload['installed_version'] : 'unknown'
+            ),
+            'watcher_payload_current=' . ($payloadCurrent ? 'yes' : 'no'),
         );
         if (isset($health['observation_age_seconds'])) {
             $lines[] = 'observation_age_seconds=' . (int) $health['observation_age_seconds'];
         }
         $state = isset($health['state']) ? $health['state'] : '';
-        if ($state === 'not_installed' || $state === 'installed_unconfigured') {
+        if (!$payloadCurrent) {
+            if ((isset($payload['state']) ? $payload['state'] : '') === 'newer') {
+                $lines[] = 'module_update_required=yes';
+            } else {
+                $lines[] = 'watcher_update_command=' . (
+                    isset($payload['update_command'])
+                        ? $payload['update_command']
+                        : 'sudo ' . dirname(__FILE__) . '/install-watcher'
+                );
+            }
+        } elseif ($state === 'not_installed' || $state === 'installed_unconfigured') {
             $lines[] = 'remedy=sudo ' . dirname(__FILE__) . '/install-watcher';
         }
         echo implode(PHP_EOL, $lines) . PHP_EOL;
         $trusted = isset($status['baseline_provenance']['state'])
             && $status['baseline_provenance']['state'] === 'trusted';
-        exit(empty($status['data_current']) || !$trusted ? 2 : 0);
+        exit(empty($status['data_current']) || !$trusted || !$payloadCurrent ? 2 : 0);
     } else {
         throw new RuntimeException('Usage: pendingchanges [status|seed|feedback|doctor]');
     }

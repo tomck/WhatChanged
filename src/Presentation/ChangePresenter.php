@@ -20,6 +20,18 @@ class ChangePresenter
                 'sensor_loaded' => false,
                 'observation_age_seconds' => null,
             );
+        $watcherPayload = isset($watcherHealth['payload']) && is_array($watcherHealth['payload'])
+            ? $watcherHealth['payload']
+            : array(
+                'state' => 'unknown',
+                'label' => 'Unknown',
+                'severity' => 'danger',
+                'detail' => 'Watcher payload version information is unavailable.',
+                'current' => false,
+                'embedded_version' => null,
+                'installed_version' => null,
+                'update_command' => null,
+            );
         $dataCurrent = !empty($status['data_current']);
         $baselineProvenance = isset($status['baseline_provenance'])
             && is_array($status['baseline_provenance'])
@@ -45,6 +57,7 @@ class ChangePresenter
             'astdbChanges' => isset($status['astdb']) ? $status['astdb'] : array(),
             'attribution' => isset($status['attribution']) ? $status['attribution'] : array(),
             'watcherHealth' => $watcherHealth,
+            'watcherPayload' => $watcherPayload,
             'dataCurrent' => $dataCurrent,
             'baselineProvenance' => $baselineProvenance,
             'baselineTrusted' => $baselineTrusted,

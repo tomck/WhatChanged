@@ -24,6 +24,7 @@ grep -q 'ExecStart=/usr/bin/python3 /usr/local/lib/what-changed-watcher/watcher.
 grep -q 'auto_prepend_file=/usr/local/lib/what-changed-watcher/what-changed-request-audit.php' \
   "$portable_root/files/99-what-changed-attribution.ini"
 cmp "$portable_root/files/watcher.py" "$root_dir/docker/custom-watcher/watcher.py"
+cmp "$portable_root/files/VERSION" "$root_dir/docker/custom-watcher/VERSION"
 
 for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
   read -r target php_version <<<"$specification"
@@ -39,7 +40,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
     src/Presentation/PageController.php views/page.php views/partials/change.php; do
     tar -tzf "$archive" | grep -qx "pendingchanges/$payload"
   done
-  for payload in bin/install-watcher bin/uninstall-watcher watcher/watcher.py \
+  for payload in bin/install-watcher bin/uninstall-watcher watcher/VERSION watcher/watcher.py \
     watcher/what-changed-request-audit.php watcher/99-what-changed-attribution.ini \
     watcher/what-changed-watcher.service watcher/what-changed-watcher.env \
     watcher/configure-database.php watcher/what-changed-watcher-configure \
@@ -51,6 +52,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
     -v "$archive:/tmp/pendingchanges.tgz:ro" \
     -v "$root_dir/docker/legacy-page-smoke.php:/tmp/legacy-page-smoke.php:ro" \
     -v "$root_dir/docker/watcher-health-smoke.php:/tmp/watcher-health-smoke.php:ro" \
+    -v "$root_dir/docker/test-watcher-payload.php:/tmp/test-watcher-payload.php:ro" \
     -v "$root_dir/docker/test-framework-fallback.php:/tmp/test-framework-fallback.php:ro" \
     "php:$php_version-cli" sh -eu -c '
       work=$(mktemp -d)
@@ -60,6 +62,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
       php /tmp/legacy-page-smoke.php "$work/pendingchanges"
       php /tmp/legacy-page-smoke.php "$work/pendingchanges" degraded
       php /tmp/watcher-health-smoke.php "$work/pendingchanges"
+      php /tmp/test-watcher-payload.php "$work/pendingchanges"
       php /tmp/test-framework-fallback.php "$work/pendingchanges"
     '
   echo "FreePBX $target candidate passed PHP $php_version syntax and metadata checks"

@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 spec = importlib.util.spec_from_file_location('watcher', Path(__file__).with_name('watcher.py'))
 watcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(watcher)
+assert watcher.WATCHER_VERSION == Path(__file__).with_name('VERSION').read_text().strip()
 
 before = {'extensions': {'keys': ['extension'], 'rows': {
     '100': {'extension': '100', 'name': 'Desk', 'secret': 'old'},

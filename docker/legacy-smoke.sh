@@ -161,7 +161,18 @@ docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" php
     ? $status["database"]["pc_legacy_smoke"]
     : array();
   $added = isset($table["added"]) ? $table["added"] : array();
-  exit(!empty($status["watcher"]) && !empty($status["pending"]) && count($added) === 1 ? 0 : 1);
+  $payload = isset($status["watcher_health"]["payload"])
+    ? $status["watcher_health"]["payload"]
+    : array();
+  exit(
+    !empty($status["watcher"])
+    && !empty($status["pending"])
+    && !empty($status["data_current"])
+    && !empty($payload["current"])
+    && count($added) === 1
+      ? 0
+      : 1
+  );
 '
 
 docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" \
