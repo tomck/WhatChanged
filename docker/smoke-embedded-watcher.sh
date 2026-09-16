@@ -32,7 +32,7 @@ fi
 # The embedded installer must be able to inspect that configuration so it can
 # install files and leave the service disabled for manual SELECT-only setup.
 database=$(php "$module/watcher/configure-database.php" --describe)
-printf '%s\n' "$database" | grep -q "$(printf '\t')asterisk$(printf '\t')/var/www/html$(printf '\t')/etc/asterisk$(printf '\t')/var/lib/asterisk$"
+printf '%s\n' "$database" | grep -q "$(printf '\t')asterisk$(printf '\t')/var/www/html$(printf '\t')/etc/asterisk$(printf '\t')/var/lib/asterisk$(printf '\t')-$"
 db_host=${database%%"$(printf '\t')"*}
 case "$db_host" in
   localhost|127.0.0.1)
@@ -45,6 +45,20 @@ case "$db_host" in
     fi
     ;;
 esac
+
+# Exercise discovery of non-default FreePBX database transport values without
+# modifying the disposable PBX's live /etc/freepbx.conf.
+socket_configurator="$stage/configure-database-socket.php"
+awk '
+  $0 == "require '\''/etc/freepbx.conf'\'';" {
+    print "$amp_conf = array('\''AMPDBHOST'\'' => '\''localhost'\'', '\''AMPDBPORT'\'' => '\''4406'\'', '\''AMPDBSOCK'\'' => '\''/run/mariadb/custom.sock'\'', '\''AMPDBNAME'\'' => '\''asterisk'\'', '\''AMPWEBROOT'\'' => '\''/srv/freepbx-web'\'', '\''ASTETCDIR'\'' => '\''/srv/asterisk-config'\'', '\''ASTVARLIBDIR'\'' => '\''/srv/asterisk-data'\'');"
+    next
+  }
+  { print }
+' "$module/watcher/configure-database.php" > "$socket_configurator"
+socket_database=$(php "$socket_configurator" --describe)
+expected_socket_database="localhost$(printf '\t')4406$(printf '\t')asterisk$(printf '\t')/srv/freepbx-web$(printf '\t')/srv/asterisk-config$(printf '\t')/srv/asterisk-data$(printf '\t')/run/mariadb/custom.sock"
+[ "$socket_database" = "$expected_socket_database" ]
 
 detected=$(sh "$module/bin/install-watcher" --check)
 echo "$detected" | grep -qx 'layout=debian'
@@ -71,11 +85,13 @@ for layout in debian portable; do
   test_webroot=/srv/freepbx-web
   test_astetc=/srv/asterisk-config
   test_astvarlib=/srv/asterisk-data
+  test_dbsock=/srv/mariadb/custom.sock
   WHAT_CHANGED_INSTALL_TESTING=1 WHAT_CHANGED_INSTALL_ROOT="$root" \
     WHAT_CHANGED_INSTALL_WEBROOT="$test_webroot" \
     WHAT_CHANGED_INSTALL_ASTETCDIR="$test_astetc" \
     WHAT_CHANGED_INSTALL_ASTVARLIBDIR="$test_astvarlib" \
     WHAT_CHANGED_INSTALL_DBPORT=3307 \
+    WHAT_CHANGED_INSTALL_DBSOCK="$test_dbsock" \
     sh "$module/bin/install-watcher" --layout "$layout" >/dev/null
 
   if [ "$layout" = debian ]; then
@@ -101,6 +117,7 @@ for layout in debian portable; do
   grep -q "ReadOnlyPaths=.* $test_webroot/admin/modules " "$root$service"
   grep -q "ReadOnlyPaths=$test_astetc $test_astvarlib " "$root$service"
   grep -qx 'DB_PORT=3307' "$root/etc/what-changed-watcher.env"
+  grep -qx "DB_SOCKET=$test_dbsock" "$root/etc/what-changed-watcher.env"
   grep -qx "WATCH_PATH=$test_astetc" "$root/etc/what-changed-watcher.env"
   grep -qx "MODULE_PATH=$test_webroot/admin/modules" "$root/etc/what-changed-watcher.env"
   grep -qx "ASTDB_PATH=$test_astvarlib/astdb.sqlite3" "$root/etc/what-changed-watcher.env"

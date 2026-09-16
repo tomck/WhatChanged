@@ -28,6 +28,7 @@ ROOT = Path(os.environ.get('WATCH_PATH', '/etc/asterisk'))
 MODULE_ROOT = Path(os.environ.get('MODULE_PATH', '/var/www/html/admin/modules'))
 ASTDB_PATH = Path(os.environ.get('ASTDB_PATH', '/var/lib/asterisk/astdb.sqlite3'))
 DB_PORT = int(os.environ.get('DB_PORT', '3306'))
+DB_SOCKET = os.environ.get('DB_SOCKET', '').strip() or None
 # AstDB contains both FreePBX configuration-adjacent state and arbitrary
 # application/runtime data.  Observe only named FreePBX families; never use a
 # broad `database show` scrape as evidence that *everything* changed.
@@ -443,12 +444,20 @@ def protect_state(state):
     protected['astdb'] = protected_astdb
     return protected
 
+def database_connection_parameters():
+    parameters = {
+        'host': os.environ['DB_HOST'], 'port': DB_PORT,
+        'user': os.environ['DB_USER'], 'password': os.environ['DB_PASSWORD'],
+        'database': os.environ['DB_NAME'],
+        'cursorclass': pymysql.cursors.DictCursor,
+    }
+    if DB_SOCKET:
+        parameters['unix_socket'] = DB_SOCKET
+    return parameters
+
+
 def database_snapshot():
-    connection = pymysql.connect(
-        host=os.environ['DB_HOST'], port=DB_PORT, user=os.environ['DB_USER'],
-        password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+    connection = pymysql.connect(**database_connection_parameters())
     with connection.cursor() as cursor:
         cursor.execute("SELECT value FROM admin WHERE variable = 'need_reload'")
         row = cursor.fetchone()
@@ -479,11 +488,7 @@ def database_snapshot():
 
 def reload_requested():
     """Read only FreePBX's lightweight global reload flag."""
-    connection = pymysql.connect(
-        host=os.environ['DB_HOST'], port=DB_PORT, user=os.environ['DB_USER'],
-        password=os.environ['DB_PASSWORD'], database=os.environ['DB_NAME'],
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+    connection = pymysql.connect(**database_connection_parameters())
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT value FROM admin WHERE variable = 'need_reload'")

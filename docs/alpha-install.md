@@ -12,7 +12,7 @@ installer's validation-passed message means the reload preflight succeeded.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.1.6.tgz`
+   - `pendingchanges-17.0.1.7.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -41,7 +41,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.6.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.7.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -61,7 +61,9 @@ the administrator explicitly chooses a reviewed layout. It generates a random
 password, creates a local MariaDB account named `what_changed_watcher` with
 **SELECT only** on the FreePBX database, installs the authenticated-request
 sensor, and starts the watcher. Existing watcher configuration and evidence
-are preserved during upgrades.
+are preserved during upgrades. A configured `AMPDBSOCK` is used for local
+Unix-socket connections; otherwise the watcher follows `AMPDBHOST` and
+`AMPDBPORT` for TCP.
 
 Standalone `.deb` and portable watcher packages remain available for operators
 who prefer operating-system package management, but are not required.

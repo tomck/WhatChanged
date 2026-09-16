@@ -88,7 +88,9 @@ fi
 test_astetc=${WHAT_CHANGED_INSTALL_ASTETCDIR:-}
 test_astvarlib=${WHAT_CHANGED_INSTALL_ASTVARLIBDIR:-}
 test_dbport=${WHAT_CHANGED_INSTALL_DBPORT:-}
-if { [ -n "$test_astetc" ] || [ -n "$test_astvarlib" ] || [ -n "$test_dbport" ]; } \
+test_dbsock=${WHAT_CHANGED_INSTALL_DBSOCK:-}
+if { [ -n "$test_astetc" ] || [ -n "$test_astvarlib" ] || [ -n "$test_dbport" ] \
+    || [ -n "$test_dbsock" ]; } \
     && [ "$test_mode" != 1 ]; then
   echo 'WHAT_CHANGED_INSTALL_* path and port overrides are reserved for the repository test gate.' >&2
   exit 1
@@ -122,6 +124,7 @@ fi
 # not require a local SQL client.
 db_host=
 db_port=
+db_socket=
 db_name=
 local_database=0
 live_environment=/etc/what-changed-watcher.env
@@ -130,6 +133,7 @@ if [ "$test_mode" = 1 ]; then
   astetc=${test_astetc:-/etc/asterisk}
   astvarlib=${test_astvarlib:-/var/lib/asterisk}
   db_port=${test_dbport:-3306}
+  db_socket=$test_dbsock
 else
   description=$(php "$payload/configure-database.php" --describe)
   tab=$(printf '\t')
@@ -137,7 +141,7 @@ else
   IFS=$tab
   set -- $description
   IFS=$old_ifs
-  if [ "$#" -ne 6 ]; then
+  if [ "$#" -ne 7 ]; then
     echo 'Could not determine the FreePBX database connection and web root.' >&2
     exit 1
   fi
@@ -147,6 +151,8 @@ else
   freepbx_webroot=$4
   astetc=$5
   astvarlib=$6
+  db_socket=$7
+  [ "$db_socket" = - ] && db_socket=
 fi
 for configured_path in "$freepbx_webroot" "$astetc" "$astvarlib"; do
   case "$configured_path" in
@@ -157,6 +163,12 @@ done
 case "$db_port" in
   ''|*[!0-9]*) echo 'FreePBX AMPDBPORT must be numeric.' >&2; exit 1 ;;
 esac
+if [ -n "$db_socket" ]; then
+  case "$db_socket" in
+    /*) : ;;
+    *) echo 'FreePBX AMPDBSOCK must be an absolute path.' >&2; exit 1 ;;
+  esac
+fi
 module_path=${freepbx_webroot%/}/admin/modules
 state_dir=${astvarlib%/}/pendingchanges-watcher
 attribution_dir=${astvarlib%/}/pendingchanges-attribution
@@ -166,13 +178,14 @@ echo "freepbx_webroot=$freepbx_webroot"
 echo "module_path=$module_path"
 echo "asterisk_config=$astetc"
 echo "asterisk_variable_data=$astvarlib"
+[ -z "$db_socket" ] || echo "database_socket=$db_socket"
 
 if [ "$test_mode" != 1 ] && {
     [ ! -f "$live_environment" ] \
       || grep -q '^DB_PASSWORD=replace-with-generated-secret$' "$live_environment";
   }; then
-  case "$db_host" in
-    localhost|127.0.0.1)
+  case "$db_socket:$db_host" in
+    ?*:*|:localhost|:127.0.0.1)
       local_database=1
       if ! command -v mariadb >/dev/null 2>&1 && ! command -v mysql >/dev/null 2>&1; then
         echo 'A MariaDB/MySQL client is required for automatic local database setup.' >&2
@@ -234,6 +247,7 @@ replace_environment_setting() {
   rm -f "$temporary"
 }
 replace_environment_setting DB_PORT "$db_port" "$environment"
+replace_environment_setting DB_SOCKET "$db_socket" "$environment"
 replace_environment_setting WATCH_PATH "$astetc" "$environment"
 replace_environment_setting MODULE_PATH "$module_path" "$environment"
 replace_environment_setting ASTDB_PATH "$astdb_path" "$environment"

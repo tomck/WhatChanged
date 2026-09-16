@@ -5,6 +5,7 @@ import sys
 import tempfile
 import types
 import json
+import os
 from pathlib import Path
 
 # Database access is exercised in the container smoke suite. Keep these pure
@@ -12,7 +13,9 @@ from pathlib import Path
 try:
     import pymysql  # noqa: F401
 except ModuleNotFoundError:
-    sys.modules['pymysql'] = types.SimpleNamespace()
+    sys.modules['pymysql'] = types.SimpleNamespace(
+        cursors=types.SimpleNamespace(DictCursor=object)
+    )
 
 spec = importlib.util.spec_from_file_location('watcher', Path(__file__).with_name('watcher.py'))
 watcher = importlib.util.module_from_spec(spec)
@@ -318,6 +321,28 @@ sip_diff = watcher.database_diff(sip_before, sip_after)['sip']['updated']
 sip_changes = {entry['key']: entry['fields']['data'] for entry in sip_diff}
 assert sip_changes['7001|callerid'] == {'before': 'Desk <7001>', 'after': 'Lobby <7001>'}
 assert sip_changes['7001|secret'] == {'before': '[redacted]', 'after': '[redacted]'}
+
+# A configured FreePBX database socket takes precedence over TCP while the
+# configured port remains available for normal host connections.
+original_socket = watcher.DB_SOCKET
+connection_environment = {
+    'DB_HOST': 'localhost', 'DB_USER': 'watcher',
+    'DB_PASSWORD': 'test-only', 'DB_NAME': 'asterisk',
+}
+original_environment = {key: os.environ.get(key) for key in connection_environment}
+os.environ.update(connection_environment)
+watcher.DB_SOCKET = '/run/mariadb/custom.sock'
+socket_parameters = watcher.database_connection_parameters()
+assert socket_parameters['unix_socket'] == '/run/mariadb/custom.sock'
+assert socket_parameters['port'] == watcher.DB_PORT
+watcher.DB_SOCKET = None
+assert 'unix_socket' not in watcher.database_connection_parameters()
+watcher.DB_SOCKET = original_socket
+for key, value in original_environment.items():
+    if value is None:
+        os.environ.pop(key, None)
+    else:
+        os.environ[key] = value
 
 # Module monitoring uses only stable release markers. Module Admin state is
 # already captured from the modules table and FreePBX's signature verifier is

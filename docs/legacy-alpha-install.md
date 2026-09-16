@@ -4,7 +4,7 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use `pendingchanges-17.0.1.6.tgz`.
+All four FreePBX versions use `pendingchanges-17.0.1.7.tgz`.
 
 The module archive embeds the same watcher for all three versions. A separate
 portable watcher bundle remains available as an optional packaging choice.
@@ -43,7 +43,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.6.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.7.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -59,7 +59,9 @@ FreePBX's configured `AMPWEBROOT`, rather than assuming `/var/www/html`. It
 creates a random credential for a dedicated
 local database user with `SELECT` only, installs a value-free authenticated-
 request sensor, and starts the observer. The separate portable watcher bundle
-remains available but is not required.
+remains available but is not required. The database connection follows
+FreePBX's configured `AMPDBSOCK`, or `AMPDBHOST` and `AMPDBPORT` when using
+TCP.
 
 The request-sensor installer validates the host's complete Apache
 configuration before reloading Apache. It preserves warnings from existing

@@ -12,6 +12,7 @@ require '/etc/freepbx.conf';
 
 $host = (string) (isset($amp_conf['AMPDBHOST']) ? $amp_conf['AMPDBHOST'] : 'localhost');
 $port = (string) (isset($amp_conf['AMPDBPORT']) ? $amp_conf['AMPDBPORT'] : '3306');
+$socket = (string) (isset($amp_conf['AMPDBSOCK']) ? $amp_conf['AMPDBSOCK'] : '');
 $name = (string) (isset($amp_conf['AMPDBNAME']) ? $amp_conf['AMPDBNAME'] : 'asterisk');
 $webroot = rtrim((string) (isset($amp_conf['AMPWEBROOT']) ? $amp_conf['AMPWEBROOT'] : '/var/www/html'), '/');
 $astetc = rtrim((string) (isset($amp_conf['ASTETCDIR']) ? $amp_conf['ASTETCDIR'] : '/etc/asterisk'), '/');
@@ -23,7 +24,7 @@ $astvarlib = rtrim((string) (
 $webroot = $webroot === '' ? '/' : $webroot;
 $astetc = $astetc === '' ? '/' : $astetc;
 $astvarlib = $astvarlib === '' ? '/' : $astvarlib;
-if (!$describeOnly && !in_array($host, array('localhost', '127.0.0.1'), true)) {
+if (!$describeOnly && $socket === '' && !in_array($host, array('localhost', '127.0.0.1'), true)) {
     fwrite(STDERR, "Automatic setup supports only a local MariaDB server. Configure a reviewed SELECT-only account manually for remote MariaDB.\n");
     exit(1);
 }
@@ -35,6 +36,12 @@ if (!preg_match('/^[0-9]+$/', $port) || (int) $port < 1 || (int) $port > 65535) 
     fwrite(STDERR, "FreePBX AMPDBPORT is not a valid TCP port.\n");
     exit(1);
 }
+$socket = trim($socket);
+if ($socket !== '' && ($socket[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $socket)
+    || preg_match('#(?:^|/)\.\.(?:/|$)#', $socket))) {
+    fwrite(STDERR, "FreePBX AMPDBSOCK is not a safe absolute path.\n");
+    exit(1);
+}
 foreach (array('AMPWEBROOT' => $webroot, 'ASTETCDIR' => $astetc, 'ASTVARLIBDIR' => $astvarlib) as $setting => $path) {
     if ($path[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $path)
         || preg_match('#(?:^|/)\.\.(?:/|$)#', $path)) {
@@ -44,5 +51,5 @@ foreach (array('AMPWEBROOT' => $webroot, 'ASTETCDIR' => $astetc, 'ASTVARLIBDIR' 
 }
 echo $host."\t".$port."\t".$name;
 if ($describeOnly) {
-    echo "\t".$webroot."\t".$astetc."\t".$astvarlib;
+    echo "\t".$webroot."\t".$astetc."\t".$astvarlib."\t".($socket === '' ? '-' : $socket);
 }

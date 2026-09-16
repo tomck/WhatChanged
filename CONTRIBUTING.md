@@ -127,7 +127,7 @@ history. Validate the Module Admin archive in the disposable lab:
 
 ```sh
 ./docker/validate-module-archive.sh \
-  dist/pendingchanges-17.0.1.6.tgz
+  dist/pendingchanges-17.0.1.7.tgz
 ```
 
 The standalone watcher packages are optional for users because the module now
