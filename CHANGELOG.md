@@ -1,5 +1,11 @@
 # Changelog
 
+## Module 17.0.1.7 / watcher 0.1.6
+
+- Honor FreePBX's configured `AMPDBSOCK` for both the local SELECT-only account
+  setup and the watcher connection, while continuing to use `AMPDBPORT` for
+  TCP database connections.
+
 ## Module 17.0.1.6 / watcher 0.1.5
 
 - Follow FreePBX's configured `ASTETCDIR`, `ASTVARLIBDIR` (or legacy

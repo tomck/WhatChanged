@@ -39,7 +39,8 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
 - A current backup and a maintenance/change record exist for the pilot.
 - The watcher has a dedicated MariaDB account limited to `SELECT` on the
   FreePBX configuration database. It must not have write, DDL, or reload
-  permissions.
+  permissions. It follows FreePBX's configured `AMPDBSOCK` for a local socket,
+  or `AMPDBHOST` and `AMPDBPORT` for TCP.
 - FreePBX's configured `ASTETCDIR`, `AMPWEBROOT/admin/modules`, and (when enabled)
   `ASTVARLIBDIR/astdb.sqlite3` are mounted/readable
   read-only by the watcher. Its state directory is writable only by its own

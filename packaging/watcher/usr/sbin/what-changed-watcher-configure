@@ -34,7 +34,7 @@ old_ifs=$IFS
 IFS=$tab
 set -- $description
 IFS=$old_ifs
-if [ "$#" -ne 6 ]; then
+if [ "$#" -ne 7 ]; then
   echo 'Could not determine the FreePBX database connection and filesystem layout.' >&2
   exit 1
 fi
@@ -44,6 +44,8 @@ db_name=$3
 freepbx_webroot=$4
 astetc=$5
 astvarlib=$6
+db_socket=$7
+[ "$db_socket" = - ] && db_socket=
 module_path=${freepbx_webroot%/}/admin/modules
 state_dir=${astvarlib%/}/pendingchanges-watcher
 attribution_dir=${astvarlib%/}/pendingchanges-attribution
@@ -82,6 +84,7 @@ update_environment() {
 
 update_environment DB_HOST "$db_host"
 update_environment DB_PORT "$db_port"
+update_environment DB_SOCKET "$db_socket"
 update_environment DB_NAME "$db_name"
 update_environment WATCH_PATH "$astetc"
 update_environment MODULE_PATH "$module_path"
@@ -121,13 +124,15 @@ if [ "$paths_only" -eq 1 ]; then
   exit 0
 fi
 
-case "$db_host" in
-  localhost|127.0.0.1) ;;
-  *)
-    echo 'Automatic setup supports only a local MariaDB server. Configure a reviewed SELECT-only account manually for remote MariaDB.' >&2
-    exit 1
-    ;;
-esac
+if [ -z "$db_socket" ]; then
+  case "$db_host" in
+    localhost|127.0.0.1) ;;
+    *)
+      echo 'Automatic setup supports only a local MariaDB server. Configure a reviewed SELECT-only account manually for remote MariaDB.' >&2
+      exit 1
+      ;;
+  esac
+fi
 
 secret=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 if command -v mariadb >/dev/null 2>&1; then
@@ -140,9 +145,13 @@ else
 fi
 
 # Root's local MariaDB socket is used only to create/update this dedicated
-# account. The watcher itself receives SELECT and nothing else, and connects
-# on FreePBX's configured AMPDBPORT.
-"$mysql_client" --protocol=socket <<SQL
+# account. The watcher itself receives SELECT and nothing else, and follows
+# FreePBX's configured AMPDBSOCK when present or AMPDBPORT for TCP.
+set -- --protocol=socket
+if [ -n "$db_socket" ]; then
+  set -- "$@" "--socket=$db_socket"
+fi
+"$mysql_client" "$@" <<SQL
   CREATE USER IF NOT EXISTS 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
   ALTER USER 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
   GRANT SELECT ON \`$db_name\`.* TO 'what_changed_watcher'@'localhost';

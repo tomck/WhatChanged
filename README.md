@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.1.6**.
+candidate is **17.0.1.7**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.1.6**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.6.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.1.7.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.6.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.1.7.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -55,7 +55,9 @@ MariaDB/MySQL client, and the normal `asterisk` service account. For a local
 database, the installer creates a random credential for a dedicated
 `what_changed_watcher` account with **SELECT only** access. For remote MariaDB,
 it installs the files but leaves the service disabled until an administrator
-supplies a reviewed SELECT-only credential.
+supplies a reviewed SELECT-only credential. Database transport follows
+FreePBX's configured `AMPDBSOCK` when present, or `AMPDBHOST` and `AMPDBPORT`
+for TCP.
 
 Before installing on a real PBX, make a current backup and verify the release
 checksum and OpenPGP signatures. See the
