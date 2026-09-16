@@ -21,6 +21,10 @@ docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc "
   archive=/srv/pendingchanges/dist/$archive_name
   test -f \"\$archive\"
   tar -tzf \"\$archive\" | grep -qx 'pendingchanges/module.xml'
+  tar -tzf \"\$archive\" | grep -qx 'pendingchanges/composer.json'
+  tar -tzf \"\$archive\" | grep -qx 'pendingchanges/autoload.php'
+  tar -tzf \"\$archive\" | grep -qx 'pendingchanges/src/Service/PendingChangesService.php'
+  tar -tzf \"\$archive\" | grep -qx 'pendingchanges/views/page.php'
   if /var/lib/asterisk/bin/fwconsole ma list \
       | grep -E '\|[[:space:]]*pendingchanges[[:space:]]*\|' \
       | grep -qv 'Not Installed'; then

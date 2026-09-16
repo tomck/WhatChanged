@@ -114,6 +114,19 @@ never record form values, headers, cookies, sessions, or credentials.
 
 ## Build and package
 
+The PHP module uses a PSR-4 namespace layout and is formatted against the
+project's PSR-12 ruleset. After installing development dependencies, check it
+with:
+
+```sh
+composer install
+composer lint:style
+```
+
+The ruleset documents two compatibility exceptions: PHP 5.6 cannot express
+constant visibility, and FreePBX's conventional BMO entry point must register
+the module autoloader while declaring the framework class.
+
 Build the unified module and both optional standalone watcher formats with:
 
 ```sh
@@ -127,7 +140,7 @@ history. Validate the Module Admin archive in the disposable lab:
 
 ```sh
 ./docker/validate-module-archive.sh \
-  dist/pendingchanges-17.0.1.7.tgz
+  dist/pendingchanges-17.0.2.0.tgz
 ```
 
 The standalone watcher packages are optional for users because the module now

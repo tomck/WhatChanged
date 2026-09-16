@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<ruleset name="WhatChanged">
+  <description>PSR-12 rules for the FreePBX module PHP source.</description>
+
+  <file>Pendingchanges.class.php</file>
+  <file>autoload.php</file>
+  <file>page.pendingchanges.php</file>
+  <file>src</file>
+
+  <arg name="extensions" value="php"/>
+  <arg name="colors"/>
+  <arg value="p"/>
+
+  <rule ref="PSR12">
+    <!-- Constant visibility syntax was introduced after the PHP 5.6 floor. -->
+    <exclude name="PSR12.Properties.ConstantVisibility.NotFound"/>
+  </rule>
+
+  <!-- FreePBX requires this class file to register the project autoloader. -->
+  <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
+    <exclude-pattern>Pendingchanges.class.php</exclude-pattern>
+  </rule>
+</ruleset>

@@ -1,607 +1,140 @@
 <?php
+
 namespace FreePBX\modules;
 
-class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO {
+require_once __DIR__ . '/autoload.php';
+
+use FreePBX\modules\Pendingchanges\Service\PendingChangesService;
+use FreePBX\modules\Pendingchanges\Watcher\HealthClassifier;
+
+class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO
+{
     const BASELINE_TABLE = 'pendingchanges_baseline';
     const BASELINE_CONFIG_KEY = 'framework_fallback_baseline';
-    const PROTECTED_VALUE_PREFIX = '[protected hmac-sha256:';
-    // Keep the framework-only fallback bounded too. The external watcher is
-    // preferred in production, but an unreadable watcher status must never
-    // turn this page into an unbounded scan of CDR/CEL/add-on tables.
-    const WATCH_TABLES = [
-        'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-        'did', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'globals',
-        'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
-        'outbound_route_sequences', 'outbound_routes', 'parkinglot', 'pjsip',
-        'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip',
-        'timeconditions', 'timegroups', 'timegroups_details',
-        'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
-    ];
     const MAX_TABLE_ROWS = 5000;
-    private $redactionKeyCache;
 
-    public function doConfigPageInit($page) {}
+    const WATCH_TABLES = array(
+        'announcement',
+        'callbacks',
+        'conferences',
+        'customappsreg',
+        'devices',
+        'did',
+        'extension_routes',
+        'extensions',
+        'fax_details',
+        'featurecodes',
+        'globals',
+        'iax',
+        'injected',
+        'ivr_details',
+        'ivr_entries',
+        'miscapps',
+        'miscdests',
+        'modules',
+        'outbound_route_sequences',
+        'outbound_routes',
+        'parkinglot',
+        'pjsip',
+        'queues_config',
+        'queues_details',
+        'queues_members',
+        'ringgroups',
+        'sip',
+        'timeconditions',
+        'timegroups',
+        'timegroups_details',
+        'trunk_dialpatterns',
+        'trunks',
+        'userman_users',
+        'userman_users_settings',
+        'users',
+        'zap',
+    );
 
-    public function install() {
-        $this->migrateLegacyBaseline();
+    private $service;
+
+    public function doConfigPageInit($page)
+    {
     }
 
-    public function uninstall() {
-        $this->delConfig(self::BASELINE_CONFIG_KEY);
-        \FreePBX::Database()->exec('DROP TABLE IF EXISTS '.self::BASELINE_TABLE);
+    public function install()
+    {
+        $this->service()->install();
     }
 
-    public function getActionBar($request) {
-        return [];
+    public function uninstall()
+    {
+        $this->service()->uninstall();
     }
 
-    public function needReload() {
-        $statement = \FreePBX::Database()->prepare("SELECT value FROM admin WHERE variable = 'need_reload'");
-        $statement->execute();
-        return $statement->fetchColumn() === 'true';
+    public function getActionBar($request)
+    {
+        return array();
     }
 
-    public function baseline() {
-        $encoded = $this->getConfig(self::BASELINE_CONFIG_KEY);
-        if (!$encoded) {
-            $this->migrateLegacyBaseline();
-            $encoded = $this->getConfig(self::BASELINE_CONFIG_KEY);
-        }
-        $baseline = is_string($encoded) ? json_decode($encoded, true) : $encoded;
-        if (!is_array($baseline) || !isset($baseline['database'], $baseline['files'], $baseline['captured_at'])) {
-            return null;
-        }
-        $database = is_array($baseline['database']) ? $baseline['database'] : [];
-        $protected = [];
-        foreach ($database as $table => $rows) {
-            $protected[$table] = [];
-            foreach ($rows as $snapshotRow) {
-                $protected[$table][] = $this->protectSensitiveRow($snapshotRow);
-            }
-        }
-        if ($protected !== $database) {
-            $baseline['database'] = $protected;
-            $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode($baseline, JSON_UNESCAPED_SLASHES));
-        }
-        return [
-            'database' => $protected,
-            'files' => is_array($baseline['files']) ? $baseline['files'] : [],
-            'captured_at' => $baseline['captured_at'],
-        ];
+    public function needReload()
+    {
+        return $this->service()->needReload();
     }
 
-    public function seedBaseline() {
-        if ($this->needReload()) {
-            throw new \RuntimeException('Cannot seed a baseline while Apply Changes is pending. Apply or clear the pending reload first.');
-        }
-        $database = $this->databaseSnapshot();
-        $files = $this->fileSnapshot();
-        $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode([
-            'database' => $database,
-            'files' => $files,
-            'captured_at' => gmdate('c'),
-        ], JSON_UNESCAPED_SLASHES));
-        return ['tables' => count($database), 'files' => count($files)];
+    public function baseline()
+    {
+        return $this->service()->baseline();
     }
 
-    public function status() {
-        $probe = $this->watcherProbe();
-        $watcher = $probe['status'];
-        $health = $probe['health'];
-        if ($watcher !== null) {
-            $files = $watcher['file_drift'];
-            $current = $health['state'] === 'healthy';
-            $provenance = isset($watcher['baseline_provenance']) && is_array($watcher['baseline_provenance'])
-                ? $watcher['baseline_provenance']
-                : [
-                    'state' => 'uncertain',
-                    'reason' => 'watcher_status_does_not_report_baseline_provenance',
-                    'detail' => 'This watcher version cannot prove baseline continuity across service interruptions.',
-                ];
-            $pending = $current ? $watcher['need_reload'] : $this->needReload();
-            $message = $watcher['message'];
-            if ($health['state'] === 'delayed') {
-                $message = 'Watcher observation is delayed; current configuration state may be incomplete.';
-            } elseif ($health['state'] === 'stale') {
-                $message = 'Watcher results are stale. Current configuration state is unknown.';
-            } elseif ((isset($provenance['state']) ? $provenance['state'] : '') !== 'trusted') {
-                $message = 'Baseline provenance is uncertain after a watcher interruption; reported drift may span an Apply Config.';
-            }
-            return [
-                'pending' => $pending,
-                'database' => $watcher['database_drift'],
-                'astdb' => isset($watcher['astdb_drift']) ? $watcher['astdb_drift'] : [],
-                'files' => $files,
-                'generated_files' => $this->fileScope($files, 'generated/'),
-                'module_files' => $this->fileScope($files, 'module/'),
-                'coverage_limitations' => isset($watcher['coverage_limitations']) ? $watcher['coverage_limitations'] : [],
-                'coverage' => isset($watcher['coverage']) ? $watcher['coverage'] : [],
-                'attribution' => isset($watcher['attribution']) ? $watcher['attribution'] : [],
-                'message' => $message,
-                'baseline' => $watcher['baseline_available'],
-                'baseline_provenance' => $provenance,
-                'captured_at' => isset($watcher['baseline_captured_at']) ? $watcher['baseline_captured_at'] : null,
-                'watcher_observed_at' => $watcher['observed_at'],
-                'watcher' => true,
-                'watcher_health' => $health,
-                'data_current' => $current,
-                'coverage_mode' => 'watcher',
-            ];
-        }
-        $baseline = $this->baseline();
-        $pending = $this->needReload();
-        if (!$baseline) {
-            return [
-                'pending' => $pending,
-                'database' => [],
-                'astdb' => [],
-                'files' => [],
-                'generated_files' => [],
-                'module_files' => [],
-                'coverage_limitations' => [],
-                'coverage' => [],
-                'attribution' => $this->unavailableAttribution($pending),
-                'baseline' => false,
-                'baseline_provenance' => ['state' => 'unavailable', 'reason' => 'baseline_not_available'],
-                'captured_at' => null,
-                'message' => 'No applied baseline has been seeded; full watcher coverage is unavailable.',
-                'watcher' => false,
-                'watcher_health' => $health,
-                'data_current' => false,
-                'coverage_mode' => 'framework',
-            ];
-        }
-        $database = $this->databaseDiff($baseline['database'], $this->databaseSnapshot());
-        $files = $this->fileDiff($baseline['files'], $this->fileSnapshot());
-        $hasDrift = !empty($database) || !empty($files);
-        if ($hasDrift) {
-            $message = $pending
-                ? 'Configuration drift detected by the framework-only fallback; watcher coverage is degraded.'
-                : 'Framework-only drift detected; watcher coverage is degraded.';
-        } else {
-            $message = $pending
-                ? 'Reload requested; full origin analysis is unavailable because watcher health is degraded.'
-                : 'Watcher health is degraded; current full-scope configuration state is unknown.';
-        }
-        return compact('pending', 'database', 'files', 'message') + [
-            'generated_files' => $this->fileScope($files, 'generated/'),
-            'module_files' => $this->fileScope($files, 'module/'),
-            'coverage_limitations' => [],
-            'astdb' => [],
-            'coverage' => [
-                'database_tables' => self::WATCH_TABLES,
-                'database_exclusions' => ['modules.modulename=pendingchanges'],
-                'astdb_families' => [],
-                'generated_files' => $this->configuredAsteriskConfigRoot().'/*.conf',
-                'module_release_markers' => 'module.xml and module.sig for all modules except pendingchanges',
-            ],
-            'attribution' => $this->unavailableAttribution($pending),
-            'baseline' => true,
-            'baseline_provenance' => [
-                'state' => 'degraded',
-                'reason' => 'framework_only_fallback',
-                'detail' => 'The external watcher is unavailable; full baseline continuity cannot be proven.',
-            ],
-            'captured_at' => $baseline['captured_at'],
-            'watcher' => false,
-            'watcher_health' => $health,
-            'data_current' => false,
-            'coverage_mode' => 'framework',
-        ];
+    public function seedBaseline()
+    {
+        return $this->service()->seedBaseline();
     }
 
-    public function feedback() {
-        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-watcher/feedback.jsonl';
-        if (!is_readable($path)) {
-            return ['schema' => 1, 'events' => [], 'message' => 'No local watcher feedback ledger is available.'];
-        }
-        $events = [];
-        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            $event = json_decode($line, true);
-            if (is_array($event) && (isset($event['schema']) ? $event['schema'] : null) === 1) {
-                $events[] = $event;
-            }
-        }
-        return [
-            'schema' => 1,
-            'privacy' => 'Types, counts, field names, coverage-limit reasons, and timestamps only. No configuration values, identifiers, hostnames, credentials, or call data.',
-            'events' => $events,
-        ];
+    public function status()
+    {
+        return $this->service()->status();
     }
 
-    private function watcherProbe() {
-        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-watcher/status.json';
-        $installed = $this->watcherInstalled();
-        $sensorLoaded = $this->attributionSensorLoaded();
-        if (!is_readable($path)) {
-            return [
-                'status' => null,
-                'health' => self::watcherHealthForMissingStatus($installed, $sensorLoaded),
-            ];
-        }
-        $contents = file_get_contents($path);
-        if ($contents === false) {
-            return [
-                'status' => null,
-                'health' => self::watcherHealthFailure('unreadable', 'Watcher status exists but could not be read.', $installed, $sensorLoaded),
-            ];
-        }
-        $status = json_decode((string) $contents, true);
-        if (!is_array($status) || !isset($status['observed_at'], $status['need_reload'], $status['database_drift'], $status['file_drift'], $status['message'])) {
-            return [
-                'status' => null,
-                'health' => self::watcherHealthFailure('invalid', 'Watcher status is malformed or incomplete.', $installed, $sensorLoaded),
-            ];
-        }
-        return [
-            'status' => $status,
-            'health' => self::classifyWatcherHealth($status, time(), $installed, $sensorLoaded),
-        ];
+    public function feedback()
+    {
+        return $this->service()->feedback();
     }
 
-    public static function classifyWatcherHealth(array $status, $now = null, $installed = true, $sensorLoaded = false) {
-        $now = $now === null ? time() : (int) $now;
-        $observed = isset($status['observed_at']) && is_numeric($status['observed_at']) ? (int) $status['observed_at'] : 0;
-        if ($observed <= 0) {
-            return self::watcherHealthFailure('invalid', 'Watcher status has no valid observation time.', $installed, $sensorLoaded);
-        }
-        $metadata = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : [];
-        $expected = isset($metadata['expected_refresh_seconds']) && is_numeric($metadata['expected_refresh_seconds'])
-            ? (int) ceil((float) $metadata['expected_refresh_seconds']) : 30;
-        if ($expected < 1 || $expected > 3600) {
-            $expected = 30;
-        }
-        $age = max(0, $now - $observed);
-        $healthyDeadline = max(15, $expected * 3);
-        $delayedDeadline = max(60, $expected * 10);
-        if ($age <= $healthyDeadline) {
-            $state = 'healthy';
-            $label = 'Healthy';
-            $severity = 'success';
-            $detail = 'A completed watcher observation is current.';
-        } elseif ($age <= $delayedDeadline) {
-            $state = 'delayed';
-            $label = 'Delayed';
-            $severity = 'warning';
-            $detail = 'The latest completed watcher observation is later than expected.';
-        } else {
-            $state = 'stale';
-            $label = 'Stale';
-            $severity = 'danger';
-            $detail = 'The latest watcher observation is too old to describe current configuration state.';
-        }
-        return [
-            'state' => $state,
-            'label' => $label,
-            'severity' => $severity,
-            'detail' => $detail,
-            'installed' => (bool) $installed,
-            'sensor_loaded' => (bool) $sensorLoaded,
-            'observation_age_seconds' => $age,
-            'expected_refresh_seconds' => $expected,
-            'healthy_deadline_seconds' => $healthyDeadline,
-            'stale_deadline_seconds' => $delayedDeadline,
-        ];
+    public static function classifyWatcherHealth(
+        array $status,
+        $now = null,
+        $installed = true,
+        $sensorLoaded = false
+    ) {
+        return HealthClassifier::classify($status, $now, $installed, $sensorLoaded);
     }
 
-    private static function watcherHealthForMissingStatus($installed, $sensorLoaded) {
-        if ($installed) {
-            return self::watcherHealthFailure(
-                'installed_unconfigured',
-                'The watcher appears installed but has not published a readable observation.',
-                true,
-                $sensorLoaded
+    public function readModuleConfig($key)
+    {
+        return $this->getConfig($key);
+    }
+
+    public function writeModuleConfig($key, $value)
+    {
+        $this->setConfig($key, $value);
+    }
+
+    public function deleteModuleConfig($key)
+    {
+        $this->delConfig($key);
+    }
+
+    private function service()
+    {
+        if ($this->service === null) {
+            $this->service = new PendingChangesService(
+                $this,
+                \FreePBX::Database(),
+                self::WATCH_TABLES,
+                self::MAX_TABLE_ROWS,
+                self::BASELINE_CONFIG_KEY,
+                self::BASELINE_TABLE
             );
         }
-        return self::watcherHealthFailure(
-            'not_installed',
-            'The external watcher is not installed; framework-only coverage is reduced.',
-            false,
-            $sensorLoaded,
-            'warning'
-        );
-    }
 
-    private static function watcherHealthFailure($state, $detail, $installed, $sensorLoaded, $severity = 'danger') {
-        return [
-            'state' => $state,
-            'label' => ucwords(str_replace('_', ' ', $state)),
-            'severity' => $severity,
-            'detail' => $detail,
-            'installed' => (bool) $installed,
-            'sensor_loaded' => (bool) $sensorLoaded,
-            'observation_age_seconds' => null,
-            'expected_refresh_seconds' => null,
-        ];
-    }
-
-    private function watcherInstalled() {
-        foreach ([
-            '/usr/lib/what-changed-watcher/watcher.py',
-            '/usr/local/lib/what-changed-watcher/watcher.py',
-            '/etc/systemd/system/what-changed-watcher.service',
-            '/lib/systemd/system/what-changed-watcher.service',
-            '/usr/lib/systemd/system/what-changed-watcher.service',
-            '/etc/what-changed-watcher.env',
-        ] as $path) {
-            if (file_exists($path)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function attributionSensorLoaded() {
-        return defined('WHAT_CHANGED_ATTRIBUTION_SENSOR_ACTIVE')
-            && WHAT_CHANGED_ATTRIBUTION_SENSOR_ACTIVE === true;
-    }
-
-    private function unavailableAttribution($pending) {
-        return [
-            'enabled' => false,
-            'confidence' => $pending ? 'unavailable' : 'none',
-            'actors' => [],
-            'requests' => [],
-            'note' => 'Authenticated request correlation requires the external watcher sensor.',
-            'caveat' => 'Request correlation is evidence of who may have staged work, not proof that an account caused each reported state change.',
-        ];
-    }
-
-    private function databaseSnapshot() {
-        $available = array_column(\FreePBX::Database()->query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"')->fetchAll(\PDO::FETCH_NUM), 0);
-        $snapshot = [];
-        foreach (self::WATCH_TABLES as $table) {
-            if (!in_array($table, $available, true)) {
-                continue;
-            }
-            $quoted = '`'.str_replace('`', '``', $table).'`';
-            $count = (int) \FreePBX::Database()->query('SELECT COUNT(*) FROM '.$quoted)->fetchColumn();
-            if ($count > self::MAX_TABLE_ROWS) {
-                continue;
-            }
-            // The signature column is a bulky verification cache, not module
-            // activation state, and may contain non-UTF-8 blob data. Keep the
-            // framework fallback aligned with the external watcher.
-            if ($table === 'modules') {
-                $columns = '`id`, `modulename`, `version`, `enabled`';
-            } elseif ($table === 'userman_users') {
-                $columns = '`id`, `auth`, `authid`, `username`, `description`, `default_extension`, `primary_group`, `fname`, `lname`, `displayname`, `title`, `company`, `department`, `language`, `timezone`, `dateformat`, `timeformat`, `datetimeformat`, `email`, `cell`, `work`, `home`, `fax`';
-            } else {
-                $columns = '*';
-            }
-            $where = $table === 'modules' ? " WHERE `modulename` <> 'pendingchanges'" : '';
-            $rows = \FreePBX::Database()->query('SELECT '.$columns.' FROM '.$quoted.$where)->fetchAll(\PDO::FETCH_ASSOC);
-            $normalized = [];
-            foreach ($rows as $row) {
-                $row = $this->protectSensitiveRow($row);
-                ksort($row);
-                $normalized[] = $row;
-            }
-            usort($normalized, static function ($a, $b) {
-                return strcmp(json_encode($a), json_encode($b));
-            });
-            $snapshot[$table] = $normalized;
-        }
-        ksort($snapshot);
-        return $snapshot;
-    }
-
-    private function fileSnapshot() {
-        $root = $this->configuredAsteriskConfigRoot();
-        $snapshot = [];
-        foreach (glob($root.'/*.conf') ?: [] as $path) {
-            if (is_file($path) && is_readable($path)) {
-                $snapshot['generated/'.substr($path, strlen($root) + 1)] = hash_file('sha256', $path);
-            }
-        }
-        $moduleRoot = $this->configuredModuleRoot();
-        foreach (glob($moduleRoot.'/*', GLOB_ONLYDIR) ?: [] as $module) {
-            if (basename($module) === 'pendingchanges') {
-                continue;
-            }
-            $digest = hash_init('sha256');
-            $present = false;
-            foreach (['module.xml', 'module.sig'] as $marker) {
-                $path = $module.'/'.$marker;
-                if (is_file($path) && is_readable($path)) {
-                    hash_update($digest, $marker);
-                    hash_update($digest, hash_file('sha256', $path, true));
-                    $present = true;
-                }
-            }
-            if ($present) {
-                $snapshot['module/'.basename($module)] = hash_final($digest);
-            }
-        }
-        ksort($snapshot);
-        return $snapshot;
-    }
-
-    private function fileScope(array $files, $prefix) {
-        return array_filter($files, static function ($name) use ($prefix) {
-            return strncmp((string) $name, $prefix, strlen($prefix)) === 0;
-        }, ARRAY_FILTER_USE_KEY);
-    }
-
-    private function databaseDiff(array $before, array $after) {
-        $diff = [];
-        foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $table) {
-            $old = isset($before[$table]) ? $before[$table] : [];
-            $new = isset($after[$table]) ? $after[$table] : [];
-            if ($old === $new) {
-                continue;
-            }
-            $oldMap = array_fill_keys(array_map('json_encode', $old), true);
-            $newMap = array_fill_keys(array_map('json_encode', $new), true);
-            $added = [];
-            foreach (array_keys(array_diff_key($newMap, $oldMap)) as $encoded) {
-                $added[] = $this->publicRow(json_decode($encoded, true));
-            }
-            $removed = [];
-            foreach (array_keys(array_diff_key($oldMap, $newMap)) as $encoded) {
-                $removed[] = $this->publicRow(json_decode($encoded, true));
-            }
-            $diff[$table] = [
-                'added' => $added,
-                'removed' => $removed,
-                'before_count' => count($old),
-                'after_count' => count($new),
-            ];
-        }
-        return $diff;
-    }
-
-    private function configuredModuleRoot() {
-        $webroot = $this->configuredPath('AMPWEBROOT', '/var/www/html');
-        return ($webroot === '/' ? '' : $webroot).'/admin/modules';
-    }
-
-    private function configuredAsteriskConfigRoot() {
-        return $this->configuredPath('ASTETCDIR', '/etc/asterisk');
-    }
-
-    private function configuredAsteriskVariableRoot() {
-        if (isset($GLOBALS['amp_conf']['ASTVARLIBDIR'])) {
-            return $this->configuredPath('ASTVARLIBDIR', '/var/lib/asterisk');
-        }
-        return $this->configuredPath('ASTVARLIB', '/var/lib/asterisk');
-    }
-
-    private function configuredPath($setting, $default) {
-        $path = isset($GLOBALS['amp_conf'][$setting]) ? (string) $GLOBALS['amp_conf'][$setting] : $default;
-        $path = $path === '/' ? '/' : rtrim($path, '/');
-        if ($path === '' || $path[0] !== '/' || preg_match('/[\x00-\x20\x7f]/', $path)
-            || preg_match('#(?:^|/)\.\.(?:/|$)#', $path)) {
-            throw new \RuntimeException('FreePBX '.$setting.' is not a safe absolute path.');
-        }
-        return $path;
-    }
-
-    private function migrateLegacyBaseline() {
-        if ($this->getConfig(self::BASELINE_CONFIG_KEY)) {
-            return;
-        }
-        $database = \FreePBX::Database();
-        try {
-            $statement = $database->prepare('SHOW TABLES LIKE ?');
-            $statement->execute([self::BASELINE_TABLE]);
-            if (!$statement->fetchColumn()) {
-                return;
-            }
-            $row = $database->query(
-                'SELECT database_snapshot, file_snapshot, captured_at FROM '.self::BASELINE_TABLE.' WHERE id = 1'
-            )->fetch(\PDO::FETCH_ASSOC);
-            if ($row) {
-                $baseline = [
-                    'database' => json_decode($row['database_snapshot'], true) ?: [],
-                    'files' => json_decode($row['file_snapshot'], true) ?: [],
-                    'captured_at' => $row['captured_at'],
-                ];
-                $this->setConfig(self::BASELINE_CONFIG_KEY, json_encode($baseline, JSON_UNESCAPED_SLASHES));
-            }
-            $database->exec('DROP TABLE IF EXISTS '.self::BASELINE_TABLE);
-        } catch (\Exception $error) {
-            // A legacy-table migration failure must not prevent Module Admin
-            // from installing the read-only module. The watcher remains the
-            // primary source and the old table is retained for another try.
-        }
-    }
-
-    private static function semanticNameSensitive($value) {
-        return preg_match(
-            '/(^|[_.|\/\s\-])(password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|auth_key|authkey)($|[_.|\/\s\-])/i',
-            (string) $value
-        ) === 1;
-    }
-
-    private static function sensitiveField($field, array $row) {
-        $name = strtolower((string) $field);
-        if (preg_match('/password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|auth_key|authkey/i', $name)) {
-            return true;
-        }
-        if (substr($name, -4) === '_key' || strpos($name, 'key_') === 0) {
-            return true;
-        }
-        if (in_array($name, ['value', 'val', 'data'], true)) {
-            $semantic = [];
-            foreach (['module', 'keyword', 'key', 'variable', 'setting', 'option', 'name'] as $semanticField) {
-                $semantic[] = isset($row[$semanticField]) ? $row[$semanticField] : '';
-            }
-            return self::semanticNameSensitive(implode(' ', $semantic));
-        }
-        return false;
-    }
-
-    private function redactionKey() {
-        if (is_string($this->redactionKeyCache) && strlen($this->redactionKeyCache) >= 32) {
-            return $this->redactionKeyCache;
-        }
-        $path = $this->configuredAsteriskVariableRoot().'/pendingchanges-redaction.key';
-        $encoded = @file_get_contents($path);
-        if (is_string($encoded) && preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
-            $this->redactionKeyCache = pack('H*', trim($encoded));
-            return $this->redactionKeyCache;
-        }
-        if (function_exists('random_bytes')) {
-            $key = random_bytes(32);
-        } elseif (function_exists('openssl_random_pseudo_bytes')) {
-            $key = openssl_random_pseudo_bytes(32);
-        } else {
-            throw new \RuntimeException('No secure random source is available for fallback redaction.');
-        }
-        if (!is_string($key) || strlen($key) < 32) {
-            throw new \RuntimeException('Could not generate the fallback redaction key.');
-        }
-        $handle = @fopen($path, 'x');
-        if ($handle !== false) {
-            fwrite($handle, bin2hex($key));
-            fclose($handle);
-            @chmod($path, 0600);
-        } else {
-            $encoded = @file_get_contents($path);
-            if (!is_string($encoded) || !preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
-                throw new \RuntimeException('Could not create the fallback redaction key.');
-            }
-            $key = pack('H*', trim($encoded));
-        }
-        $this->redactionKeyCache = $key;
-        return $key;
-    }
-
-    private function protectSensitiveRow(array $row) {
-        foreach ($row as $field => $value) {
-            if (!self::sensitiveField($field, $row)) {
-                continue;
-            }
-            if (is_string($value) && strpos($value, self::PROTECTED_VALUE_PREFIX) === 0) {
-                continue;
-            }
-            $serialized = json_encode($value, JSON_UNESCAPED_SLASHES);
-            $row[$field] = self::PROTECTED_VALUE_PREFIX
-                .hash_hmac('sha256', $serialized === false ? (string) $value : $serialized, $this->redactionKey()).']';
-        }
-        return $row;
-    }
-
-    private function publicRow(array $row) {
-        foreach ($row as $field => $value) {
-            if (self::sensitiveField($field, $row)
-                || (is_string($value) && strpos($value, self::PROTECTED_VALUE_PREFIX) !== false)) {
-                $row[$field] = '[redacted]';
-            }
-        }
-        return $row;
-    }
-
-    private function fileDiff(array $before, array $after) {
-        $diff = [];
-        foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $file) {
-            $old = isset($before[$file]) ? $before[$file] : null;
-            $new = isset($after[$file]) ? $after[$file] : null;
-            if ($old !== $new) {
-                $diff[$file] = ['before' => $old, 'after' => $new];
-            }
-        }
-        return $diff;
+        return $this->service;
     }
 }

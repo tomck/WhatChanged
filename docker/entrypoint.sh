@@ -73,20 +73,20 @@ fi
 # Synchronize only the module payload on every disposable-lab start.  Copying
 # the whole checkout also traverses .git and build artifacts; Docker Desktop
 # file sharing can reject that traversal while the checkout changes.
-for path in LICENSE module.xml Pendingchanges.class.php page.pendingchanges.php bin; do
+for path in LICENSE composer.json module.xml autoload.php Pendingchanges.class.php page.pendingchanges.php bin src views; do
   cp -R "/srv/pendingchanges/$path" /var/www/html/admin/modules/pendingchanges/
 done
+
+# The normal FreePBX Debian install exposes fwconsole in /usr/sbin. The
+# source-built disposable image keeps it only under /var/lib/asterisk/bin.
+# Create the packaged path before registering synchronized module source.
+ln -sfn /var/lib/asterisk/bin/fwconsole /usr/sbin/fwconsole
+
 # Re-register the synchronized source on every start. This keeps Module Admin's
 # recorded version aligned when a persisted web volume survives a module bump.
 # A registration failure must not take down the PBX: the source remains
 # available for inspection and a later archive-install validation.
 fwconsole ma install pendingchanges || fwconsole ma enable pendingchanges || true
-
-# The normal FreePBX Debian install exposes fwconsole in /usr/sbin. The
-# source-built disposable image keeps it only under /var/lib/asterisk/bin,
-# while Framework's authenticated Apply Config handler resolves /usr/sbin.
-# Mirror the packaged path so the lab can test the real web apply request.
-ln -sfn /var/lib/asterisk/bin/fwconsole /usr/sbin/fwconsole
 
 # FreePBX 17's Module Admin machine-ID helper assumes shell_exec always
 # returns a string. Debian 12's PHP 8.2 can return null instead, which turns
