@@ -1,0 +1,19 @@
+{
+  "name": "tomck/whatchanged",
+  "description": "Pending Changes Tripwire module for FreePBX",
+  "license": "GPL-3.0-or-later",
+  "require": {
+    "php": ">=5.6"
+  },
+  "require-dev": {
+    "squizlabs/php_codesniffer": "^3.13"
+  },
+  "autoload": {
+    "psr-4": {
+      "FreePBX\\modules\\Pendingchanges\\": "src/"
+    }
+  },
+  "scripts": {
+    "lint:style": "phpcs"
+  }
+}

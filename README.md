@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.1.7**.
+candidate is **17.0.2.0**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.1.7**.
 
 ## Install
 
-Download `pendingchanges-17.0.1.7.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.2.0.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.1.7.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.0.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"

@@ -1,5 +1,20 @@
 # Changelog
 
+## Module 17.0.2.0 / watcher 0.1.6
+
+- Refactor the FreePBX module into a PSR-4-style internal class structure while
+  retaining the conventional BMO and page entry points required by FreePBX.
+- Separate baseline persistence, snapshot collection, redaction, diffing,
+  watcher health, request handling, presentation, and views into focused,
+  testable components.
+- Apply PSR-12 formatting to the refactored PHP code without raising the PHP
+  5.6 floor required for unified FreePBX 14–17 support.
+- Add a source-controlled PHP_CodeSniffer ruleset and Composer style command,
+  with documented exceptions only for PHP 5.6 constant syntax and the required
+  FreePBX BMO bootstrap side effect.
+- Preserve the watcher protocol, coverage contract, read-only behavior,
+  redaction rules, and Apply Config baseline lifecycle from 17.0.1.7.
+
 ## Module 17.0.1.7 / watcher 0.1.6
 
 - Honor FreePBX's configured `AMPDBSOCK` for both the local SELECT-only account

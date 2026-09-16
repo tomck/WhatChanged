@@ -35,6 +35,10 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
   tar -tzf "$archive" | grep -qx 'pendingchanges/module.xml'
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$module_version</version>"
   tar -xOf "$archive" pendingchanges/module.xml | grep -q "<version>$target.0</version>"
+  for payload in composer.json autoload.php src/Service/PendingChangesService.php \
+    src/Presentation/PageController.php views/page.php views/partials/change.php; do
+    tar -tzf "$archive" | grep -qx "pendingchanges/$payload"
+  done
   for payload in bin/install-watcher bin/uninstall-watcher watcher/watcher.py \
     watcher/what-changed-request-audit.php watcher/99-what-changed-attribution.ini \
     watcher/what-changed-watcher.service watcher/what-changed-watcher.env \
@@ -48,7 +52,6 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
     -v "$root_dir/docker/legacy-page-smoke.php:/tmp/legacy-page-smoke.php:ro" \
     -v "$root_dir/docker/watcher-health-smoke.php:/tmp/watcher-health-smoke.php:ro" \
     -v "$root_dir/docker/test-framework-fallback.php:/tmp/test-framework-fallback.php:ro" \
-    -v "$root_dir/Pendingchanges.class.php:/Pendingchanges.class.php:ro" \
     "php:$php_version-cli" sh -eu -c '
       work=$(mktemp -d)
       tar -xzf /tmp/pendingchanges.tgz -C "$work"
@@ -57,7 +60,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
       php /tmp/legacy-page-smoke.php "$work/pendingchanges"
       php /tmp/legacy-page-smoke.php "$work/pendingchanges" degraded
       php /tmp/watcher-health-smoke.php "$work/pendingchanges"
-      php /tmp/test-framework-fallback.php
+      php /tmp/test-framework-fallback.php "$work/pendingchanges"
     '
   echo "FreePBX $target candidate passed PHP $php_version syntax and metadata checks"
 done
