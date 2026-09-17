@@ -39,6 +39,7 @@ assert diff['extensions']['removed'][0]['secret'] == '[redacted]'
 assert watcher.file_diff({'a.conf': 'old'}, {'a.conf': 'new', 'b.conf': 'added'})['a.conf']['after'] == 'new'
 assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
 assert {
+    'incoming',
     'outbound_routes', 'outbound_route_patterns',
     'outbound_route_sequence', 'outbound_route_trunks', 'modules',
     'fax_details',
@@ -56,6 +57,20 @@ class KeyCursor:
     def execute(self, *_): pass
     def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
 assert watcher.primary_key(KeyCursor(), 'kvstore_Sipsettings') == ['key']
+
+class IncomingKeyCursor:
+    def __init__(self):
+        self.primary = True
+
+    def execute(self, statement, *_):
+        self.primary = statement.startswith('SHOW KEYS')
+
+    def fetchall(self):
+        if self.primary:
+            return []
+        return [{'Field': 'cidnum'}, {'Field': 'extension'}, {'Field': 'destination'}]
+
+assert watcher.primary_key(IncomingKeyCursor(), 'incoming') == ['cidnum', 'extension']
 assert watcher.VOLATILE_COLUMNS['sip'] == {'flags'}
 assert watcher.VOLATILE_COLUMNS['modules'] == {'signature'}
 assert watcher.primary_key(KeyCursor(), 'modules') == ['modulename']

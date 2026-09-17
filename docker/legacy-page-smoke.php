@@ -41,7 +41,7 @@ namespace {
                             'severity' => 'warning',
                             'detail' => 'No installed watcher payload was found.',
                             'current' => false,
-                            'embedded_version' => '0.1.8',
+                            'embedded_version' => '0.1.9',
                             'installed_version' => null,
                             'update_command' => 'sudo '
                                 . $GLOBALS['argv'][1] . '/bin/install-watcher',
@@ -72,8 +72,8 @@ namespace {
                         'severity' => 'success',
                         'detail' => 'The installed watcher matches the payload bundled with this module.',
                         'current' => true,
-                        'embedded_version' => '0.1.8',
-                        'installed_version' => '0.1.8',
+                        'embedded_version' => '0.1.9',
+                        'installed_version' => '0.1.9',
                         'update_command' => 'sudo '
                             . $GLOBALS['argv'][1] . '/bin/install-watcher',
                     ],

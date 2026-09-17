@@ -43,6 +43,10 @@ curl -fsS -L -b "$COOKIE_JAR" \
   --referer "$BASE_URL/admin/config.php?display=queues" \
   --data-urlencode 'display=queues' --data-urlencode 'action=delete' \
   --data-urlencode 'account=7003' -o /dev/null "$BASE_URL/admin/config.php" || true
+curl -fsS -L -b "$COOKIE_JAR" \
+  --referer "$BASE_URL/admin/config.php?display=did" \
+  --data-urlencode 'display=did' --data-urlencode 'action=delIncoming' \
+  --data-urlencode 'extdisplay=7043094838/' -o /dev/null "$BASE_URL/admin/config.php" || true
 curl -fsS -b "$COOKIE_JAR" \
   --referer "$BASE_URL/admin/config.php?display=extensions" \
   --data-urlencode 'command=delete' --data-urlencode 'module=core' \
@@ -67,6 +71,16 @@ printf '%s' "$extension_response" | grep -q '"status":true' || {
   echo "Extension fixture creation failed" >&2; exit 1;
 }
 echo "Created extension fixture."
+
+curl -fsS -L -b "$COOKIE_JAR" \
+  --referer "$BASE_URL/admin/config.php?display=did&view=form" \
+  --data-urlencode 'display=did' --data-urlencode 'action=addIncoming' \
+  --data-urlencode 'extension=7043094838' --data-urlencode 'cidnum=' \
+  --data-urlencode 'description=WhatChanged Lab Inbound Route' \
+  --data-urlencode 'goto0=Extensions' \
+  --data-urlencode 'Extensions0=from-did-direct,7001,1' \
+  --data-urlencode 'submit=Submit' -o /dev/null "$BASE_URL/admin/config.php"
+echo "Created inbound route fixture."
 
 # Ring Group and Queue forms use standard authenticated POST handlers. Their
 # surrounding tests will verify the resulting watcher observations.

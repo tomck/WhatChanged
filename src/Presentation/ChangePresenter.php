@@ -79,6 +79,7 @@ class ChangePresenter
     {
         $labels = array(
             'fax_details' => 'Fax Configuration',
+            'incoming' => 'Inbound Routes',
             'userman_users' => 'User Management users',
             'userman_users_settings' => 'User Management / UCP settings',
         );
