@@ -2,6 +2,48 @@
 
 These rules apply to the entire repository.
 
+## Project purpose
+
+- WhatChanged helps FreePBX administrators understand which observed
+  configuration changes are waiting behind **Apply Config** before somebody
+  activates them unknowingly. It combines a FreePBX presentation module with
+  a least-privilege watcher that records an applied baseline and explains
+  subsequent drift.
+- The product is an operational safety aid, not an oracle, rollback engine, or
+  substitute for backups and change control. Prefer precise, supportable claims
+  over reassuring but unprovable ones.
+- Optimize for the administrator who has inherited an unfamiliar PBX during an
+  incident: important conclusions should be visible first, evidence should be
+  inspectable, and limitations should be candid without requiring source-code
+  knowledge.
+
+## Human-centered engineering
+
+- Make the safe path the easy path. Installation, upgrades, diagnostics, and
+  removal should be idempotent, preserve user data, and leave the system in an
+  intelligible state after interruption.
+- Do not make administrators translate an implementation failure into a repair
+  procedure. Error messages must identify the affected component, explain the
+  consequence in plain language, and provide an exact, context-aware remedy.
+- When the watcher installer discovers a missing supported dependency, it must
+  identify the host platform, show the package-manager action it proposes,
+  request explicit consent, run that action when approved, and then resume and
+  verify the original installation automatically. It must never install
+  packages silently. In a non-interactive session, fail safely with the exact
+  command and rerun instruction instead of hanging or emitting only
+  `component missing`.
+- Derive FreePBX paths, database endpoints, service layout, and web-server/PHP
+  integration from the running system. Do not assume `/var/www/html`, port
+  3306, Apache, or a particular Linux family when FreePBX or the operating
+  system exposes the authoritative value.
+- Present concise summaries before raw evidence. Use readable labels,
+  before/after values, progressive disclosure, and actionable health states;
+  reserve raw JSON and low-level diagnostics for expandable evidence or
+  troubleshooting output.
+- Keep user-facing commands copyable and complete. Documentation should state
+  prerequisites, expected outcomes, verification steps, limitations, and a
+  reversible recovery or uninstall path.
+
 ## Product boundaries
 
 - WhatChanged is a read-only explanation and evidence tool. Do not add an
@@ -91,6 +133,9 @@ These rules apply to the entire repository.
   on the real FreePBX 16, 15, and 14 fixture images.
 - Validate the exact signed module archive through Module Admin before
   publishing it. Passing an unsigned source build is not a substitute.
+- Exercise dependency-recovery flows in disposable supported environments:
+  both an interactive, consented install-and-resume path and a non-interactive
+  failure that prints the complete remediation command.
 - A smoke gate must fail closed on missing evidence, stale watcher state,
   uncertain baseline provenance, unexpected extra mutation, or uncleared drift.
 
