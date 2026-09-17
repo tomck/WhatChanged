@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.2.3**.
+candidate is **17.0.2.4**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,24 @@ candidate is **17.0.2.3**.
 
 ## Install
 
-Download `pendingchanges-17.0.2.3.tgz` from the matching GitHub release,
+### Fast install (trust-and-run)
+
+For a disposable or otherwise explicitly trusted PBX, the latest published
+release can be downloaded, checksum-verified, OpenPGP-verified when `gpg` is
+available, and installed with one command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+```
+
+This convenience command downloads the signed module archive from the latest
+GitHub release, discovers FreePBX's configured `AMPWEBROOT`, installs the
+module, and launches its explicit watcher installer. The watcher installer
+may ask permission to install PyMySQL. Reviewers who do not want to pipe a
+remote script into a shell should use the [manual verification and install
+path](docs/alpha-install.md) instead.
+
+Download `pendingchanges-17.0.2.4.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +49,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.3.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.4.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
