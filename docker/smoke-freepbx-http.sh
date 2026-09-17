@@ -49,7 +49,7 @@ wait_fixture_evidence() {
     if $docker_cmd exec -T custom-watcher python -c "
 import json
 s = json.load(open('/var/lib/pendingchanges-watcher/status.json'))
-required = {'users', 'devices', 'sip', 'ringgroups', 'queues_config'}
+required = {'users', 'devices', 'sip', 'incoming', 'ringgroups', 'queues_config'}
 if '$direction' == 'added':
     missing = required - set(s['database_drift'])
 else:
@@ -66,7 +66,7 @@ assert not missing
 }
 
 # A rerun must not compare the seed against the same fixtures from a previous
-# pass. Remove only the three lab-owned objects, apply that clean state, then
+# pass. Remove only the four lab-owned objects, apply that clean state, then
 # use it as the baseline for the real authenticated creation flow.
 FREEPBX_FIXTURE_ACTION=cleanup "$root_dir/docker/seed-freepbx.sh"
 cleanup_reload=$($docker_cmd exec -T database sh -lc \
@@ -100,7 +100,7 @@ wait_fixture_evidence added
 $docker_cmd exec -T custom-watcher python -c '
 import json
 s = json.load(open("/var/lib/pendingchanges-watcher/status.json"))
-required = {"users", "devices", "sip", "ringgroups", "queues_config"}
+required = {"users", "devices", "sip", "incoming", "ringgroups", "queues_config"}
 actual = set(s["database_drift"])
 missing = sorted(required - actual)
 assert not missing, f"fixture drift missing tables: {missing}; observed: {sorted(actual)}"
@@ -108,7 +108,7 @@ s_attribution = s.get("attribution", {})
 assert s_attribution.get("confidence") == "likely", s_attribution
 assert s_attribution.get("actors") == ["labadmin"], s_attribution
 areas = {event.get("display") or event.get("type") or event.get("module") or event.get("command") for event in s_attribution.get("requests", [])}
-assert {"extensions", "ringgroups", "queues"}.issubset(areas), areas
+assert {"extensions", "did", "ringgroups", "queues"}.issubset(areas), areas
 '
 
 "$root_dir/docker/apply-freepbx.sh"
@@ -130,7 +130,7 @@ wait_fixture_evidence removed
 $docker_cmd exec -T custom-watcher python -c '
 import json
 s = json.load(open("/var/lib/pendingchanges-watcher/status.json"))
-required = {"users", "devices", "sip", "ringgroups", "queues_config"}
+required = {"users", "devices", "sip", "incoming", "ringgroups", "queues_config"}
 missing = sorted(
     table for table in required
     if not s["database_drift"].get(table, {}).get("removed")

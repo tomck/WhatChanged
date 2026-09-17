@@ -48,7 +48,7 @@ ASTDB_MAX_ROWS = int(os.environ.get('ASTDB_MAX_ROWS', '10000'))
 # tables, and the watcher must never read them just because they exist.
 DEFAULT_WATCH_TABLES = (
     'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-    'did', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'freepbx_settings', 'globals',
+    'did', 'incoming', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'freepbx_settings', 'globals',
     'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
     # FreePBX 17 uses the singular `outbound_route_sequence` table. Retain
     # the historic plural entry for compatibility with older/restored PBXs,
@@ -90,6 +90,12 @@ REDACTION_KEY_CACHE = None
 # stable logical keys used only as a fallback, so updates remain updates rather
 # than misleading remove/add pairs.
 NATURAL_KEY_FIELDS = ('extension', 'id', 'trunkid', 'route_id', 'account', 'grpnum', 'device', 'user', 'key')
+# Core inbound routes do not declare a primary key. A DID may legitimately
+# have more than one route when caller-ID matching differs, so the DID and
+# caller-ID pair is the stable logical identity rather than `extension` alone.
+NATURAL_KEY_FIELDS_BY_TABLE = {
+    'incoming': ('cidnum', 'extension'),
+}
 # The legacy `sip.flags` column is an internal display/order ordinal. FreePBX
 # rewrites it when an endpoint form is saved even when the option's value is
 # unchanged, so including it turns a one-field edit into dozens of false
@@ -329,7 +335,8 @@ def primary_key(cursor, table):
     # incorrectly presented as one removal plus one addition.
     cursor.execute(f"SHOW COLUMNS FROM `{table}`")
     columns = {column(item, 'Field', 0) for item in cursor.fetchall()}
-    return [field for field in NATURAL_KEY_FIELDS if field in columns][:1]
+    table_fields = NATURAL_KEY_FIELDS_BY_TABLE.get(table, NATURAL_KEY_FIELDS)
+    return [field for field in table_fields if field in columns]
 
 def row_key(row, fields):
     if fields:

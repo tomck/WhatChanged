@@ -1,5 +1,14 @@
 # Changelog
 
+## Module 17.0.2.3 / watcher 0.1.9
+
+- Observe FreePBX Core's `incoming` table so staged inbound-route/DID
+  additions, edits, and removals are reported before Apply Config.
+- Use the `(cidnum, extension)` pair as the stable identity for inbound routes,
+  preserving separate routes that share a DID but match different caller IDs.
+- Add an authenticated Docker smoke fixture for inbound-route lifecycle and
+  present the result as **Inbound Routes** in the report.
+
 ## Module 17.0.2.2 / watcher 0.1.8
 
 - Support authenticated-request attribution on nginx with PHP-FPM as well as
