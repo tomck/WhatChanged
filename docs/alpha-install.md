@@ -13,7 +13,7 @@ administrator attribution is explicitly unavailable.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.2.3.tgz`
+   - `pendingchanges-17.0.2.4.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -34,6 +34,24 @@ must not be used to build a portable release archive.
 
 ## Install
 
+### Fast install (trust-and-run)
+
+For an operator who explicitly trusts the hosted installer, the latest
+published release can be installed with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+```
+
+The script resolves the latest `pendingchanges-*` release, downloads the
+module archive and verification material, checks its SHA-256 manifest, and
+verifies the signed manifest when `gpg` is available. It then discovers the
+configured FreePBX `AMPWEBROOT`, installs the module, and runs the embedded
+watcher installer. It never runs Apply Config. This is intentionally a
+convenience path for people who accept the trust implied by piping a remote
+script to `sudo`; use the manual path below when you need to inspect every
+file before execution.
+
 Install the shared module, then run its embedded watcher installer as root:
 
 ```sh
@@ -44,7 +62,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.3.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.4.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
