@@ -6,15 +6,24 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-target=
-for candidate in /etc/php/*/apache2/conf.d /etc/php.d; do
-  if [ -d "$candidate" ]; then
-    target=$candidate
-  fi
+append_target() {
+  case " $targets " in
+    *" $1 "*) : ;;
+    *) targets="$targets $1" ;;
+  esac
+}
+
+# Install only into web SAPIs. Debian keeps Apache and FPM configuration in
+# separate trees. RHEL-derived FreePBX distributions commonly use /etc/php.d
+# for the active web SAPI as well as CLI, so retain that compatibility path.
+targets=
+for candidate in /etc/php/*/apache2/conf.d /etc/php/*/fpm/conf.d /etc/php.d; do
+  [ -d "$candidate" ] && append_target "$candidate"
 done
-if [ -z "$target" ]; then
-  echo 'No Apache PHP configuration directory was found.' >&2
-  exit 1
+if [ -z "$targets" ]; then
+  echo 'No supported Apache or PHP-FPM web-SAPI configuration directory was found.' >&2
+  echo 'The core watcher remains usable, but administrator request attribution is unavailable.' >&2
+  exit 0
 fi
 
 attribution_log=/var/lib/asterisk/pendingchanges-attribution/requests.jsonl
@@ -29,22 +38,100 @@ sensor_source=/usr/lib/what-changed-watcher/99-what-changed-attribution.ini
 if [ ! -f "$sensor_source" ]; then
   sensor_source=/usr/local/lib/what-changed-watcher/99-what-changed-attribution.ini
 fi
-install -o root -g root -m 0644 \
-  "$sensor_source" \
-  "$target/99-what-changed-attribution.ini"
-echo 'Validating the complete Apache configuration on this host before reloading Apache.'
-echo 'Apache may print warnings from existing virtual hosts or modules during this check.'
-if ! apachectl configtest; then
-  echo 'Apache configuration validation failed; Apache was not reloaded.' >&2
-  exit 1
+for target in $targets; do
+  install -o root -g root -m 0644 \
+    "$sensor_source" \
+    "$target/99-what-changed-attribution.ini"
+  echo "sensor_configuration=$target/99-what-changed-attribution.ini"
+done
+
+systemd_active() {
+  command -v systemctl >/dev/null 2>&1 \
+    && systemctl is-active --quiet "$1" >/dev/null 2>&1
+}
+process_active() {
+  command -v pgrep >/dev/null 2>&1 && pgrep -x "$1" >/dev/null 2>&1
+}
+
+apache_active=0
+if systemd_active apache2.service || systemd_active httpd.service \
+    || process_active apache2 || process_active httpd; then
+  apache_active=1
 fi
-echo 'Apache configuration validation passed.'
-echo 'WhatChanged does not create or modify Apache DocumentRoot directives.'
-if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
-  systemctl reload apache2
-elif systemctl list-unit-files httpd.service >/dev/null 2>&1; then
-  systemctl reload httpd
+nginx_active=0
+if systemd_active nginx.service || process_active nginx; then
+  nginx_active=1
+fi
+
+fpm_versions=
+for fpm_target in /etc/php/*/fpm/conf.d; do
+  [ -d "$fpm_target" ] || continue
+  version=$(printf '%s\n' "$fpm_target" | sed -n 's|^/etc/php/\([^/]*\)/fpm/conf.d$|\1|p')
+  [ -n "$version" ] || continue
+  if systemd_active "php${version}-fpm.service" \
+      || [ -s "/run/php/php${version}-fpm.pid" ] \
+      || process_active "php-fpm${version}"; then
+    fpm_versions="$fpm_versions $version"
+  fi
+done
+rhel_fpm_active=0
+if [ -d /etc/php.d ] && { systemd_active php-fpm.service || process_active php-fpm; }; then
+  rhel_fpm_active=1
+fi
+
+# Validate every active web stack before reloading any process. Existing
+# virtual-host warnings remain visible, but a validation failure is fatal.
+if [ "$apache_active" -eq 1 ]; then
+  echo 'Validating the complete Apache configuration before reloading Apache.'
+  apachectl configtest
+fi
+if [ "$nginx_active" -eq 1 ]; then
+  echo 'Validating the complete nginx configuration before reloading nginx.'
+  nginx -t
+fi
+for version in $fpm_versions; do
+  echo "Validating PHP $version FPM configuration before reloading PHP-FPM."
+  "php-fpm$version" -t
+done
+if [ "$rhel_fpm_active" -eq 1 ]; then
+  echo 'Validating PHP-FPM configuration before reloading PHP-FPM.'
+  php-fpm -t
+fi
+
+if [ "$apache_active" -eq 1 ]; then
+  if systemd_active apache2.service; then
+    systemctl reload apache2
+  elif systemd_active httpd.service; then
+    systemctl reload httpd
+  else
+    apachectl -k graceful
+  fi
+fi
+for version in $fpm_versions; do
+  if systemd_active "php${version}-fpm.service"; then
+    systemctl reload "php${version}-fpm"
+  elif [ -s "/run/php/php${version}-fpm.pid" ]; then
+    kill -USR2 "$(cat "/run/php/php${version}-fpm.pid")"
+  fi
+done
+if [ "$rhel_fpm_active" -eq 1 ]; then
+  if systemd_active php-fpm.service; then
+    systemctl reload php-fpm
+  elif [ -s /run/php-fpm/php-fpm.pid ]; then
+    kill -USR2 "$(cat /run/php-fpm/php-fpm.pid)"
+  fi
+fi
+if [ "$nginx_active" -eq 1 ]; then
+  if systemd_active nginx.service; then
+    systemctl reload nginx
+  else
+    nginx -s reload
+  fi
+fi
+
+if [ "$apache_active" -eq 0 ] && [ "$nginx_active" -eq 0 ] \
+    && [ -z "$fpm_versions" ] && [ "$rhel_fpm_active" -eq 0 ]; then
+  echo 'Sensor configuration installed; no supported web service was active to reload.'
 else
-  echo 'No Apache systemd service was found.' >&2
-  exit 1
+  echo 'WhatChanged administrator request sensor configured for the active web stack.'
 fi

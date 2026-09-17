@@ -2,6 +2,12 @@
 set -eu
 umask 0002
 
+web_server=${FREEPBX_WEB_SERVER:-apache}
+case "$web_server" in
+  apache|nginx) : ;;
+  *) echo "Unsupported FREEPBX_WEB_SERVER: $web_server" >&2; exit 2 ;;
+esac
+
 # Compose must not treat a restarted PBX as ready merely because persistent
 # FreePBX files already exist. Recreate this marker only after every startup
 # repair and module synchronization step has completed.
@@ -39,6 +45,33 @@ fi
 # lab resume safely when FreePBX has partially populated its database/files.
 if [ ! -f /var/www/html/.what-changed-freepbx-ready ] || \
   [ ! -f /etc/freepbx.conf ] || [ ! -f /etc/amportal.conf ]; then
+  # Compose's database health check proves that MariaDB answers inside its own
+  # container. A brand-new bridge can still take another moment before the
+  # application account is reachable from this container. Exercise the exact
+  # host, credentials, and database FreePBX will use before starting its
+  # destructive first-install transaction.
+  database_ready=0
+  attempts=0
+  while [ "$attempts" -lt 60 ]; do
+    if mariadb \
+      --connect-timeout=2 \
+      --host="${FREEPBX_DB_HOST}" \
+      --user="${FREEPBX_DB_USER}" \
+      --password="${FREEPBX_DB_PASSWORD}" \
+      "${FREEPBX_DB_NAME}" \
+      --batch --skip-column-names \
+      --execute='SELECT 1' >/dev/null 2>&1; then
+      database_ready=1
+      break
+    fi
+    attempts=$((attempts + 1))
+    sleep 2
+  done
+  if [ "$database_ready" -ne 1 ]; then
+    echo 'FreePBX database endpoint was not ready after 120 seconds.' >&2
+    exit 1
+  fi
+
   # The FreePBX pm2 module requires its private node_modules path during the
   # installer itself.  Reuse the image-provided package instead of downloading
   # dependencies into this disposable lab on every initialization.
@@ -139,12 +172,17 @@ PY
 
 patch_findmefollow_php82_compatibility
 
-# Packaged FreePBX runs its Apache workers as asterisk so authenticated Apply
-# Config can regenerate files with the same ownership as the CLI. Mirror that
-# production contract in the lab rather than granting www-data broad write
-# access or sudo privileges.
+# Run the selected web PHP worker as asterisk so authenticated Apply Config can
+# regenerate files with the same ownership as the CLI. Mirror FreePBX's normal
+# privilege contract rather than granting www-data broad write access or sudo.
 sed -i 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=asterisk/' /etc/apache2/envvars
 sed -i 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=asterisk/' /etc/apache2/envvars
+if [ "$web_server" = nginx ]; then
+  sed -i 's/^user = .*/user = asterisk/' /etc/php/8.2/fpm/pool.d/www.conf
+  sed -i 's/^group = .*/group = asterisk/' /etc/php/8.2/fpm/pool.d/www.conf
+  sed -i 's/^listen.owner = .*/listen.owner = asterisk/' /etc/php/8.2/fpm/pool.d/www.conf
+  sed -i 's/^listen.group = .*/listen.group = asterisk/' /etc/php/8.2/fpm/pool.d/www.conf
+fi
 [ -f /etc/freepbx.conf ] && chgrp asterisk /etc/freepbx.conf && chmod 640 /etc/freepbx.conf
 [ -f /etc/amportal.conf ] && chgrp asterisk /etc/amportal.conf && chmod 640 /etc/amportal.conf
 chmod -R g+rwX /var/log/asterisk
@@ -157,14 +195,19 @@ mkdir -p /var/lib/php/sessions
 chown asterisk:asterisk /var/lib/php/sessions
 chmod 1733 /var/lib/php/sessions
 
-# Install the value-free authenticated-request sensor in Apache's PHP SAPI.
-# Its dedicated volume is writable by the web worker and readable by the
-# watcher without granting Apache access to the private baseline directory.
+# Install the value-free authenticated-request sensor only in the selected web
+# PHP SAPI. Its dedicated volume is writable by the web worker and readable by
+# the watcher without granting the web server access to the private baseline.
 install -d -m 0755 /usr/local/lib/what-changed-watcher
 install -m 0644 /srv/pendingchanges/deploy/what-changed-request-audit.php \
   /usr/local/lib/what-changed-watcher/what-changed-request-audit.php
+if [ "$web_server" = nginx ]; then
+  sensor_target=/etc/php/8.2/fpm/conf.d
+else
+  sensor_target=/etc/php/8.2/apache2/conf.d
+fi
 install -m 0644 /srv/pendingchanges/deploy/99-what-changed-attribution.ini \
-  /etc/php/8.2/apache2/conf.d/99-what-changed-attribution.ini
+  "$sensor_target/99-what-changed-attribution.ini"
 install -d -o asterisk -g asterisk -m 2770 /var/lib/asterisk/pendingchanges-attribution
 if [ -f /var/lib/asterisk/pendingchanges-attribution/requests.jsonl ]; then
   chown asterisk:asterisk /var/lib/asterisk/pendingchanges-attribution/requests.jsonl
@@ -213,7 +256,7 @@ PY
 sync_ami_manager
 
 # The installer starts Asterisk on first boot, but a recreated lab container
-# needs it started again before Apache exposes configuration modules.
+# needs it started again before the web server exposes configuration modules.
 if ! asterisk -rx 'core show version' >/dev/null 2>&1; then
   cd /usr/src/freepbx
   ./start_asterisk start
@@ -225,7 +268,7 @@ fi
 # resume.  In particular it keeps the framework cache writable by Apache,
 # avoiding a recursive bootstrap failure in the disposable web UI.
 /var/lib/asterisk/bin/fwconsole chown >/dev/null
-# Apache can create freepbx.log before a CLI reload. Keep the shared log
+# A web request can create freepbx.log before a CLI reload. Keep the shared log
 # directory group-inheriting and owned by the common asterisk account.
 find /var/log/asterisk -type d -exec chmod g+rws {} +
 # Create this before Apache can create it with a restrictive umask.  Both web
@@ -235,4 +278,18 @@ chown asterisk:asterisk /var/log/asterisk/freepbx.log
 chmod 664 /var/log/asterisk/freepbx.log
 
 touch /var/www/html/.what-changed-entrypoint-ready
+if [ "$web_server" = nginx ]; then
+  rm -f /etc/nginx/sites-enabled/default
+  ln -sfn /etc/nginx/sites-available/freepbx /etc/nginx/sites-enabled/freepbx
+  sed -i 's/^user .*;/user asterisk;/' /etc/nginx/nginx.conf
+  apachectl -k stop >/dev/null 2>&1 || true
+  if pgrep -x apache2 >/dev/null 2>&1 || pgrep -x httpd >/dev/null 2>&1; then
+    echo 'Apache remained active in the nginx-only lab.' >&2
+    exit 1
+  fi
+  php-fpm8.2 -t
+  nginx -t
+  php-fpm8.2 -D
+  exec nginx -g 'daemon off;'
+fi
 exec apachectl -D FOREGROUND

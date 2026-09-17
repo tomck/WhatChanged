@@ -28,5 +28,5 @@ if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1;
   fi
 fi
 
-echo 'Watcher executables and Apache sensor removed.'
+echo 'Watcher executables and web-PHP sensor removed.'
 echo 'Evidence, /etc/what-changed-watcher.env, and the database account were preserved.'

@@ -3,10 +3,23 @@ set -eu
 
 case "${1:-remove}" in
   remove|purge)
-    rm -f /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini
-    if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1; then
+    rm -f /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini \
+      /etc/php/*/fpm/conf.d/99-what-changed-attribution.ini \
+      /etc/php.d/99-what-changed-attribution.ini
+    if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1 \
+        && systemctl is-active --quiet apache2.service >/dev/null 2>&1; then
       systemctl reload apache2 >/dev/null 2>&1 || true
     fi
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1 \
+        && systemctl is-active --quiet nginx.service >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    for service in /etc/php/*/fpm; do
+      [ -d "$service" ] || continue
+      version=$(basename "$(dirname "$service")")
+      systemctl reload "php${version}-fpm.service" >/dev/null 2>&1 || true
+    done
+    systemctl reload php-fpm.service >/dev/null 2>&1 || true
     systemctl daemon-reload >/dev/null 2>&1 || true
     ;;
 esac
