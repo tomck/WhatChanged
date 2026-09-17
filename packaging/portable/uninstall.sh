@@ -11,7 +11,9 @@ rm -f /etc/systemd/system/what-changed-watcher.service
 rm -f /usr/sbin/what-changed-watcher-configure
 rm -f /usr/sbin/what-changed-watcher-install-sensor
 rm -rf /usr/local/lib/what-changed-watcher
-for sensor in /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini /etc/php.d/99-what-changed-attribution.ini; do
+for sensor in /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini \
+  /etc/php/*/fpm/conf.d/99-what-changed-attribution.ini \
+  /etc/php.d/99-what-changed-attribution.ini; do
   if [ -f "$sensor" ]; then
     rm -f "$sensor"
   fi

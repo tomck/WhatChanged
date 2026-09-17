@@ -40,6 +40,18 @@ Run the complete FreePBX 17 release gate with:
 ./docker/lab-gate.sh
 ```
 
+Run the identical gate through nginx and PHP-FPM, with assertions that Apache
+is stopped and does not serve the GUI, with:
+
+```sh
+./docker/nginx-lab-gate.sh
+```
+
+The nginx fixture listens on `127.0.0.1:8081` under a separate Compose project,
+so it can coexist with the ordinary Apache fixture without sharing PBX state.
+The image still contains the Apache package because FreePBX's upstream Debian
+installer requires it; the nginx gate proves that no Apache process is active.
+
 That single command covers packaging and Module Admin installation, watcher
 unit tests, request-audit behavior, embedded Debian/portable layouts,
 authenticated extension/ring-group/queue fixtures, create/update/delete drift,
@@ -99,7 +111,7 @@ boundary.
 
 `docker/custom-watcher/watcher.py` is the canonical watcher implementation.
 The module packaging program embeds that source with the service, environment,
-database configurator, and Apache request sensor. The root installer chooses
+database configurator, and web-PHP request sensor. The root installer chooses
 an operating-system filesystem layout; Module Admin never performs those
 privileged changes implicitly.
 
@@ -108,7 +120,7 @@ seconds. A bounded full state scan runs on a transition/event and at most every
 30 seconds while idle. The heavier module-tree scan runs every five minutes or
 after observed Module Admin work.
 
-The Apache sensor records only authenticated username, timestamp, page/module
+The web-PHP sensor records only authenticated username, timestamp, page/module
 action, method, and HTTP status for successful administrative writes. It must
 never record form values, headers, cookies, sessions, or credentials.
 
@@ -140,7 +152,7 @@ history. Validate the Module Admin archive in the disposable lab:
 
 ```sh
 ./docker/validate-module-archive.sh \
-  dist/pendingchanges-17.0.2.0.tgz
+  dist/pendingchanges-17.0.2.2.tgz
 ```
 
 The standalone watcher packages are optional for users because the module now

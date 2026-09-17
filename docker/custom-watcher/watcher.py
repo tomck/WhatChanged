@@ -132,7 +132,7 @@ ATTRIBUTION_TEXT_FIELDS = (
 )
 
 def request_events(limit=2000):
-    """Read bounded, value-free request breadcrumbs produced by Apache PHP."""
+    """Read bounded, value-free request breadcrumbs produced by web PHP."""
     if not ATTRIBUTION_LOG.is_file():
         return []
     try:

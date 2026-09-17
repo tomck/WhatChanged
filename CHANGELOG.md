@@ -1,5 +1,17 @@
 # Changelog
 
+## Module 17.0.2.2 / watcher 0.1.8
+
+- Support authenticated-request attribution on nginx with PHP-FPM as well as
+  Apache, validating and safely reloading only active supported web services.
+- Keep the core watcher usable with an explicit attribution limitation when no
+  supported web PHP SAPI is available.
+- Add a complete FreePBX 17 nginx/PHP-FPM release gate that runs the same
+  authenticated fixtures, breaker scenarios, redaction, and recovery checks
+  while proving that Apache is stopped and does not serve requests.
+- Preserve Docker lab restart reliability by waiting for FreePBX's exact
+  application database endpoint before a first-install transaction.
+
 ## Module 17.0.2.1 / watcher 0.1.7
 
 - Record the embedded and installed watcher payload versions and show whether

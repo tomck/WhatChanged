@@ -169,9 +169,9 @@ for layout in debian portable; do
   test -s "$root$library/what-changed-request-audit.php"
   test -x "$root/usr/sbin/what-changed-watcher-configure"
   test -x "$root/usr/sbin/what-changed-watcher-install-sensor"
-  grep -q 'Validating the complete Apache configuration on this host' \
+  grep -q '/etc/php/\*/fpm/conf.d' \
     "$root/usr/sbin/what-changed-watcher-install-sensor"
-  grep -q 'WhatChanged does not create or modify Apache DocumentRoot directives' \
+  grep -q 'administrator request attribution is unavailable' \
     "$root/usr/sbin/what-changed-watcher-install-sensor"
   test -s "$root$service"
   test -s "$root/etc/what-changed-watcher.env"

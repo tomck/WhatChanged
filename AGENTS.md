@@ -15,7 +15,7 @@ These rules apply to the entire repository.
   account caused a reported state change. Preserve that qualification anywhere
   attribution is displayed or documented.
 - Do not patch the FreePBX framework. Integrate through supported module,
-  database, filesystem, Apache sensor, and watcher boundaries.
+  database, filesystem, web-PHP sensor, and watcher boundaries.
 - Keep credentials, form values, cookies, sessions, private keys, call data,
   and other secrets out of logs, fixtures, feedback ledgers, test output, and
   committed files. Redact or installation-key fingerprint sensitive values
@@ -82,6 +82,8 @@ These rules apply to the entire repository.
   by the test unless the user explicitly authorizes a full reset.
 - Before a release, run the complete FreePBX 17 gate:
   `./docker/lab-gate.sh`.
+- Run `./docker/nginx-lab-gate.sh` to execute the same FreePBX 17 gate through
+  nginx and PHP-FPM while asserting that no Apache process is active.
 - Run `./docker/legacy-compatibility-gate.sh` for PHP 5.6, 7.4, and 8.2 syntax,
   metadata, page-rendering, security, and request-sensor checks.
 - Run `./docker/legacy-real-image-gate.sh` to install the identical archive and

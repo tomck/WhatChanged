@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.2.1**.
+candidate is **17.0.2.2**.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -21,7 +21,7 @@ candidate is **17.0.2.1**.
 
 ## Install
 
-Download `pendingchanges-17.0.2.1.tgz` from the matching GitHub release,
+Download `pendingchanges-17.0.2.2.tgz` from the matching GitHub release,
 copy it to the PBX, and run:
 
 ```sh
@@ -32,7 +32,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.1.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.2.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -43,12 +43,14 @@ fi
 
 The module archive contains the watcher; there is no required second download.
 The last command is intentionally explicit because it installs a system service
-and an Apache request sensor as root. It detects Debian-family and
+and a web-request sensor as root. It detects Debian-family and
 RHEL/CentOS/Sangoma-family systems and chooses the corresponding service paths.
-It never runs Apply Config or reloads Asterisk. Installing the request sensor
-validates the complete Apache configuration and reloads Apache. Apache may
-print warnings from existing virtual hosts or modules during that check;
-WhatChanged does not create or modify Apache `DocumentRoot` directives.
+It never runs Apply Config or reloads Asterisk. On Apache it validates and
+reloads Apache; on nginx/PHP-FPM it validates and reloads nginx and the active
+PHP-FPM service. Existing host warnings remain visible. WhatChanged does not
+create or modify web-server virtual hosts or `DocumentRoot` directives. If no
+supported web PHP SAPI is present, the core watcher remains usable but inferred
+administrator attribution is explicitly unavailable.
 
 The watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL, a
 MariaDB/MySQL client, and the normal `asterisk` service account. For a local
@@ -85,9 +87,9 @@ sudo -u asterisk \
 ```
 
 The installer check reports `payload_state=current` when its bundled and
-installed watcher versions match. The CLI doctor can confirm that the Apache
+installed watcher versions match. The CLI doctor can confirm that the web-PHP
 sensor is configured, but PHP CLI
-cannot prove that an Apache web request loaded it. Confirm the runtime line
+cannot prove that a web request loaded it. Confirm the runtime line
 **Loaded for this FreePBX web request** on the report page.
 It also reports the bundled and installed watcher versions. If they do not
 match, it prints the exact full-path `install-watcher` command needed to update
@@ -195,7 +197,7 @@ sudo "$freepbx_webroot/admin/modules/pendingchanges/bin/uninstall-watcher"
 sudo /var/lib/asterisk/bin/fwconsole ma uninstall pendingchanges
 ```
 
-The uninstaller removes the service and Apache sensor but intentionally retains
+The uninstaller removes the service and web-PHP sensor but intentionally retains
 the local evidence, `/etc/what-changed-watcher.env`, and the SELECT-only database
 account so removal cannot silently erase forensic material. The retained items
 can be reviewed and removed separately if they are no longer required.

@@ -2,7 +2,7 @@
 /**
  * WhatChanged authenticated-request breadcrumb sensor.
  *
- * This file is loaded only by Apache's PHP configuration. It records bounded,
+ * This file is loaded only by the active web PHP SAPI. It records bounded,
  * value-free metadata for successful authenticated FreePBX write requests so
  * the state watcher can offer cautious actor attribution. It never records
  * form values, cookies, session identifiers, credentials, or HTTP headers.

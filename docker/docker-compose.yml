@@ -23,6 +23,7 @@ services:
       database:
         condition: service_healthy
     environment:
+      FREEPBX_WEB_SERVER: ${FREEPBX_WEB_SERVER:-apache}
       FREEPBX_DB_HOST: database
       FREEPBX_DB_USER: asterisk
       FREEPBX_DB_PASSWORD: local-freepbx

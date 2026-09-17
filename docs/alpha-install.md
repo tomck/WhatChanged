@@ -2,17 +2,18 @@
 
 This alpha supports FreePBX 14–17 with one shared module archive. It is an
 observer: installation, configuration, and removal do not Apply Config or
-reload Asterisk. Installing the attribution sensor validates Apache's complete
-host configuration and then reloads Apache. Apache may print warnings from
-existing virtual hosts or modules during that validation. WhatChanged does not
-create or modify Apache `DocumentRoot` directives; `Syntax OK` followed by the
-installer's validation-passed message means the reload preflight succeeded.
+reload Asterisk. Installing the attribution sensor validates and reloads each
+active supported web stack: Apache, or nginx with PHP-FPM. Existing host
+warnings remain visible during validation. WhatChanged does not create or
+modify web-server virtual hosts or `DocumentRoot` directives. If no supported
+web PHP SAPI is present, the core watcher remains available but inferred
+administrator attribution is explicitly unavailable.
 
 ## Before installing
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.2.1.tgz`
+   - `pendingchanges-17.0.2.2.tgz`
    - `SHA256SUMS` and its detached signature, if supplied.
 3. Check the SHA-256 checksum and detached GPG signature using the published
    project public key. A Debian package is also signed by an APT repository
@@ -43,7 +44,7 @@ freepbx_webroot=$(
 module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
 if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.1.tgz -C "$freepbx_webroot/admin/modules"
+  sudo tar -xzf pendingchanges-17.0.2.2.tgz -C "$freepbx_webroot/admin/modules"
   sudo chown -R asterisk:asterisk "$module_dir"
   sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
   sudo "$module_dir/bin/install-watcher"
@@ -95,10 +96,10 @@ sudo -u asterisk \
 
 The installer check reports `payload_state=current` when its bundled and
 installed watcher versions match. The command-line doctor reports
-`sensor_configured=yes` when it finds the
-Apache PHP sensor configuration. It deliberately reports
-`sensor_loaded=not_applicable_cli`: PHP CLI does not load Apache's PHP
-configuration and therefore cannot prove that the sensor ran in a web request.
+`sensor_configured=yes` when it finds an Apache or PHP-FPM sensor
+configuration. It deliberately reports `sensor_loaded=not_applicable_cli`:
+PHP CLI does not load the web SAPI configuration and therefore cannot prove
+that the sensor ran in a web request.
 The FreePBX page is the authoritative runtime check.
 The doctor also reports `watcher_payload_current=yes` when the installed
 watcher matches the module. Otherwise it prints `watcher_update_command` with

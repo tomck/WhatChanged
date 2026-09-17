@@ -23,7 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf 
 RUN apt-get update && apt-get install -y --no-install-recommends gpg && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://mirror.freepbx.org/modules/packages/freepbx/freepbx-17.0-latest.tgz -o freepbx.tgz && \
     tar -xzf freepbx.tgz
+# The default lab still runs Apache. These late-layer packages let the isolated
+# nginx profile replace the serving stack without invalidating the expensive
+# cached Asterisk and FreePBX build layers.
+RUN apt-get update && apt-get install -y --no-install-recommends nginx php-fpm && \
+    rm -rf /var/lib/apt/lists/*
 COPY entrypoint.sh /usr/local/bin/freepbx-lab
+COPY nginx-freepbx.conf /etc/nginx/sites-available/freepbx
 RUN chmod +x /usr/local/bin/freepbx-lab
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/freepbx-lab"]

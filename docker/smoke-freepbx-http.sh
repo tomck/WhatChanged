@@ -69,13 +69,22 @@ assert not missing
 # pass. Remove only the three lab-owned objects, apply that clean state, then
 # use it as the baseline for the real authenticated creation flow.
 FREEPBX_FIXTURE_ACTION=cleanup "$root_dir/docker/seed-freepbx.sh"
-wait_pending
-# `fwconsole reload` can complete a few seconds after returning in this lab.
-# Waiting first for the removal to be observed prevents a stale clean status
-# from being mistaken for the new post-reload baseline.
-$docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
-sleep 8
-wait_clean
+cleanup_reload=$($docker_cmd exec -T database sh -lc \
+  'mariadb -u asterisk -plocal-freepbx asterisk -N -e "SELECT value FROM admin WHERE variable='\''need_reload'\'';"')
+if [ "$cleanup_reload" = true ]; then
+  wait_pending
+  # `fwconsole reload` can complete a few seconds after returning in this lab.
+  # Waiting first for the removal to be observed prevents a stale clean status
+  # from being mistaken for the new post-reload baseline.
+  $docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
+  sleep 8
+  wait_clean
+else
+  # A brand-new isolated Compose project has no prior fixtures to remove. Its
+  # already-clean trusted baseline is the correct starting state; requiring a
+  # synthetic reload here made first-run gates fail before creating anything.
+  wait_clean
+fi
 
 "$root_dir/docker/seed-freepbx.sh"
 

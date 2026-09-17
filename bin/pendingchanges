@@ -19,9 +19,11 @@ try {
         $payloadCurrent = !empty($payload['current']);
         $sensorConfigured = false;
         $sensorCandidates = array('/etc/php.d/99-what-changed-attribution.ini');
-        $debianCandidates = glob('/etc/php/*/apache2/conf.d/99-what-changed-attribution.ini');
-        if (is_array($debianCandidates)) {
-            $sensorCandidates = array_merge($sensorCandidates, $debianCandidates);
+        foreach (array('apache2', 'fpm') as $webSapi) {
+            $debianCandidates = glob('/etc/php/*/' . $webSapi . '/conf.d/99-what-changed-attribution.ini');
+            if (is_array($debianCandidates)) {
+                $sensorCandidates = array_merge($sensorCandidates, $debianCandidates);
+            }
         }
         foreach ($sensorCandidates as $sensorCandidate) {
             if (!is_readable($sensorCandidate)) {
