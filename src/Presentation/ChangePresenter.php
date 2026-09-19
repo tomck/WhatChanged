@@ -80,6 +80,8 @@ class ChangePresenter
         $labels = array(
             'fax_details' => 'Fax Configuration',
             'incoming' => 'Inbound Routes',
+            'freepbx_settings' => 'FreePBX settings',
+            'modules' => 'FreePBX modules',
             'userman_users' => 'User Management users',
             'userman_users_settings' => 'User Management / UCP settings',
         );
@@ -133,8 +135,9 @@ class ChangePresenter
             'kind' => $kind,
             'symbol' => $symbols[$kind],
             'title' => $title,
-            'summary' => 'Evidence',
+            'summary' => $kind === 'updated' ? 'Raw evidence' : 'Evidence',
             'details' => $details,
+            'fieldRows' => $this->fieldRows($table, $kind, $details),
         );
     }
 
@@ -148,11 +151,31 @@ class ChangePresenter
             'title' => $item['id'] . ($item['name'] !== '' ? ' — ' . $item['name'] : ''),
             'summary' => 'Extension and endpoint evidence',
             'details' => $item['evidence'],
+            'fieldRows' => array(),
         );
     }
 
     private function identity($table, array $row)
     {
+        if ($table === 'modules') {
+            $module = (string) (isset($row['modulename']) ? $row['modulename'] : '');
+            if ($module === '') {
+                $module = (string) (isset($row['name']) ? $row['name'] : '');
+            }
+            if ($module !== '') {
+                $name = (string) (isset($row['name']) ? $row['name'] : '');
+                return 'Module: ' . $module
+                    . ($name !== '' && $name !== $module ? ' — ' . $name : '');
+            }
+        }
+
+        if ($table === 'freepbx_settings') {
+            $name = (string) (isset($row['name']) ? $row['name'] : '');
+            if ($name !== '') {
+                return 'Setting: ' . $this->fieldLabel($table, $name);
+            }
+        }
+
         if ($table === 'userman_users') {
             $username = (string) (isset($row['username']) ? $row['username'] : '');
             $id = (string) (isset($row['id']) ? $row['id'] : '');
@@ -184,6 +207,96 @@ class ChangePresenter
         }
 
         return $table . ' record';
+    }
+
+    public function fieldRows($table, $kind, array $details)
+    {
+        $rows = array();
+        foreach ($details as $field => $value) {
+            $before = '';
+            $after = '';
+            if ($kind === 'updated' && is_array($value)
+                && (array_key_exists('before', $value) || array_key_exists('after', $value))) {
+                $before = array_key_exists('before', $value) ? $value['before'] : '';
+                $after = array_key_exists('after', $value) ? $value['after'] : '';
+            } elseif ($kind === 'added') {
+                $after = $value;
+            } else {
+                $before = $value;
+            }
+
+            $rows[] = array(
+                'field' => (string) $field,
+                'label' => $this->fieldLabel($table, $field),
+                'description' => $this->fieldDescription($table, $field),
+                'before' => $this->displayValue($before),
+                'after' => $this->displayValue($after),
+            );
+        }
+
+        return $rows;
+    }
+
+    public function displayValue($value)
+    {
+        if (is_array($value) || is_object($value)) {
+            return json_encode($value, JSON_UNESCAPED_SLASHES);
+        }
+
+        if ($value === null) {
+            return '—';
+        }
+
+        if ($value === '') {
+            return '(empty)';
+        }
+
+        return (string) $value;
+    }
+
+    public function fieldLabel($table, $field)
+    {
+        $labels = array(
+            'freepbx_settings' => array(
+                'name' => 'Setting key',
+                'value' => 'Configured value',
+                'hidden' => 'Hidden from menus',
+                'emptyok' => 'Empty value allowed',
+            ),
+            'modules' => array(
+                'modulename' => 'Module identifier',
+                'name' => 'Module name',
+                'version' => 'Installed version',
+                'enabled' => 'Enabled',
+                'type' => 'Module type',
+                'status' => 'Module status',
+            ),
+        );
+        if (isset($labels[$table][$field])) {
+            return $labels[$table][$field];
+        }
+
+        return ucwords(str_replace('_', ' ', (string) $field));
+    }
+
+    public function fieldDescription($table, $field)
+    {
+        $descriptions = array(
+            'freepbx_settings' => array(
+                'name' => 'The internal FreePBX key for this setting.',
+                'hidden' => 'Whether FreePBX hides this setting from ordinary menus.',
+                'emptyok' => 'Whether FreePBX accepts an empty value for this setting.',
+                'value' => 'The configured value for this setting.',
+            ),
+            'modules' => array(
+                'modulename' => 'The stable identifier FreePBX uses for this module.',
+                'name' => 'The human-readable module name.',
+                'version' => 'The module version registered with FreePBX.',
+                'enabled' => 'Whether FreePBX currently considers the module enabled.',
+            ),
+        );
+
+        return isset($descriptions[$table][$field]) ? $descriptions[$table][$field] : '';
     }
 
     private function faxSettingLabel($key)

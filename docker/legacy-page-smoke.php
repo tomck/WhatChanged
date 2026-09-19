@@ -90,6 +90,27 @@ namespace {
                             'fields' => ['name' => ['before' => 'Before', 'after' => 'After']],
                         ]],
                     ],
+                    'modules' => [
+                        'added' => [],
+                        'removed' => [],
+                        'updated' => [[
+                            'key' => '2',
+                            'identity' => ['id' => '2', 'modulename' => 'core'],
+                            'fields' => ['version' => ['before' => '17.0.32', 'after' => '17.0.33']],
+                        ]],
+                    ],
+                    'freepbx_settings' => [
+                        'added' => [],
+                        'removed' => [],
+                        'updated' => [[
+                            'key' => 'hidden',
+                            'identity' => ['name' => 'hidden'],
+                            'fields' => [
+                                'hidden' => ['before' => 1, 'after' => 0],
+                                'emptyok' => ['before' => 1, 'after' => 0],
+                            ],
+                        ]],
+                    ],
                 ],
                 'astdb' => [
                     'added' => [],
@@ -150,7 +171,7 @@ namespace {
     $html = ob_get_clean();
     $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
         ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
-        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin'];
+        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value'];
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);

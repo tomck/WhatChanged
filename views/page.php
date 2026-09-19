@@ -8,6 +8,14 @@
   .pendingchanges-card h3 { margin:0; padding:10px 14px; background:#e7f3ef; font-size:18px; }
   .pendingchanges-change { display:grid; grid-template-columns:28px minmax(200px, 1fr) auto; gap:10px; align-items:center; padding:9px 14px; border-top:1px solid #e4ece9; }
   .pendingchanges-change details { grid-column:2 / 4; }
+  .pendingchanges-fields { grid-column:2 / 4; overflow-x:auto; }
+  .pendingchanges-diff { margin:0; background:#fff; }
+  .pendingchanges-diff th, .pendingchanges-diff td { vertical-align:top !important; }
+  .pendingchanges-diff th:first-child { width:34%; }
+  .pendingchanges-diff code { display:block; color:#65756f; font-size:11px; font-weight:normal; margin-top:3px; }
+  .pendingchanges-diff small { display:block; color:#65756f; font-weight:normal; margin-top:4px; }
+  .pendingchanges-before { color:#9b2634; background:#fff1f2; font-family:monospace; white-space:pre-wrap; }
+  .pendingchanges-after { color:#176b2c; background:#effaf1; font-family:monospace; white-space:pre-wrap; }
   .pendingchanges-symbol { font-size:22px; font-weight:bold; text-align:center; }
   .pendingchanges-added .pendingchanges-symbol { color:#218739; }
   .pendingchanges-removed .pendingchanges-symbol { color:#bb2d3b; }

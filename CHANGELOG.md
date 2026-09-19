@@ -1,5 +1,14 @@
 # Changelog
 
+## Module 17.0.2.5 / watcher 0.1.9
+
+- Replace numeric module and settings headings with meaningful module names and
+  setting labels, while retaining the raw database key in the evidence view.
+- Render changed fields as readable before/after rows with short explanations
+  for module versions and FreePBX settings such as `hidden` and `emptyok`.
+- Keep raw evidence expandable beneath the presentation so the friendly view
+  does not reduce auditability.
+
 ## Module 17.0.2.3 / watcher 0.1.9
 
 - Observe FreePBX Core's `incoming` table so staged inbound-route/DID
