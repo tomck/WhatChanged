@@ -59,6 +59,10 @@ chmod 0644 "$stage/usr/lib/what-changed-watcher/VERSION" \
 chmod 0755 "$stage/DEBIAN/postinst" "$stage/DEBIAN/prerm" "$stage/DEBIAN/postrm"
 chmod 0755 "$stage/usr/sbin/what-changed-watcher-configure" \
   "$stage/usr/sbin/what-changed-watcher-install-sensor"
+# The checkout is commonly on a restrictive umask.  Debian requires the
+# control directory to be traversable, and package payload directories should
+# remain installable regardless of the source checkout's directory modes.
+find "$stage" -type d -exec chmod 0755 {} +
 dpkg-deb --root-owner-group --build "$stage" "/tmp/$archive"
 SH
 mkdir -p "$root_dir/dist"
