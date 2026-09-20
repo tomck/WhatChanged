@@ -75,6 +75,48 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
    signal and compare it with the change record before an operator applies
    unrelated pending changes.
 
+## Redaction key lifecycle
+
+Secret-looking values are never persisted in cleartext. Before persistence
+they are replaced with an installation-keyed `HMAC-SHA256` fingerprint
+(`[protected hmac-sha256:…]`); the public report shows only `[redacted]`.
+The key lives at `$ASTVARLIB/pendingchanges-redaction.key`, owned by the
+Asterisk service account with mode `0600`. It is created automatically on the
+first baseline snapshot; no manual step is needed on install.
+
+- Check it with `sudo -u asterisk /var/lib/asterisk/bin/pendingchanges doctor`
+  (`redaction_key_state`, `redaction_key_path`, `redaction_key_detail`,
+  `redaction_key_remedy`). `ok` and `absent` (pre-first-snapshot) are normal.
+  `invalid` or `unreadable` fails doctor (exit 2); `insecure` (group/other
+  readable — fix with `chmod 0600` as root) warns.
+- **Loss is not exposure.** Fingerprints are one-way; a lost key reveals no
+  secrets. It does break comparability: every protected field will report as
+  changed exactly once against the new key. Rotate deliberately instead:
+  as root, move the key aside, confirm a clean Apply Config, then seed a
+  fresh baseline. Never delete the key to "fix" drift — re-seed after Apply.
+- **Backups containing the key are sensitive.** Anyone holding the key plus a
+  baseline can test guesses against fingerprints offline (slow, but possible).
+  Encrypt pilot backups and restrict who can read them.
+
+## Backup, restore, and reinstall
+
+- The Framework-side baseline lives in module kvstore and rides a FreePBX
+  module backup when the module is included. The watcher state directory
+  (`pendingchanges-watcher/`: `baseline.json`, `runtime.json`, `status.json`,
+  `feedback.jsonl`), the attribution log, the watcher environment file, and
+  the redaction key are **outside** FreePBX Backup. Either back up
+  `/var/lib/asterisk/pendingchanges-*` and the key alongside the PBX backup,
+  or plan to re-seed after restore.
+- After a restore, run `doctor` and require the same three signals as a fresh
+  install (Healthy, current snapshot, verified continuity). A restored
+  baseline without its original redaction key is not comparable: perform a
+  reviewed Apply Config and seed fresh rather than trusting the old
+  comparison.
+- Uninstalling the module deliberately retains the watcher environment,
+  retained evidence, and the SELECT-only database account so a final report
+  survives removal. Remove those by hand (`bin/uninstall-watcher`) only under
+  local retention policy.
+
 ## Rollback
 
 Stop the watcher and remove the module through Module Admin. Preserve the

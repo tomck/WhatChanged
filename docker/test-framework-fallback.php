@@ -55,5 +55,37 @@ namespace {
         throw new RuntimeException('Framework diff exposed a protected fingerprint');
     }
 
+    // Redaction key lifecycle is read-only: absent before the first snapshot,
+    // ok with owner-only permissions, insecure when group/other-readable,
+    // invalid when corrupt — each with an operator remedy. The unreadable
+    // state cannot be simulated as root and is covered by inspection.
+    $keyDir = sys_get_temp_dir() . '/pendingchanges-keystatus-' . getmypid();
+    @mkdir($keyDir, 0700, true);
+    $GLOBALS['amp_conf']['ASTVARLIBDIR'] = $keyDir;
+    $keyPath = $keyDir . '/pendingchanges-redaction.key';
+    $keyReport = $redactorInstance->keyStatus();
+    if ($keyReport['state'] !== 'absent' || $keyReport['path'] !== $keyPath) {
+        throw new RuntimeException('Missing redaction key was not reported as absent');
+    }
+    file_put_contents($keyPath, str_repeat('c', 64));
+    chmod($keyPath, 0600);
+    $keyReport = $redactorInstance->keyStatus();
+    if ($keyReport['state'] !== 'ok') {
+        throw new RuntimeException('Valid redaction key was not reported as ok');
+    }
+    chmod($keyPath, 0644);
+    $keyReport = $redactorInstance->keyStatus();
+    if ($keyReport['state'] !== 'insecure') {
+        throw new RuntimeException('Group-readable redaction key was not reported as insecure');
+    }
+    file_put_contents($keyPath, 'not-a-key');
+    chmod($keyPath, 0600);
+    $keyReport = $redactorInstance->keyStatus();
+    if ($keyReport['state'] !== 'invalid' || $keyReport['remedy'] === '') {
+        throw new RuntimeException('Corrupt redaction key was not reported as invalid with a remedy');
+    }
+    unlink($keyPath);
+    rmdir($keyDir);
+
     echo "framework fallback security checks passed\n";
 }

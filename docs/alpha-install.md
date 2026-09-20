@@ -122,6 +122,9 @@ The FreePBX page is the authoritative runtime check.
 The doctor also reports `watcher_payload_current=yes` when the installed
 watcher matches the module. Otherwise it prints `watcher_update_command` with
 the exact full command to run.
+It also reports `redaction_key_state`: `ok` (or `absent` before the first
+snapshot) is normal; `invalid` or `unreadable` fails doctor with exit 2 and
+prints `redaction_key_remedy` with the exact next step.
 
 In FreePBX, open **Reports → Pending Changes Tripwire**. The release archive
 contains `module.sig`. Until the maintainer's key is certified by Sangoma, a

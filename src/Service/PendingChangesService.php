@@ -12,9 +12,29 @@ use FreePBX\modules\Pendingchanges\Watcher\Probe;
 
 class PendingChangesService
 {
+    /**
+     * Watcher-covered tables the framework-only fallback does not snapshot.
+     * This is the documented delta between the external watcher's
+     * DEFAULT_WATCH_TABLES (docker/custom-watcher/watcher.py) and the BMO
+     * WATCH_TABLES list (Pendingchanges.class.php). The parity gate
+     * (docker/test-table-parity.php) fails if either side drifts without
+     * updating this list, so a watcher-less pilot can never silently claim
+     * full coverage.
+     */
+    const FRAMEWORK_FALLBACK_UNCOVERED_TABLES = array(
+        'incoming',
+        'freepbx_settings',
+        'outbound_route_patterns',
+        'outbound_route_sequence',
+        'outbound_route_trunks',
+        'sipsettings',
+        'kvstore_Sipsettings',
+    );
+
     private $database;
     private $tables;
     private $paths;
+    private $redactor;
     private $baseline;
     private $databaseSnapshotter;
     private $fileSnapshotter;
@@ -34,6 +54,7 @@ class PendingChangesService
         $this->paths = new PathResolver();
 
         $redactor = new Redactor($this->paths);
+        $this->redactor = $redactor;
         $this->baseline = new BaselineRepository(
             $module,
             $database,
@@ -141,6 +162,11 @@ class PendingChangesService
     public function differ()
     {
         return $this->differ;
+    }
+
+    public function redactionKeyStatus()
+    {
+        return $this->redactor->keyStatus();
     }
 
     private function watcherStatus(array $watcher, array $health)
@@ -256,6 +282,7 @@ class PendingChangesService
             'coverage' => array(
                 'database_tables' => $this->tables,
                 'database_exclusions' => array('modules.modulename=pendingchanges'),
+                'framework_fallback_uncovered_tables' => self::FRAMEWORK_FALLBACK_UNCOVERED_TABLES,
                 'astdb_families' => array(),
                 'generated_files' => $this->paths->asteriskConfigRoot() . '/*.conf',
                 'module_release_markers' => 'module.xml and module.sig for all modules except pendingchanges',

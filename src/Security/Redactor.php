@@ -89,6 +89,58 @@ class Redactor
         return $row;
     }
 
+    /**
+     * Read-only inspection of the installation redaction key. This method
+     * never creates, rotates, or repairs the key: absence simply means no
+     * baseline snapshot has needed one yet. An invalid or unreadable key is
+     * a loud failure because snapshots cannot protect secrets without it.
+     */
+    public function keyStatus()
+    {
+        $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-redaction.key';
+        if (!file_exists($path)) {
+            return array(
+                'state' => 'absent',
+                'path' => $path,
+                'detail' => 'No redaction key exists yet; one is created automatically on the next baseline snapshot.',
+                'remedy' => 'No action required. Seed an applied baseline to create it.',
+            );
+        }
+        if (!is_readable($path)) {
+            return array(
+                'state' => 'unreadable',
+                'path' => $path,
+                'detail' => 'The redaction key exists but cannot be read by this process; snapshots cannot protect secrets.',
+                'remedy' => 'As root, confirm ownership by the Asterisk service account with mode 0600, then re-run doctor.',
+            );
+        }
+        $encoded = @file_get_contents($path);
+        if (!is_string($encoded) || !preg_match('/^[a-f0-9]{64}$/', trim($encoded))) {
+            return array(
+                'state' => 'invalid',
+                'path' => $path,
+                'detail' => 'The redaction key is not a 64-character hex value; protected baselines cannot be verified against it.',
+                'remedy' => 'Follow the redaction key rotation procedure, then seed a fresh baseline after a clean Apply Config.',
+            );
+        }
+        $permissions = @fileperms($path);
+        if ($permissions !== false && ($permissions & 0077) !== 0) {
+            return array(
+                'state' => 'insecure',
+                'path' => $path,
+                'detail' => 'The redaction key is readable beyond its owner; the 0600 permission split is not intact.',
+                'remedy' => 'As root, run chmod 0600 on the key path, then re-run doctor.',
+            );
+        }
+
+        return array(
+            'state' => 'ok',
+            'path' => $path,
+            'detail' => 'A valid installation redaction key is present with owner-only permissions.',
+            'remedy' => '',
+        );
+    }
+
     private function redactionKey()
     {
         if (is_string($this->redactionKeyCache) && strlen($this->redactionKeyCache) >= 32) {

@@ -12,6 +12,8 @@ try {
         $result = $service->feedback();
     } elseif ($command === 'doctor') {
         $status = $service->status();
+        $keyStatus = $service->redactionKeyStatus();
+        $keyState = isset($keyStatus['state']) ? $keyStatus['state'] : 'unknown';
         $health = isset($status['watcher_health']) && is_array($status['watcher_health']) ? $status['watcher_health'] : array();
         $payload = isset($health['payload']) && is_array($health['payload'])
             ? $health['payload']
@@ -61,6 +63,9 @@ try {
                 isset($payload['installed_version']) ? $payload['installed_version'] : 'unknown'
             ),
             'watcher_payload_current=' . ($payloadCurrent ? 'yes' : 'no'),
+            'redaction_key_state=' . $keyState,
+            'redaction_key_path=' . (isset($keyStatus['path']) ? $keyStatus['path'] : 'unknown'),
+            'redaction_key_detail=' . (isset($keyStatus['detail']) ? $keyStatus['detail'] : ''),
         );
         if (isset($health['observation_age_seconds'])) {
             $lines[] = 'observation_age_seconds=' . (int) $health['observation_age_seconds'];
@@ -82,7 +87,11 @@ try {
         echo implode(PHP_EOL, $lines) . PHP_EOL;
         $trusted = isset($status['baseline_provenance']['state'])
             && $status['baseline_provenance']['state'] === 'trusted';
-        exit(empty($status['data_current']) || !$trusted || !$payloadCurrent ? 2 : 0);
+        $keyBroken = $keyState === 'invalid' || $keyState === 'unreadable';
+        if (!empty($keyStatus['remedy']) && ($keyBroken || $keyState === 'insecure' || $keyState === 'absent')) {
+            echo 'redaction_key_remedy=' . $keyStatus['remedy'] . PHP_EOL;
+        }
+        exit(empty($status['data_current']) || !$trusted || !$payloadCurrent || $keyBroken ? 2 : 0);
     } else {
         throw new RuntimeException('Usage: pendingchanges [status|seed|feedback|doctor]');
     }
