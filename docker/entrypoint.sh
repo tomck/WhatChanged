@@ -214,6 +214,15 @@ if [ -f /var/lib/asterisk/pendingchanges-attribution/requests.jsonl ]; then
   chmod 0640 /var/lib/asterisk/pendingchanges-attribution/requests.jsonl
 fi
 
+# Debian's Apache package leaves its stock `index.html` in the FreePBX
+# document root. In Apache mode that page wins over FreePBX's index.php and
+# makes the lab look broken even though /admin is healthy. Remove only the
+# recognizable Debian placeholder; never delete a real application index.
+if [ "$web_server" = apache ] && [ -f /var/www/html/index.html ] && \
+  grep -q 'Apache2 Debian Default Page' /var/www/html/index.html; then
+  rm -f /var/www/html/index.html
+fi
+
 # FreePBX creates its AMI credentials during installation.  On a resumed lab,
 # the named Asterisk configuration volume can otherwise retain an older
 # manager.conf account, leaving the web UI unable to connect to Asterisk.

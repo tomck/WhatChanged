@@ -23,7 +23,11 @@ services:
       database:
         condition: service_healthy
     environment:
-      FREEPBX_WEB_SERVER: ${FREEPBX_WEB_SERVER:-apache}
+      # The browser-facing disposable lab uses nginx by default. Apache remains
+      # available as an explicit compatibility profile via
+      # FREEPBX_WEB_SERVER=apache, but it must not accidentally expose Debian's
+      # stock default page when the lab is opened at localhost:8080.
+      FREEPBX_WEB_SERVER: ${FREEPBX_WEB_SERVER:-nginx}
       FREEPBX_DB_HOST: database
       FREEPBX_DB_USER: asterisk
       FREEPBX_DB_PASSWORD: local-freepbx
