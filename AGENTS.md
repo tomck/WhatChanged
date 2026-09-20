@@ -43,6 +43,10 @@ These rules apply to the entire repository.
 - Keep user-facing commands copyable and complete. Documentation should state
   prerequisites, expected outcomes, verification steps, limitations, and a
   reversible recovery or uninstall path.
+- When observing a production PBX (as opposed to a disposable lab), never Apply
+  Config, reload Asterisk, or reseed/reset the baseline. Snapshot the baseline
+  hash before and after, preserve evidence, and keep timestamped rollback
+  copies so installing the observer cannot silently alter what it measures.
 
 ## Product boundaries
 
@@ -62,6 +66,9 @@ These rules apply to the entire repository.
   and other secrets out of logs, fixtures, feedback ledgers, test output, and
   committed files. Redact or installation-key fingerprint sensitive values
   before persistence.
+- Do not add a generic discard, revert, or undo path. Reversing arbitrary
+  FreePBX records safely requires module-specific dependency handling, and any
+  reversal must never overwrite evidence or undo unrelated work.
 
 ## Supported versions and packaging
 
@@ -105,12 +112,26 @@ These rules apply to the entire repository.
 
 - The watcher database account must remain local and SELECT-only.
 - Exclude module-owned state and known volatile fields from drift so the tool
-  does not report its own observations as configuration changes.
+  does not report its own observations as configuration changes. In particular,
+  the watcher must exclude its own `pendingchanges` module record; prove that
+  genuine module enable/disable/version changes are still detected with a
+  disposable fixture module, never with the observer itself.
+- New coverage introduced while a reload is pending must defer rather than
+  invent before-values, and scope changes require migration markers so a saved
+  baseline made by an older, differently shaped observer is replaced instead
+  of misread.
+- The request sensor records only account name, time, page/module/action,
+  method, and success — never request bodies, passwords, cookies, or session
+  identifiers. Exclude read-only and housekeeping requests, and always display
+  attribution with a confidence level rather than as proven causation.
+- Never present stale or missing watcher data as clean. Health requires a
+  fresh completed observation, not merely an active process; degraded results
+  must describe the state as unknown and must never say "No pending reload."
 - Preserve the distinction between FreePBX record drift, AstDB drift,
   generated-Asterisk-file drift, and module/file changes.
 - A pending global reload with no attributable observed difference must remain
   explicit, for example: `Reload requested; origin unavailable.`
-- The feedback export may contain source types, table/family names, field names,
+- The feedback export is opt-in and local-only. It may contain source types, table/family names, field names,
   counts, coverage-limit reasons, and timestamps. It must not contain actual
   configuration values, record identifiers, hostnames, credentials, or call
   data.
@@ -144,16 +165,38 @@ These rules apply to the entire repository.
 - Never copy a private signing key into this repository, a Docker container, a
   release archive, or test output. Signing bundles must be key-free and signed
   interactively on the approved signing host.
+- Never copy host-local `--local` signatures or trust files back into GitHub,
+  Docker, or release archives. They are that PBX's trust artifacts, not
+  release artifacts; the source tree stays unsigned.
+- The repository must not prescribe a maintainer's personal key identity.
+  Signing keys are supplied through the signing host's environment (never
+  hardcoded in scripts or docs); a public key may be published, a private key
+  or passphrase never.
 - Do not use FreePBX local-signing mode for a distributable archive. Verify the
   returned checksums, detached OpenPGP signatures, embedded `module.sig`,
   version metadata, and absence of private-key material before publication.
+- Transfer signing bundles over a versioned, checksum-verified path and refuse
+  if the destination already exists, so a release can never overwrite another
+  or mix versions.
+- If a completed `signed/` set already exists on the signing host, stop and
+  ask — never delete a finished signature set blindly.
+- Hold tags and releases until the signed set returns and verifies; publish
+  the commit, the tag, and the complete release together so no link can serve
+  a 404 or an unsigned substitute.
+- Validate the exact signed module archive through Module Admin before
+  publishing it. Passing an unsigned source build is not a substitute.
+  Validators must fail closed on artifact identity, never silently validating
+  a wrong same-named archive. Never publish around a gate failure; rerun the
+  failing leg instead.
 - Do not tag, push, publish, deploy to a real PBX, or replace an existing
   release unless the user explicitly authorizes that external change.
 - Check the active GitHub CLI account before publishing; this repository is
   owned by `tomck`.
-- Codex-created commits must use `scripts/codex-commit.sh` with the precise
-  model and reasoning effort so the repository hook adds the expected
-  attribution trailers. Do not invent a model name or rewrite published
-  history.
+- Every AI-assisted commit must carry an `Assisted-by: AGENT:MODEL` trailer
+  with the precise agent and model, and must never invent a model name.
+  Codex-created commits must use `scripts/codex-commit.sh` so the repository
+  hook adds the expected attribution trailers. Leave published history alone:
+  rewriting changes every hash and breaks tags, releases, and clones, so it
+  needs explicit approval plus a backup.
 - Preserve unrelated user changes and work from a clean checkout or branch
   when the primary worktree contains unrelated modifications.
