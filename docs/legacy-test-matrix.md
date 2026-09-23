@@ -5,10 +5,10 @@ deliberately narrower than a support claim.
 
 | FreePBX target | Candidate | Validated runtime | Current evidence | Still required |
 | --- | --- | --- | --- | --- |
-| 14 | `17.0.2.6` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Full Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle passed on 17.0.2.5 source; exact 2.6 archive pending | Validate exact archive; then voluntary alpha feedback |
-| 15 | `17.0.2.6` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Full Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle passed on 17.0.2.5 source; exact 2.6 archive pending | Validate exact archive; then voluntary alpha feedback |
-| 16 | `17.0.2.6` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Full Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle passed on 17.0.2.5 source; exact 2.6 archive pending | Validate exact archive; then voluntary alpha feedback |
-| 17 | `17.0.2.6` shared archive | FreePBX 17, PHP 8.2 | Full Apache/nginx installation, watcher, fixture, breaker, Apply Config, and clean-state gates passed on 17.0.2.5 source; exact 2.6 archive pending | Validate exact archive; then continued alpha feedback |
+| 14 | `17.0.2.6` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Exact 2.6 archive passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Voluntary alpha feedback |
+| 15 | `17.0.2.6` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Exact 2.6 archive passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Voluntary alpha feedback |
+| 16 | `17.0.2.6` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Exact 2.6 archive passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Voluntary alpha feedback |
+| 17 | `17.0.2.6` shared archive | FreePBX 17, PHP 8.2 | Exact 2.6 archive passed full Apache and nginx/PHP-FPM gates: Module Admin, watcher, authenticated fixtures, breakers, Apply Config, redaction, recovery, and final clean state | Continued alpha feedback |
 
 The shared portable watcher additionally passes Python 3.6 compilation,
 cross-version PHP sensor tests, archive-layout checks, and service-path checks.

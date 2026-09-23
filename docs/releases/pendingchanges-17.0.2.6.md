@@ -12,6 +12,6 @@ One module archive supports FreePBX 14–17 and includes watcher 0.1.9. The
 watcher payload is unchanged. The observer does not Apply Config and does not
 claim to detect changes outside its explicit coverage contract.
 
-The source has passed the disposable Apache, nginx/PHP-FPM, legacy PHP, and
-real-image compatibility gates. Publication requires signing and validation
-of the exact resulting archive.
+The exact unsigned archive has passed the disposable Apache, nginx/PHP-FPM,
+legacy PHP, and real-image compatibility gates. Publication still requires
+signing and validation of the exact signed archive.

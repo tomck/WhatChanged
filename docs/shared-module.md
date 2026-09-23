@@ -13,12 +13,11 @@ the FreePBX version. It also reads FreePBX's configured `AMPWEBROOT` so
 module-file monitoring follows nonstandard web roots. Standalone Debian and
 portable packages remain available but are optional.
 
-Validation: the 17.0.2.6 source passed the FreePBX 17 Apache and nginx/PHP-FPM
-Docker gates, PHP compatibility checks, and FreePBX 14, 15, and 16 real-image
-Module Admin installation, watcher-health, staged-drift, Apply Config, and
-clean-baseline lifecycles before the metadata-only version bump. The exact
-17.0.2.6 archive still requires validation after packaging. Both
-embedded filesystem layouts and automatic OS-family detection were validated
+Validation: the exact unsigned 17.0.2.6 archive passed full Apache and
+nginx/PHP-FPM FreePBX 17 gates, PHP compatibility checks, and FreePBX 14, 15,
+and 16 real-image lifecycles. These covered Module Admin installation, watcher
+health, staged drift, Apply Config, and a clean baseline. Both embedded
+filesystem layouts and automatic OS-family detection were validated
 in disposable containers. Live systemd activation of the embedded portable
 layout still requires voluntary testing on a maintained
 RHEL/CentOS/Sangoma-family PBX.
