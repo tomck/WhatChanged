@@ -8,7 +8,7 @@ archives are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-17.0.2.5` | 14–17 | `pendingchanges-17.0.2.5.tgz` with embedded watcher | Optional Debian and portable 0.1.9 packages |
+| `pendingchanges-17.0.2.6` | 14–17 | `pendingchanges-17.0.2.6.tgz` with embedded watcher | Optional Debian and portable 0.1.9 packages |
 
 One module tag identifies the source commit. The release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
@@ -16,19 +16,18 @@ not a claim that every third-party FreePBX module or state store is covered.
 
 ## 1. Build the unsigned signing bundle
 
-Run the compatibility gates first. Commit the reviewed release source, create
-the annotated release tag on that commit, then assemble the exact files that
-will be transferred to the isolated signing host:
+Run the compatibility gates first. Commit the reviewed release source, then
+assemble the exact files that will be transferred to the isolated signing host.
+Hold the annotated release tag until the signed set returns and verifies:
 
 ```sh
 ./docker/legacy-compatibility-gate.sh
 ./docker/legacy-real-image-gate.sh
-git tag -a pendingchanges-17.0.2.5 -m 'Pending Changes Tripwire 17.0.2.5 alpha'
 ./scripts/package-watcher.sh
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-17.0.2.5.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-17.0.2.6.tar.gz`. It contains
 the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -38,8 +37,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-17.0.2.5.tar.gz
-cd what-changed-signing-17.0.2.5
+tar -xzf what-changed-signing-17.0.2.6.tar.gz
+cd what-changed-signing-17.0.2.6
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
@@ -70,11 +69,13 @@ contains an OpenPGP private-key block.
 
 ## 4. Publish after review
 
+After the signed set verifies, create the annotated tag on the release commit.
 The publishing program refuses a dirty tree, a tag that does not point to the
 current commit, a missing signature, or an existing GitHub release. After the
 signed set has been reviewed:
 
 ```sh
+git tag -a pendingchanges-17.0.2.6 -m 'Pending Changes Tripwire 17.0.2.6 alpha'
 ./scripts/publish-github-releases.sh dist/signed-release
 ```
 

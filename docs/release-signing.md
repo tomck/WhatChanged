@@ -1,7 +1,8 @@
 # WhatChanged release signing bundle
 
 This directory contains reviewed, unsigned release candidates built from the
-tagged WhatChanged source. It deliberately contains no secret key.
+WhatChanged source. It deliberately contains no secret key. The release tag is
+created only after the signed set returns and passes verification.
 
 Run `./sign.sh` from an interactive terminal on the FreePBX signing host after
 setting `WHAT_CHANGED_SIGNING_SUBKEY` to the full fingerprint of the

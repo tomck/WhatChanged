@@ -1,5 +1,14 @@
 # Changelog
 
+## Module 17.0.2.6 / watcher 0.1.9
+
+- Refresh redaction-key permission checks within a single PHP process so the
+  doctor reports a repaired or newly insecure key accurately.
+- Expose redaction-key health through the conventional FreePBX BMO adapter,
+  avoiding a missing-class error in the command-line doctor.
+- Add a regression assertion for the BMO method and repeat the disposable
+  Apache, nginx/PHP-FPM, legacy compatibility, and real-image gates.
+
 ## Module 17.0.2.5 / watcher 0.1.9
 
 - Replace numeric module and settings headings with meaningful module names and
