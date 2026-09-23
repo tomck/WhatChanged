@@ -198,7 +198,7 @@ Codex-assisted commits use the wrapper and name the actual model:
   -- -m "Describe the change"
 ```
 
-The commit receives a stable `Co-authored-by` identity plus machine-readable
-`Codex-Model` and `Codex-Reasoning-Effort` trailers. Ordinary `git commit`
-remains untouched. Run `./scripts/test-git-attribution.sh` to test the hook
-without creating a commit.
+The commit receives `Assisted-by: Codex:MODEL` and a
+`Codex-Reasoning-Effort` trailer when supplied. Ordinary `git commit` remains
+untouched. Run `./scripts/test-git-attribution.sh` to test the hook without
+creating a commit.

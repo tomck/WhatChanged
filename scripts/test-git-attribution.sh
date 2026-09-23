@@ -20,8 +20,7 @@ CODEX_COMMIT_REASONING_EFFORT=high \
 CODEX_COMMIT_THREAD_ID=test-thread \
     "$hook" "$message_file"
 
-grep -Fqx 'Co-authored-by: Codex <noreply@openai.com>' "$message_file"
-grep -Fqx 'Codex-Model: gpt-test-model' "$message_file"
+grep -Fqx 'Assisted-by: Codex:gpt-test-model' "$message_file"
 grep -Fqx 'Codex-Reasoning-Effort: high' "$message_file"
 grep -Fqx 'Codex-Thread: test-thread' "$message_file"
 
@@ -30,10 +29,10 @@ CODEX_COMMIT_MODEL=gpt-second-model \
 CODEX_COMMIT_REASONING_EFFORT=medium \
     "$hook" "$message_file"
 
-[[ $(grep -Fxc 'Co-authored-by: Codex <noreply@openai.com>' "$message_file") == 1 ]]
-grep -Fqx 'Codex-Model: gpt-second-model' "$message_file"
+[[ $(grep -Fc 'Assisted-by: Codex:' "$message_file") == 1 ]]
+grep -Fqx 'Assisted-by: Codex:gpt-second-model' "$message_file"
 grep -Fqx 'Codex-Reasoning-Effort: medium' "$message_file"
-if grep -Fq 'Codex-Model: gpt-test-model' "$message_file"; then
+if grep -Fq 'Assisted-by: Codex:gpt-test-model' "$message_file"; then
     echo "Hook retained stale model attribution" >&2
     exit 1
 fi

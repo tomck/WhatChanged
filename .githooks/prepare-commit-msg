@@ -33,15 +33,9 @@ validate_value() {
 validate_value CODEX_COMMIT_MODEL "$model"
 
 git interpret-trailers --in-place \
-    --if-exists=doNothing \
-    --if-missing=add \
-    --trailer "Co-authored-by: Codex <noreply@openai.com>" \
-    "$message_file"
-
-git interpret-trailers --in-place \
     --if-exists=replace \
     --if-missing=add \
-    --trailer "Codex-Model: ${model}" \
+    --trailer "Assisted-by: Codex:${model}" \
     "$message_file"
 
 if [[ -n $reasoning ]]; then
