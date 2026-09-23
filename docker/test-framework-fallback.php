@@ -14,8 +14,11 @@ namespace {
     require $argv[1].'/Pendingchanges.class.php';
 
     $class = new ReflectionClass('FreePBX\\modules\\Pendingchanges');
-    if ($class->getMethod('status')->getDeclaringClass()->getName() !== $class->getName()) {
-        throw new RuntimeException('FreePBX BMO adapter does not expose its public contract');
+    foreach (['status', 'redactionKeyStatus'] as $method) {
+        if (!$class->hasMethod($method)
+            || $class->getMethod($method)->getDeclaringClass()->getName() !== $class->getName()) {
+            throw new RuntimeException('FreePBX BMO adapter does not expose ' . $method);
+        }
     }
 
     $redactor = 'FreePBX\\modules\\Pendingchanges\\Security\\Redactor';

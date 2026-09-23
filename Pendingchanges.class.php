@@ -98,6 +98,11 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO
         return $this->service()->feedback();
     }
 
+    public function redactionKeyStatus()
+    {
+        return $this->service()->redactionKeyStatus();
+    }
+
     public static function classifyWatcherHealth(
         array $status,
         $now = null,

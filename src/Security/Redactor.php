@@ -98,6 +98,9 @@ class Redactor
     public function keyStatus()
     {
         $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-redaction.key';
+        // Doctor may inspect the key repeatedly in one PHP process after an
+        // operator repairs its permissions. Avoid PHP's cached stat result.
+        clearstatcache(true, $path);
         if (!file_exists($path)) {
             return array(
                 'state' => 'absent',
