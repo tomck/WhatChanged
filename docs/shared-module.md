@@ -1,4 +1,4 @@
-# Shared module candidate 17.0.2.6
+# Shared module release 17.0.2.6
 
 The default archive, pendingchanges-17.0.2.6.tgz, declares FreePBX 14.0,
 15.0, 16.0 and 17.0 support and requires PHP 5.6 or newer.
@@ -22,6 +22,11 @@ in disposable containers. Live systemd activation of the embedded portable
 layout still requires voluntary testing on a maintained
 RHEL/CentOS/Sangoma-family PBX.
 
+The release checksums, detached signatures, and embedded `module.sig` were
+verified after signing. The exact signed archive installed through FreePBX
+Module Admin in the disposable Docker lab; its key may be labeled "Unknown"
+until certified. No production PBX was changed for this validation.
+
 Version 17.0.2.6 also records watcher payload version 0.1.9 in every embedded,
 Debian, and portable package. The UI and CLI compare that marker with the
 module's bundled payload and provide the exact update command when they differ.
@@ -35,7 +40,8 @@ custom-trunk changes. They also passed watcher-health, keyed redaction,
 interruption recovery, Apply Config baseline refreshes, and final clean state.
 
 Build with scripts/package-module.sh. Existing signatures cannot be reused
-after metadata changes; these candidates must be signed before publication.
+after metadata changes; any subsequent archive must be signed and validated
+as a new release artifact before publication.
 
 Refactoring review: version parsing in packaging, signing, publishing and lab
 scripts assumed x.0.0.N and would truncate the requested x.0.1.0 release.
