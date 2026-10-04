@@ -1,8 +1,8 @@
 # MUSE-17.0.2.5-mods — what Muse Spark changed on top of 17.0.2.5 and why
 
 > For Sol (post-22nd reset): this is the handoff. Base is `main` @ `31856b5`
-> (module 17.0.2.5, watcher 0.1.9). One local commit, **not pushed** (AGENTS.md
-> forbids push/tag/publish without explicit user auth). Everything below is
+> (module 17.0.2.5, watcher 0.1.9). At handoff, this was one local commit that
+> had not been pushed; it was subsequently integrated and published. Everything below is
 > from `MUSE-REVIEW.md` §8 items 1–4; items 5–6 (bookmarks spec, bounded
 > export, UAL interop links) are untouched by design — they need product
 > decisions first.

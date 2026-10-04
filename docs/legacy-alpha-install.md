@@ -4,7 +4,10 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use `pendingchanges-17.0.2.6.tgz` once published.
+All four FreePBX versions use the published `pendingchanges-17.0.2.6.tgz`.
+Authenticate and verify it using the
+[shared release procedure](alpha-install.md#verify-the-downloaded-release)
+before copying it to the PBX.
 
 The module archive embeds the same watcher for all three versions. A separate
 portable watcher bundle remains available as an optional packaging choice.
@@ -42,16 +45,24 @@ freepbx_webroot=$(
   sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
     sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
 )
-module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
-if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$freepbx_webroot/admin/modules"
-  sudo chown -R asterisk:asterisk "$module_dir"
-  sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-  sudo "$module_dir/bin/install-watcher"
-else
-  echo "Could not find FreePBX's module directory beneath: $freepbx_webroot" >&2
+if [ -z "$freepbx_webroot" ]; then
+  echo "Could not read AMPWEBROOT from FreePBX. Run 'sudo fwconsole setting AMPWEBROOT' and resolve any reported error." >&2
+  exit 1
 fi
+
+module_parent="$freepbx_webroot/admin/modules"
+module_dir="$module_parent/pendingchanges"
+
+if [ ! -d "$module_parent" ]; then
+  echo "FreePBX reported AMPWEBROOT=$freepbx_webroot, but its module directory was not found at: $module_parent" >&2
+  exit 1
+fi
+
+sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$module_parent"
+sudo chown -R asterisk:asterisk "$module_dir"
+sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+sudo "$module_dir/bin/install-watcher"
 sudo systemctl status what-changed-watcher --no-pager
 ```
 

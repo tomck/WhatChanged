@@ -35,6 +35,11 @@ version=$(sed -n 's:.*<rawname>\([^<]*\)</rawname>.*:\1:p' "$root_dir/module.xml
 source_version=$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "$root_dir/module.xml" | head -n1)
 source "$root_dir/deploy/release-versions.sh"
 [[ "$source_version" == "$module_version" ]] || { echo 'Release manifest and module.xml disagree' >&2; exit 1; }
+installer_version=$(sed -n 's/^module_version=${WHAT_CHANGED_VERSION:-\([^}]*\)}$/\1/p' "$root_dir/install.sh" | head -n1)
+[[ "$installer_version" == "$module_version" ]] || {
+  echo 'Convenience installer pin and release manifest disagree' >&2
+  exit 1
+}
 payload_version=$(tr -d '[:space:]' < "$root_dir/docker/custom-watcher/VERSION")
 [[ "$payload_version" == "$watcher_version" ]] || {
   echo 'Release manifest and embedded watcher VERSION disagree' >&2

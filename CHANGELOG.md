@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased repository installer and documentation
+
+- Pin the convenience installer to the reviewed public-alpha release instead
+  of GitHub's stable-only `/releases/latest` redirect.
+- Require GnuPG and verify both the signed checksum manifest and detached
+  module-archive signature; no checksum-only fallback remains.
+- Put the independently authenticated manual path first, document the GitHub
+  bootstrap trust boundary, and clarify support evidence.
+
 ## Module 17.0.2.6 / watcher 0.1.9
 
 - Refresh redaction-key permission checks within a single PHP process so the
@@ -17,6 +26,15 @@
   for module versions and FreePBX settings such as `hidden` and `emptyok`.
 - Keep raw evidence expandable beneath the presentation so the friendly view
   does not reduce auditability.
+
+## Module 17.0.2.4 / watcher 0.1.9
+
+- Add the explicitly trust-based GitHub convenience installer while retaining
+  the inspect-and-verify manual installation path.
+- Resolve the latest published module release, validate its signed checksum
+  manifest, discover FreePBX's configured web root, and launch the embedded
+  watcher installer.
+- Keep Apply Config and Asterisk reload outside the installation path.
 
 ## Module 17.0.2.3 / watcher 0.1.9
 

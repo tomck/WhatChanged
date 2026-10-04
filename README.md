@@ -5,8 +5,10 @@ drift since the last known-good apply. It reports added, changed, and removed
 records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
-One module archive supports FreePBX 14, 15, 16, and 17. The current release
-candidate is **17.0.2.6**.
+One module archive supports FreePBX 14, 15, 16, and 17. The current published
+alpha is **17.0.2.6**. **WhatChanged** is the project; **Pending Changes
+Tripwire** is the FreePBX module title, and its raw module name is
+`pendingchanges`.
 
 [Download the latest published alpha](https://github.com/tomck/WhatChanged/releases)
 · [Full installation guide](docs/alpha-install.md)
@@ -19,44 +21,82 @@ candidate is **17.0.2.6**.
 > Coverage contract may not be detected, and administrator attribution is
 > supporting evidence rather than proof.
 
+| FreePBX | Alpha status | Validation evidence |
+| --- | --- | --- |
+| 17 | Primary tested target | Exact 17.0.2.6 archive passed the complete Apache and nginx/PHP-FPM gates; the signed archive passed Module Admin installation |
+| 16 | Compatibility-tested alpha | Exact 17.0.2.6 archive passed the real-image lifecycle; maintained-host feedback is still wanted |
+| 15 | Compatibility-tested alpha | Exact 17.0.2.6 archive passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
+| 14 | Compatibility-tested alpha | Exact 17.0.2.6 archive passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
+
+See the [compatibility evidence](docs/legacy-test-matrix.md) for the exact
+runtime versions and limits. These are test results, not a promise that an old
+FreePBX operating system remains secure or vendor-supported.
+
 ## Install
 
-### Fast install (trust-and-run)
+### Recommended: inspect, verify, then install
 
-For a disposable or otherwise explicitly trusted PBX, the latest published
-release can be downloaded, checksum-verified, OpenPGP-verified when `gpg` is
-available, and installed with one command:
+Download the matching archive, checksum manifest, detached signatures, and
+public key from the
+[17.0.2.6 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.6).
+Authenticate the public-key fingerprint through a channel you trust, then
+follow the exact OpenPGP and checksum commands in the
+[full installation guide](docs/alpha-install.md). A key downloaded from the
+same release can prove that the files agree with one another, but by itself it
+cannot prove who controls that key.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
-```
-
-This convenience command downloads the signed module archive from the latest
-GitHub release, discovers FreePBX's configured `AMPWEBROOT`, installs the
-module, and launches its explicit watcher installer. The watcher installer
-may ask permission to install PyMySQL. Reviewers who do not want to pipe a
-remote script into a shell should use the [manual verification and install
-path](docs/alpha-install.md) instead.
-
-Once published, download `pendingchanges-17.0.2.6.tgz` from the matching GitHub release,
-copy it to the PBX, and run:
+After verification, copy `pendingchanges-17.0.2.6.tgz` to the PBX and run:
 
 ```sh
 freepbx_webroot=$(
   sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
     sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
 )
-module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
-if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$freepbx_webroot/admin/modules"
-  sudo chown -R asterisk:asterisk "$module_dir"
-  sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-  sudo "$module_dir/bin/install-watcher"
-else
-  echo "Could not find FreePBX's module directory beneath: $freepbx_webroot" >&2
+if [ -z "$freepbx_webroot" ]; then
+  echo "Could not read AMPWEBROOT from FreePBX. Run 'sudo fwconsole setting AMPWEBROOT' and resolve any reported error." >&2
+  exit 1
 fi
+
+module_parent="$freepbx_webroot/admin/modules"
+module_dir="$module_parent/pendingchanges"
+
+if [ ! -d "$module_parent" ]; then
+  echo "FreePBX reported AMPWEBROOT=$freepbx_webroot, but its module directory was not found at: $module_parent" >&2
+  exit 1
+fi
+
+sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$module_parent"
+sudo chown -R asterisk:asterisk "$module_dir"
+sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+sudo "$module_dir/bin/install-watcher"
 ```
+
+Expected completion includes a successful Module Admin install, an embedded
+watcher installation summary, and a prompt to open **Reports → Pending Changes
+Tripwire**. The watcher installer may ask permission to install PyMySQL; it
+does not install packages without consent.
+
+### Convenience install (trust GitHub and run)
+
+For a disposable or otherwise explicitly trusted PBX, the release pinned by
+the reviewed installer can be downloaded, checksum-verified,
+OpenPGP-verified, and installed with one command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+```
+
+This convenience command trusts the copy of `install.sh` served from the
+GitHub repository as its bootstrap. It is currently pinned to 17.0.2.6 rather
+than GitHub's `/releases/latest` redirect, which excludes alpha prereleases.
+The script requires GnuPG, verifies
+both the signed checksum manifest and the detached archive signature, discovers
+FreePBX's configured `AMPWEBROOT`, installs the module, and launches its
+explicit watcher installer. If GnuPG is missing, it stops with the appropriate
+package command instead of silently falling back to checksum-only validation.
+Use the inspected manual path above when that GitHub trust boundary is not
+appropriate.
 
 The module archive contains the watcher; there is no required second download.
 The last command is intentionally explicit because it installs a system service
@@ -111,6 +151,12 @@ cannot prove that a web request loaded it. Confirm the runtime line
 It also reports the bundled and installed watcher versions. If they do not
 match, it prints the exact full-path `install-watcher` command needed to update
 the payload.
+
+A Module Admin upgrade does not silently replace the root-owned system service.
+When a release contains a newer embedded watcher, the report page and doctor
+mark the payload outdated and provide the exact `install-watcher` command. An
+administrator must run that command explicitly; it preserves existing evidence
+and configuration while updating the service payload.
 
 Then open **Reports → Pending Changes Tripwire** in FreePBX. Before treating an
 empty report as meaningful, require all four:
@@ -225,9 +271,6 @@ Development and smoke testing happen only in disposable Docker labs. Build
 instructions, the FreePBX 14–17 compatibility matrix, individual smoke tests,
 packaging, signing, and release procedures are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Open Source Tripwire is intentionally not used: it can say that a file changed,
-but it cannot explain the FreePBX records waiting behind Apply Config.
 
 ## License
 

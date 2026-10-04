@@ -5,7 +5,9 @@
 > Replaces an earlier review written against the stale 17.0.0.11 checkout —
 > most of that is resolved upstream (kvstore baseline, PathResolver,
 > functions.inc.php removal, views/, PSR-4, AMPDBSOCK, nginx).
-> Untracked local note: not pushed. License: GPL-3.0-or-later (stay GPL — §7).
+> Historical review snapshot. It was later committed and published; status
+> statements below describe the checkout at review time, not current `main`.
+> License: GPL-3.0-or-later (stay GPL — §7).
 
 ## 0. What this module is (one paragraph for a fresh AI)
 

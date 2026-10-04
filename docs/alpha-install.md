@@ -12,12 +12,15 @@ administrator attribution is explicitly unavailable.
 ## Before installing
 
 1. Create a current PBX backup and normal change record.
-2. Download these matching release files to the PBX:
-   - `pendingchanges-17.0.2.6.tgz` (after publication)
-   - `SHA256SUMS` and its detached signature, if supplied.
-3. Check the SHA-256 checksum and detached GPG signature using the published
-   project public key. A Debian package is also signed by an APT repository
-   Release file when installed from the future repository.
+2. Download these matching files from the
+   [17.0.2.6 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.6):
+   - `pendingchanges-17.0.2.6.tgz` and `pendingchanges-17.0.2.6.tgz.asc`
+   - `SHA256SUMS` and `SHA256SUMS.asc`
+   - `WHAT_CHANGED_SIGNING_KEY.asc`
+3. Obtain the expected primary-key fingerprint through a channel you trust.
+   Do not treat a fingerprint copied from the same release as independent
+   authentication. The project does not hardcode a maintainer's personal key
+   identity into its installer.
 
 The embedded watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL
 for that Python, a MariaDB/MySQL client, and the normal `asterisk` service
@@ -32,48 +35,98 @@ detached signature per release artifact, and a distributable FreePBX
 different: it creates a PBX-specific sidecar under `/etc/freepbx.secure` and
 must not be used to build a portable release archive.
 
-## Install
+## Verify the downloaded release
 
-### Fast install (trust-and-run)
-
-For an operator who explicitly trusts the hosted installer, the latest
-published release can be installed with:
+Set `expected_fingerprint` to the independently authenticated primary-key
+fingerprint, without spaces, then run this from the directory containing the
+release files:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+expected_fingerprint='PASTE_THE_INDEPENDENTLY_VERIFIED_FINGERPRINT_HERE'
+actual_fingerprint=$(
+  gpg --batch --show-keys --with-colons WHAT_CHANGED_SIGNING_KEY.asc |
+    awk -F: '$1 == "fpr" { print $10; exit }'
+)
+
+if [ -z "$actual_fingerprint" ] || [ "$actual_fingerprint" != "$expected_fingerprint" ]; then
+  echo "Signing-key fingerprint does not match the independently verified value." >&2
+  exit 1
+fi
+
+verification_home=$(mktemp -d)
+chmod 0700 "$verification_home"
+GNUPGHOME="$verification_home" gpg --batch --import WHAT_CHANGED_SIGNING_KEY.asc
+GNUPGHOME="$verification_home" gpg --batch \
+  --verify SHA256SUMS.asc SHA256SUMS || exit 1
+GNUPGHOME="$verification_home" gpg --batch \
+  --verify pendingchanges-17.0.2.6.tgz.asc pendingchanges-17.0.2.6.tgz || exit 1
+awk '$2 == "pendingchanges-17.0.2.6.tgz" { print }' SHA256SUMS |
+  sha256sum -c - || exit 1
 ```
 
-The script resolves the latest `pendingchanges-*` release, downloads the
-module archive and verification material, checks its SHA-256 manifest, and
-verifies the signed manifest when `gpg` is available. It then discovers the
-configured FreePBX `AMPWEBROOT`, installs the module, and runs the embedded
-watcher installer. It never runs Apply Config. This is intentionally a
-convenience path for people who accept the trust implied by piping a remote
-script to `sudo`; use the manual path below when you need to inspect every
-file before execution.
+All three checks must succeed. The detached archive signature authenticates
+the archive against the selected key; the signed manifest binds its expected
+checksum; the checksum comparison detects a damaged or substituted local file.
+Remove the temporary `verification_home` after review if local policy does not
+retain verification keyrings.
 
-Install the shared module, then run its embedded watcher installer as root:
+## Install the verified archive
+
+Run:
 
 ```sh
 freepbx_webroot=$(
   sudo /var/lib/asterisk/bin/fwconsole setting AMPWEBROOT |
     sed -n 's/^Setting of "AMPWEBROOT" is ([^)]*)\[\(.*\)\]$/\1/p'
 )
-module_dir="$freepbx_webroot/admin/modules/pendingchanges"
 
-if [ -d "$freepbx_webroot/admin/modules" ]; then
-  sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$freepbx_webroot/admin/modules"
-  sudo chown -R asterisk:asterisk "$module_dir"
-  sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
-  sudo "$module_dir/bin/install-watcher"
-else
-  echo "Could not find FreePBX's module directory beneath: $freepbx_webroot" >&2
+if [ -z "$freepbx_webroot" ]; then
+  echo "Could not read AMPWEBROOT from FreePBX. Run 'sudo fwconsole setting AMPWEBROOT' and resolve any reported error." >&2
+  exit 1
 fi
+
+module_parent="$freepbx_webroot/admin/modules"
+module_dir="$module_parent/pendingchanges"
+
+if [ ! -d "$module_parent" ]; then
+  echo "FreePBX reported AMPWEBROOT=$freepbx_webroot, but its module directory was not found at: $module_parent" >&2
+  exit 1
+fi
+
+sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$module_parent"
+sudo chown -R asterisk:asterisk "$module_dir"
+sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
+sudo "$module_dir/bin/install-watcher"
 ```
 
+Expected completion includes a successful Module Admin install, the detected
+watcher filesystem and service layout, and confirmation that the embedded
+watcher installation completed. The dependency prompt may offer to install
+PyMySQL; declining leaves the host unchanged and prints the exact remediation.
+
 The first command asks FreePBX for its configured `AMPWEBROOT`; it does not
-assume `/var/www/html`. The watcher installer reads that same authoritative
-settings and writes the corresponding module and Asterisk paths into its systemd unit.
+assume `/var/www/html`. The watcher installer reads the same authoritative
+setting and writes the corresponding module and Asterisk paths into its
+systemd unit.
+
+## Convenience install (trust GitHub and run)
+
+For an operator who explicitly trusts the copy of `install.sh` delivered from
+the GitHub repository, the release pinned by that reviewed script can be
+installed with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+```
+
+The script is currently pinned to 17.0.2.6 because GitHub's
+`/releases/latest` redirect excludes alpha prereleases. It downloads the
+archive and verification material, requires GnuPG, and verifies both the
+signed manifest and detached archive signature before installation. If GnuPG
+is absent, it stops and prints the platform-appropriate package command. This
+path uses the GitHub repository itself as the bootstrap trust boundary; use
+the manual path above when the signing-key identity must be authenticated
+independently.
 
 The installer reads `/etc/os-release`: Debian-family systems use `/usr/lib`
 and `/lib/systemd/system`; RHEL, CentOS, and Sangoma-family systems use
@@ -125,6 +178,12 @@ the exact full command to run.
 It also reports `redaction_key_state`: `ok` (or `absent` before the first
 snapshot) is normal; `invalid` or `unreadable` fails doctor with exit 2 and
 prints `redaction_key_remedy` with the exact next step.
+
+Module Admin upgrades do not silently replace the root-owned watcher service.
+If a new module includes a newer watcher payload, the page and doctor report
+the mismatch and print the exact `install-watcher` command. Run that command
+explicitly to update the service while preserving existing watcher
+configuration and evidence.
 
 In FreePBX, open **Reports → Pending Changes Tripwire**. The release archive
 contains `module.sig`. Until the maintainer's key is certified by Sangoma, a
