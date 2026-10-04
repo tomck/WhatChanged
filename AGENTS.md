@@ -194,8 +194,10 @@ These rules apply to the entire repository.
   owned by `tomck`.
 - Every AI-assisted commit must carry an `Assisted-by: AGENT:MODEL` trailer
   with the precise agent and model, and must never invent a model name.
-  Codex-created commits must use `scripts/codex-commit.sh` so the repository
-  hook adds the expected attribution trailers. Leave published history alone:
+  Codex-created commits must use `scripts/codex-commit.sh`, and Claude-created
+  commits must use `scripts/claude-commit.sh`, so the repository hook adds the
+  expected attribution trailers (agent, model, agent version, effort). Any
+  other agent uses `scripts/ai-commit.sh`. Do not substitute `Co-Authored-By`. Leave published history alone:
   rewriting changes every hash and breaks tags, releases, and clones, so it
   needs explicit approval plus a backup.
 - Preserve unrelated user changes and work from a clean checkout or branch

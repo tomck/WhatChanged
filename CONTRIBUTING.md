@@ -182,23 +182,26 @@ reviewed source commit used to build the signed module.
 
 ## Codex-assisted commits
 
-This repository keeps Codex attribution in Git instead of relying on a client
+This repository keeps AI attribution in Git instead of relying on a client
 setting. Enable the versioned hook once per checkout:
 
 ```sh
 ./scripts/install-git-hooks.sh
 ```
 
-Codex-assisted commits use the wrapper and name the actual model:
+AI-assisted commits use a wrapper and name the actual model:
 
 ```sh
-./scripts/codex-commit.sh \
-  --model gpt-5.6-sol \
-  --reasoning-effort high \
+./scripts/codex-commit.sh --model gpt-5.6-sol --reasoning-effort high \
+  -- -m "Describe the change"
+./scripts/claude-commit.sh --model claude-sonnet-5-5 --effort high \
   -- -m "Describe the change"
 ```
 
-The commit receives `Assisted-by: Codex:MODEL` and a
-`Codex-Reasoning-Effort` trailer when supplied. Ordinary `git commit` remains
-untouched. Run `./scripts/test-git-attribution.sh` to test the hook without
-creating a commit.
+Other agents use `./scripts/ai-commit.sh --agent NAME --model MODEL ...`.
+The commit receives `Assisted-by: AGENT:MODEL` and, when known,
+`Agent-Version`, `Reasoning-Effort` and `Agent-Thread` trailers
+(`claude-commit.sh` detects the Claude Code version itself). A missing model is
+refused rather than guessed. Ordinary `git commit` remains untouched. Run
+`./scripts/test-git-attribution.sh` to test the hook without creating a
+commit.

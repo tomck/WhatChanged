@@ -4,16 +4,19 @@ set -euo pipefail
 
 message_file=${1:?prepare-commit-msg requires a commit message file}
 
-# Ordinary human-created commits are deliberately untouched. Codex commits
-# must go through scripts/codex-commit.sh, which supplies this gate and the
-# provenance values below.
-if [[ ${CODEX_COMMIT:-0} != 1 ]]; then
+# Ordinary human-created commits are deliberately untouched. AI-assisted
+# commits must go through scripts/ai-commit.sh (or the codex-commit.sh /
+# claude-commit.sh wrappers), which supply this gate and the provenance
+# values below. CODEX_COMMIT* variables remain accepted for compatibility.
+if [[ ${AI_COMMIT:-${CODEX_COMMIT:-0}} != 1 ]]; then
     exit 0
 fi
 
-model=${CODEX_COMMIT_MODEL:-}
-reasoning=${CODEX_COMMIT_REASONING_EFFORT:-}
-thread=${CODEX_COMMIT_THREAD_ID:-}
+agent=${AI_COMMIT_AGENT:-Codex}
+model=${AI_COMMIT_MODEL:-${CODEX_COMMIT_MODEL:-}}
+effort=${AI_COMMIT_EFFORT:-${CODEX_COMMIT_REASONING_EFFORT:-}}
+agent_version=${AI_COMMIT_AGENT_VERSION:-}
+thread=${AI_COMMIT_THREAD:-${CODEX_COMMIT_THREAD_ID:-}}
 
 validate_value() {
     local name=$1
@@ -30,28 +33,30 @@ validate_value() {
     fi
 }
 
-validate_value CODEX_COMMIT_MODEL "$model"
-
-git interpret-trailers --in-place \
-    --if-exists=replace \
-    --if-missing=add \
-    --trailer "Assisted-by: Codex:${model}" \
-    "$message_file"
-
-if [[ -n $reasoning ]]; then
-    validate_value CODEX_COMMIT_REASONING_EFFORT "$reasoning"
+add_trailer() {
     git interpret-trailers --in-place \
         --if-exists=replace \
         --if-missing=add \
-        --trailer "Codex-Reasoning-Effort: ${reasoning}" \
+        --trailer "$1: $2" \
         "$message_file"
+}
+
+validate_value AI_COMMIT_AGENT "$agent"
+validate_value AI_COMMIT_MODEL "$model"
+
+add_trailer Assisted-by "${agent}:${model}"
+
+if [[ -n $agent_version ]]; then
+    validate_value AI_COMMIT_AGENT_VERSION "$agent_version"
+    add_trailer Agent-Version "$agent_version"
+fi
+
+if [[ -n $effort ]]; then
+    validate_value AI_COMMIT_EFFORT "$effort"
+    add_trailer Reasoning-Effort "$effort"
 fi
 
 if [[ -n $thread ]]; then
-    validate_value CODEX_COMMIT_THREAD_ID "$thread"
-    git interpret-trailers --in-place \
-        --if-exists=replace \
-        --if-missing=add \
-        --trailer "Codex-Thread: ${thread}" \
-        "$message_file"
+    validate_value AI_COMMIT_THREAD "$thread"
+    add_trailer Agent-Thread "$thread"
 fi
