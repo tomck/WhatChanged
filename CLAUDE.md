@@ -8,6 +8,6 @@ Read `AGENTS.md`; it governs this repository.
   Commit only with:
   `scripts/claude-commit.sh --model <exact model ID> --effort <level> -- <git commit args>`
 - Use the exact model ID from the session (for example `claude-sonnet-5-5`).
-  Pass `--effort` only with the level actually in use; omit it rather than
-  guess. The Claude Code version is detected automatically.
+  Ask the user for the effort level (shown by `/effort`) if it is not known
+  this session; never guess it, and pass it with `--effort`. The Claude Code version is detected automatically.
 - Do not commit, tag, push, or publish unless the user asks.
