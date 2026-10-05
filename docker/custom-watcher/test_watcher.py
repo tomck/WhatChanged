@@ -45,6 +45,7 @@ assert watcher.file_diff({'a.conf': 'old'}, {'a.conf': 'new', 'b.conf': 'added'}
 assert watcher.TABLE_ROW_LIMITS['sip'] > watcher.MAX_TABLE_ROWS
 assert {
     'incoming',
+    'endpoint_extensions',
     'outbound_routes', 'outbound_route_patterns',
     'outbound_route_sequence', 'outbound_route_trunks', 'modules',
     'fax_details',
@@ -398,6 +399,22 @@ assert not watcher.clean_scope_refresh_allowed(
     base_scope, {'watch_tables': ['incoming', 'users'], 'readable_tables': []})
 assert watcher.clean_scope_refresh_allowed(
     base_scope, {'watch_tables': ['users'], 'readable_tables': []})
+legacy_scope = {'watch_tables': ['incoming']}
+assert not watcher.clean_scope_refresh_allowed(
+    legacy_scope, contract_scope, {'incoming'})
+
+# When a visibility regression prevents a clean scope refresh, newly readable
+# tables stay deferred instead of appearing as administrator-created records.
+before_scope, after_scope, deferred = watcher.comparable_tables(
+    {'incoming': {'rows': {}}},
+    {'incoming': {'rows': {}}, 'endpoint_extensions': {'rows': {'100': {'ext': '100'}}}},
+    scope_changed=True,
+    pending_reload=False,
+    newly_readable={'endpoint_extensions'},
+    coverage_regressed=True,
+)
+assert set(before_scope) == {'incoming'} and set(after_scope) == {'incoming'}
+assert deferred == ['endpoint_extensions']
 
 # The historic `sip` table remains fully explainable: an update names the
 # peer option and its before/after value, while sensitive values stay private.

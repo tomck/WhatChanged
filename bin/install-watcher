@@ -390,15 +390,18 @@ replace_environment_setting ASTDB_PATH "$astdb_path" "$environment"
 replace_environment_setting STATE_DIR "$state_dir" "$environment"
 replace_environment_setting ATTRIBUTION_LOG "$attribution_log" "$environment"
 
-# 0.1.9 accidentally omitted Core's `incoming` table from the installed
-# environment template even though the watcher and coverage contract included
-# it. Preserve every local customization while repairing that one known gap.
+# Preserve every local customization while adding newly supported tables to an
+# existing watcher environment. `incoming` repairs the 0.1.9 packaging gap;
+# `endpoint_extensions` covers the commercial Endpoint Manager extension map.
 current_watch_tables=$(sed -n 's/^WATCH_TABLES=//p' "$environment" | tail -n 1)
-case ",$current_watch_tables," in
-  *,incoming,*) ;;
-  ,) replace_environment_setting WATCH_TABLES incoming "$environment" ;;
-  *) replace_environment_setting WATCH_TABLES "$current_watch_tables,incoming" "$environment" ;;
-esac
+for required_watch_table in incoming endpoint_extensions; do
+  case ",$current_watch_tables," in
+    *,"$required_watch_table",*) ;;
+    ,) current_watch_tables=$required_watch_table ;;
+    *) current_watch_tables="$current_watch_tables,$required_watch_table" ;;
+  esac
+done
+replace_environment_setting WATCH_TABLES "$current_watch_tables" "$environment"
 
 # Only the account created by this installer is eligible for automatic grant
 # reconciliation. Preserve an administrator-supplied account unchanged.

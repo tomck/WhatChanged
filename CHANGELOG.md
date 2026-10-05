@@ -1,6 +1,6 @@
 # Changelog
 
-## Module 17.0.2.7 / watcher 0.1.11 (unreleased)
+## Module 17.0.2.7 / watcher 0.1.12 (unreleased)
 
 - Make embedded and standalone watcher removal safe for Apache and
   nginx/PHP-FPM by removing every web-SAPI sensor ini, validating and
@@ -18,6 +18,12 @@
 - Represent MariaDB's indistinguishable absent-table and missing-grant response
   honestly, aggregate optional sources into one calm limitation, and retain a
   stronger warning when a previously readable source disappears.
+- Fail closed in the page when previously readable table coverage disappears,
+  preserve legacy-baseline visibility during upgrades, and defer unrelated
+  scope expansion while that regression remains unresolved.
+- Observe the commercial Endpoint Manager extension map so an authenticated
+  "Update Config and Refresh Phone" action can be explained as record drift
+  rather than only an unattributed reload request.
 - Add an Apache/nginx uninstall, conflict, live-response, and reinstall smoke
   scenario to the complete FreePBX 17 gates.
 

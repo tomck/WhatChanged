@@ -187,6 +187,8 @@ for layout in debian portable; do
   grep -qx "STATE_DIR=$test_astvarlib/pendingchanges-watcher" "$root/etc/what-changed-watcher.env"
   grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
     | grep -Eq '(^|,)incoming(,|$)'
+  grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+    | grep -Eq '(^|,)endpoint_extensions(,|$)'
   grep -q "auto_prepend_file=$library/what-changed-request-audit.php" \
     "$root$library/99-what-changed-attribution.ini"
   cmp "$root$library/watcher.py" "$module/watcher/watcher.py"

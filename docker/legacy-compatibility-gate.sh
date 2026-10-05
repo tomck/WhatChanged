@@ -62,6 +62,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
         | while IFS= read -r source; do php -l "$source" >/dev/null; done
       php /tmp/legacy-page-smoke.php "$work/pendingchanges"
       php /tmp/legacy-page-smoke.php "$work/pendingchanges" degraded
+      php /tmp/legacy-page-smoke.php "$work/pendingchanges" regressed
       php /tmp/watcher-health-smoke.php "$work/pendingchanges"
       php /tmp/test-watcher-payload.php "$work/pendingchanges"
       php /tmp/test-framework-fallback.php "$work/pendingchanges"

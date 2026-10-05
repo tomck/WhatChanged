@@ -54,7 +54,7 @@
         <?php endif; ?>
       </div>
       <div class="pendingchanges-health-label">Coverage</div>
-      <div><?= $dataCurrent ? 'Current full watcher snapshot' : 'Reduced or last-known coverage; do not treat an empty result as all clear' ?></div>
+      <div><?= $coverageComplete ? 'Current full watcher snapshot' : 'Reduced or last-known coverage; do not treat an empty result as all clear' ?></div>
       <div class="pendingchanges-health-label">Baseline</div>
       <div>
         <?= $baselineTrusted ? 'Continuity verified' : 'Continuity uncertain; wait for an observed successful Apply Config before treating the baseline as authoritative' ?>
@@ -140,13 +140,20 @@
       </details>
     <?php endif; ?>
     <?php if (!empty($status['coverage_limitations'])): ?>
-      <div class="alert alert-info">Some configuration coverage is limited. These are coverage limitations, not pending changes.</div>
+      <div class="alert <?= $coverageRegressed ? 'alert-warning' : 'alert-info' ?>">
+        <?= $coverageRegressed
+          ? 'Previously available configuration coverage has been lost. The visible evidence cannot be treated as an all-clear.'
+          : 'Some configuration coverage is limited. These are coverage limitations, not pending changes.' ?>
+      </div>
       <?php foreach ($status['coverage_limitations'] as $limitation): ?>
-        <div class="pendingchanges-file">
+        <?php $limitationReason = isset($limitation['reason']) ? $limitation['reason'] : ''; ?>
+        <div class="pendingchanges-file<?= $limitationReason === 'table_visibility_regressed' ? ' alert alert-warning' : '' ?>">
           <?php if ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'row_limit'): ?>
             <?= $presenter->escape(isset($limitation['table']) ? $limitation['table'] : 'unknown table') ?>: <?= (int) (isset($limitation['rows']) ? $limitation['rows'] : 0) ?> rows exceeds the <?= (int) (isset($limitation['limit']) ? $limitation['limit'] : 0) ?>-row cap.
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'scope_expanded_while_pending'): ?>
             Additional watcher coverage begins after the current pending reload is resolved: <?= $presenter->escape(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : array())) ?>.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'scope_expanded_while_coverage_regressed'): ?>
+            Additional watcher coverage is deferred until the lost table visibility is explained or restored: <?= $presenter->escape(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : array())) ?>.
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_scope_expanded_while_pending'): ?>
             Immediate Asterisk-state coverage begins after the current pending reload is resolved: <?= $presenter->escape(implode(', ', isset($limitation['families']) ? $limitation['families'] : array())) ?>.
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_row_limit'): ?>
@@ -158,7 +165,7 @@
             They may have been removed with a module or the watcher account may have lost read access.
             <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'If the tables should exist, re-run the watcher installer.') ?>
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'optional_table_visibility_unknown'): ?>
-            <?= count(isset($limitation['tables']) ? $limitation['tables'] : array()) ?> optional table sources are not visible.
+            Optional table sources not visible: <?= count(isset($limitation['tables']) ? $limitation['tables'] : array()) ?>.
             This is expected when their owning modules are not installed; MariaDB does not distinguish that case from missing table-level permission for this account.
             <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'If those modules are installed, re-run the watcher installer.') ?>
             <details><summary>Show optional source names</summary><?= $presenter->escape(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : array())) ?></details>
@@ -168,8 +175,10 @@
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
-    <?php if ($dataCurrent && $baselineTrusted && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+    <?php if ($coverageComplete && $baselineTrusted && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No attributable configuration or watched-file drift is currently present.</p>
+    <?php elseif ($dataCurrent && $baselineTrusted && $coverageRegressed && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
+      <p class="text-muted">No drift appears within the sources that remain readable, but lost coverage prevents an all-clear.</p>
     <?php elseif ((!$dataCurrent || !$baselineTrusted) && empty($status['database']) && empty($astdbChanges) && empty($status['generated_files']) && empty($status['module_files'])): ?>
       <p class="text-muted">No drift appears in the available evidence, but watcher health and baseline continuity must both be verified before this can be treated as an authoritative result.</p>
     <?php endif; ?>

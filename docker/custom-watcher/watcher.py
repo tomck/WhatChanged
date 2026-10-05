@@ -48,7 +48,8 @@ ASTDB_MAX_ROWS = int(os.environ.get('ASTDB_MAX_ROWS', '10000'))
 # tables, and the watcher must never read them just because they exist.
 DEFAULT_WATCH_TABLES = (
     'announcement', 'callbacks', 'conferences', 'customappsreg', 'devices',
-    'did', 'incoming', 'extension_routes', 'extensions', 'fax_details', 'featurecodes', 'freepbx_settings', 'globals',
+    'did', 'endpoint_extensions', 'incoming', 'extension_routes', 'extensions',
+    'fax_details', 'featurecodes', 'freepbx_settings', 'globals',
     'iax', 'injected', 'ivr_details', 'ivr_entries', 'miscapps', 'miscdests', 'modules',
     # FreePBX 17 uses the singular `outbound_route_sequence` table. Retain
     # the historic plural entry for compatibility with older/restored PBXs,
@@ -122,7 +123,7 @@ VOLATILE_COLUMNS = {
 NULL_EQUIVALENT_ZERO_COLUMNS = {'outbound_routes': {'time_group_id'}}
 NON_DIFF_COLUMNS = {'userman_users_settings': {'username'}}
 IDENTITY_CONTEXT_FIELDS = (
-    'username', 'uid', 'module', 'key', 'modulename', 'extension', 'id',
+    'username', 'uid', 'module', 'key', 'modulename', 'extension', 'ext', 'id',
     'account', 'grpnum', 'device', 'user', 'name', 'description',
 )
 CONTENT_HASH_CACHE = {}
@@ -726,7 +727,8 @@ def file_diff(before, after):
             for name in sorted(set(before).union(after)) if before.get(name) != after.get(name)}
 
 def comparable_tables(baseline, current, scope_changed, pending_reload,
-                      newly_readable=None, unreadable=None, removed_from_configuration=None):
+        newly_readable=None, unreadable=None, removed_from_configuration=None,
+        coverage_regressed=False):
     """Avoid calling newly enabled coverage a pending administrator change.
 
     A watcher upgrade may add tables while FreePBX already has Apply Config
@@ -738,7 +740,7 @@ def comparable_tables(baseline, current, scope_changed, pending_reload,
     ignored = set(unreadable or ()).union(removed_from_configuration or ())
     baseline = {table: value for table, value in baseline.items() if table not in ignored}
     current = {table: value for table, value in current.items() if table not in ignored}
-    if not (scope_changed and pending_reload):
+    if not (scope_changed and (pending_reload or coverage_regressed)):
         return baseline, current, []
     added_coverage = set(current).difference(baseline)
     if newly_readable is not None:
@@ -754,11 +756,13 @@ def comparable_tables(baseline, current, scope_changed, pending_reload,
     )
 
 
-def clean_scope_refresh_allowed(previous_scope, current_scope):
+def clean_scope_refresh_allowed(previous_scope, current_scope,
+        previous_readable_fallback=()):
     """Allow clean scope upgrades, but never normalize lost table visibility."""
     previous_without_readable = dict(previous_scope)
     current_without_readable = dict(current_scope)
-    previous_readable = set(previous_without_readable.pop('readable_tables', ()))
+    previous_readable = set(previous_without_readable.pop(
+        'readable_tables', previous_readable_fallback))
     current_readable = set(current_without_readable.pop('readable_tables', ()))
     current_configured = set(current_without_readable.get('watch_tables', ()))
     retained_previous = previous_readable.intersection(current_configured)
@@ -938,7 +942,8 @@ def observe_forever():
             save_baseline(state)
             baseline_provenance = {'state': 'trusted', 'reason': 'initial_clean_baseline'}
         elif existing and existing.get('scope') != scope and not database['need_reload'] \
-                and clean_scope_refresh_allowed(existing.get('scope', {}), scope):
+                and clean_scope_refresh_allowed(
+                    existing.get('scope', {}), scope, existing.get('tables', {}).keys()):
             if baseline_provenance.get('state') == 'trusted':
                 save_baseline(state)
                 baseline_provenance = {'state': 'trusted', 'reason': 'clean_scope_upgrade'}
@@ -961,6 +966,7 @@ def observe_forever():
             baseline_scope = baseline.get('scope', {})
             baseline_readable = set(baseline_scope.get('readable_tables', baseline['tables'].keys()))
             current_readable = set(database['readable_tables'])
+            coverage_regressed = bool(ambiguous_tables.intersection(baseline_readable))
             removed_from_configuration = set(baseline_scope.get('watch_tables', ())).difference(WATCH_TABLES)
             before_tables, after_tables, deferred_coverage = comparable_tables(
                 baseline['tables'],
@@ -970,6 +976,7 @@ def observe_forever():
                 newly_readable=current_readable.difference(baseline_readable),
                 unreadable=ambiguous_tables,
                 removed_from_configuration=removed_from_configuration,
+                coverage_regressed=coverage_regressed,
             )
             database_drift = database_diff(
                 without_module_owned_rows(before_tables),
@@ -991,7 +998,8 @@ def observe_forever():
         limitations.extend(astdb['limitations'])
         if deferred_coverage:
             limitations.append({
-                'reason': 'scope_expanded_while_pending',
+                'reason': 'scope_expanded_while_pending'
+                    if database['need_reload'] else 'scope_expanded_while_coverage_regressed',
                 'tables': deferred_coverage,
             })
         if astdb_deferred:
@@ -1016,7 +1024,10 @@ def observe_forever():
             'file_drift': file_drift,
             'coverage_limitations': limitations,
             'coverage': {
-                'database_tables': list(WATCH_TABLES),
+                'database_tables_configured': list(WATCH_TABLES),
+                'database_tables_visible': sorted(database['readable_tables']),
+                'database_tables_not_visible': sorted(
+                    set(WATCH_TABLES).difference(database['readable_tables'])),
                 'database_exclusions': ['modules.modulename=pendingchanges'],
                 'astdb_families': list(ASTDB_FAMILIES),
                 'generated_files': str(ROOT / '*.conf'),

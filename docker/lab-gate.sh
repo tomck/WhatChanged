@@ -51,6 +51,7 @@ docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-module-state.sh"
 "$ROOT_DIR/docker/smoke-userman-setting.sh"
 "$ROOT_DIR/docker/smoke-fax-settings.sh"
+"$ROOT_DIR/docker/smoke-endpoint-manager.sh"
 "$ROOT_DIR/docker/smoke-outbound-route.sh"
 "$ROOT_DIR/docker/smoke-trunk.sh"
 "$ROOT_DIR/docker/smoke-watcher-health-page.sh"

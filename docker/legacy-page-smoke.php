@@ -10,6 +10,52 @@ namespace {
     {
         public function status()
         {
+            if (isset($GLOBALS['argv'][2]) && $GLOBALS['argv'][2] === 'regressed') {
+                return [
+                    'pending' => false,
+                    'baseline' => true,
+                    'watcher' => true,
+                    'baseline_provenance' => ['state' => 'trusted'],
+                    'message' => 'No pending reload or observed drift.',
+                    'captured_at' => 1700000000,
+                    'watcher_observed_at' => 1700000030,
+                    'database' => [],
+                    'astdb' => [],
+                    'generated_files' => [],
+                    'module_files' => [],
+                    'coverage_limitations' => [[
+                        'reason' => 'table_visibility_regressed',
+                        'tables' => ['endpoint_extensions'],
+                        'remedy' => 'Re-run the watcher installer.',
+                    ]],
+                    'coverage' => [
+                        'database_tables_configured' => ['users', 'endpoint_extensions'],
+                        'database_tables_visible' => ['users'],
+                        'database_tables_not_visible' => ['endpoint_extensions'],
+                    ],
+                    'attribution' => [],
+                    'watcher_health' => [
+                        'state' => 'healthy',
+                        'label' => 'Healthy',
+                        'severity' => 'success',
+                        'detail' => 'A completed watcher observation is current.',
+                        'sensor_loaded' => true,
+                        'observation_age_seconds' => 5,
+                        'payload' => [
+                            'state' => 'current',
+                            'label' => 'Current',
+                            'severity' => 'success',
+                            'detail' => 'The installed watcher matches the bundled payload.',
+                            'current' => true,
+                            'embedded_version' => '0.1.12',
+                            'installed_version' => '0.1.12',
+                            'update_command' => null,
+                        ],
+                    ],
+                    'data_current' => true,
+                    'coverage_mode' => 'watcher',
+                ];
+            }
             if (isset($GLOBALS['argv'][2]) && $GLOBALS['argv'][2] === 'degraded') {
                 return [
                     'pending' => false,
@@ -159,7 +205,7 @@ namespace {
     }
 
     if ($argc < 2 || $argc > 3) {
-        fwrite(STDERR, "usage: legacy-page-smoke.php extracted-module-directory [degraded]\n");
+        fwrite(STDERR, "usage: legacy-page-smoke.php extracted-module-directory [degraded|regressed]\n");
         exit(2);
     }
 
@@ -173,9 +219,13 @@ namespace {
     ob_start();
     require $argv[1].'/page.pendingchanges.php';
     $html = ob_get_clean();
-    $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
-        ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
-        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value', '2 optional table sources are not visible', 'Show optional source names', 'optional_one, optional_two'];
+    if (isset($argv[2]) && $argv[2] === 'degraded') {
+        $expectedText = ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence'];
+    } elseif (isset($argv[2]) && $argv[2] === 'regressed') {
+        $expectedText = ['Pending Changes Tripwire', 'Watcher database coverage regressed', 'Reduced or last-known coverage', 'Previously available configuration coverage has been lost', 'endpoint_extensions', 'lost coverage prevents an all-clear'];
+    } else {
+        $expectedText = ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value', 'Optional table sources not visible: 2', 'Show optional source names', 'optional_one, optional_two'];
+    }
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);
@@ -183,6 +233,9 @@ namespace {
     }
     if (isset($argv[2]) && $argv[2] === 'degraded' && strpos($html, 'No attributable configuration or watched-file drift is currently present.') !== false) {
         throw new \RuntimeException('Degraded watcher page claimed a current clean state');
+    }
+    if (isset($argv[2]) && $argv[2] === 'regressed' && strpos($html, 'alert alert-success') !== false) {
+        throw new \RuntimeException('Coverage regression rendered a success banner');
     }
     echo "legacy page rendering checks passed\n";
 }

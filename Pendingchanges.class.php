@@ -20,6 +20,7 @@ class Pendingchanges extends \FreePBX_Helpers implements \FreePBX\BMO
         'customappsreg',
         'devices',
         'did',
+        'endpoint_extensions',
         'extension_routes',
         'extensions',
         'fax_details',

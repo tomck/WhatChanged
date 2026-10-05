@@ -18,6 +18,15 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+devices_count=$(compose exec -T database mariadb -uroot -plocal-freepbx-root \
+  --batch --skip-column-names -e \
+  "SELECT COUNT(*) FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA='asterisk' AND TABLE_NAME='devices'")
+if [ "$devices_count" != 1 ]; then
+  echo 'Limited-account smoke requires the existing asterisk.devices table.' >&2
+  exit 1
+fi
+
 compose exec -T database mariadb -uroot -plocal-freepbx-root asterisk -e \
   "DROP USER IF EXISTS '$fixture_user'@'%';
    CREATE USER '$fixture_user'@'%' IDENTIFIED BY 'disposable-limited-account';
@@ -49,5 +58,12 @@ assert limitations[1]["tables"] == ["whatchanged_absent_fixture"]
 '
 
 cleanup
+fixture_count=$(compose exec -T database mariadb -uroot -plocal-freepbx-root \
+  --batch --skip-column-names -e \
+  "SELECT COUNT(*) FROM mysql.user WHERE User='$fixture_user' AND Host='%'")
+if [ "$fixture_count" != 0 ]; then
+  echo 'Limited-account smoke left its disposable MariaDB account behind.' >&2
+  exit 1
+fi
 trap - EXIT HUP INT TERM
 echo 'Limited watcher account reports absent and ungranted tables without false certainty'

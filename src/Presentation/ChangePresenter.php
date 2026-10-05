@@ -44,10 +44,37 @@ class ChangePresenter
         $hasDrift = !empty($status['database'])
             || !empty($status['astdb'])
             || !empty($status['files']);
+        $coverageRegressed = false;
+        $coverageLimitations = isset($status['coverage_limitations'])
+            && is_array($status['coverage_limitations'])
+            ? $status['coverage_limitations']
+            : array();
+        foreach ($coverageLimitations as $limitation) {
+            if (
+                is_array($limitation)
+                && (isset($limitation['reason']) ? $limitation['reason'] : '')
+                    === 'table_visibility_regressed'
+            ) {
+                $coverageRegressed = true;
+                break;
+            }
+        }
+        $coverageComplete = $dataCurrent && !$coverageRegressed;
+
+        if ($coverageRegressed && !$status['pending'] && !$hasDrift) {
+            $status['message'] = 'Watcher database coverage regressed; no all-clear is available until '
+                . 'the missing source visibility is explained or restored.';
+        }
 
         if ($severity === 'danger') {
             $messageClass = 'alert-danger';
-        } elseif ($severity === 'warning' || !$baselineTrusted || $status['pending'] || $hasDrift) {
+        } elseif (
+            $severity === 'warning'
+            || !$baselineTrusted
+            || $status['pending']
+            || $hasDrift
+            || $coverageRegressed
+        ) {
             $messageClass = 'alert-warning';
         } else {
             $messageClass = 'alert-success';
@@ -62,6 +89,8 @@ class ChangePresenter
             'watcherHealth' => $watcherHealth,
             'watcherPayload' => $watcherPayload,
             'dataCurrent' => $dataCurrent,
+            'coverageRegressed' => $coverageRegressed,
+            'coverageComplete' => $coverageComplete,
             'baselineProvenance' => $baselineProvenance,
             'baselineTrusted' => $baselineTrusted,
             'messageClass' => $messageClass,
@@ -82,6 +111,7 @@ class ChangePresenter
     {
         $labels = array(
             'fax_details' => 'Fax Configuration',
+            'endpoint_extensions' => 'Endpoint Manager extensions',
             'incoming' => 'Inbound Routes',
             'freepbx_settings' => 'FreePBX settings',
             'modules' => 'FreePBX modules',
@@ -196,7 +226,7 @@ class ChangePresenter
                 . ' / ' . (string) (isset($row['key']) ? $row['key'] : 'value');
         }
 
-        foreach (array('extension', 'id', 'account', 'grpnum', 'device', 'user', 'key') as $field) {
+        foreach (array('extension', 'ext', 'id', 'account', 'grpnum', 'device', 'user', 'key') as $field) {
             if (array_key_exists($field, $row) && $row[$field] !== '') {
                 $label = (string) $row[$field];
                 if (!empty($row['name'])) {

@@ -129,8 +129,17 @@ unknown status, rather than falsely claiming that a missing table exists. A
 source that was previously readable but disappears receives a stronger
 coverage-regression warning. Both reports give the exact `install-watcher`
 command to reconcile installer-managed grants when the table should exist.
+The regression warning describes continuity against the current applied
+baseline; after a legitimate Apply Config establishes a new baseline, an
+unresolved source becomes an optional visibility limitation because MariaDB
+still cannot distinguish an absent table from an ungranted one.
 Newly readable coverage is deferred while Apply Config is already pending so
 pre-existing rows are not misrepresented as newly staged changes.
+
+The commercial Endpoint Manager's extension map (`endpoint_extensions`) is an
+explicit optional source. This lets WhatChanged explain changes such as
+"Update Config and Refresh Phone" when Endpoint Manager updates an extension
+record and raises the global reload flag. Token-like fields remain redacted.
 
 PHP supports only one `auto_prepend_file`. If another application already owns
 that setting, WhatChanged leaves it untouched, completes the core watcher
