@@ -80,7 +80,7 @@ state diff remains the authoritative evidence of what the bounded watcher saw.
 Secret-looking values are never persisted in cleartext. Before persistence
 they are replaced with an installation-keyed `HMAC-SHA256` fingerprint
 (`[protected hmac-sha256:…]`); the public report shows only `[redacted]`.
-The key lives at `$ASTVARLIB/pendingchanges-redaction.key`, owned by the
+The watcher key lives at `$ASTVARLIB/pendingchanges-watcher/redaction.key`, owned by the
 Asterisk service account with mode `0600`. It is created automatically on the
 first baseline snapshot; no manual step is needed on install.
 
@@ -91,9 +91,13 @@ first baseline snapshot; no manual step is needed on install.
   readable — fix with `chmod 0600` as root) warns.
 - **Loss is not exposure.** Fingerprints are one-way; a lost key reveals no
   secrets. It does break comparability: every protected field will report as
-  changed exactly once against the new key. Rotate deliberately instead:
-  as root, move the key aside, confirm a clean Apply Config, then seed a
-  fresh baseline. Never delete the key to "fix" drift — re-seed after Apply.
+  changed against the new key. Rotate deliberately only after confirming that
+  FreePBX has no pending Apply Config: stop the watcher, preserve a timestamped
+  root-only copy of the complete watcher state directory, move
+  `redaction.key`, `baseline.json`, `runtime.json`, and `status.json` into that
+  copy, then start the watcher. It creates a new key and clean baseline on its
+  next completed observation. If a reload is pending it refuses to invent that
+  baseline. Never delete the key merely to silence drift.
 - **Backups containing the key are sensitive.** Anyone holding the key plus a
   baseline can test guesses against fingerprints offline (slow, but possible).
   Encrypt pilot backups and restrict who can read them.
@@ -112,10 +116,11 @@ first baseline snapshot; no manual step is needed on install.
   baseline without its original redaction key is not comparable: perform a
   reviewed Apply Config and seed fresh rather than trusting the old
   comparison.
-- Uninstalling the module deliberately retains the watcher environment,
-  retained evidence, and the SELECT-only database account so a final report
-  survives removal. Remove those by hand (`bin/uninstall-watcher`) only under
-  local retention policy.
+- Run the module's `bin/uninstall-watcher` before uninstalling the module. It
+  removes watcher executables, the service, and the web-PHP sensor while
+  deliberately retaining the environment, evidence, redaction key, and
+  SELECT-only database account so a final report survives removal. Remove the
+  retained material separately only under local retention policy.
 
 ## Rollback
 

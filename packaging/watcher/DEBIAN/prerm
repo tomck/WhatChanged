@@ -4,5 +4,18 @@ set -eu
 case "${1:-remove}" in
   remove|deconfigure|upgrade)
     systemctl stop what-changed-watcher.service >/dev/null 2>&1 || true
+    lifecycle=/usr/lib/what-changed-watcher/web-sensor-lifecycle.sh
+    if [ ! -r "$lifecycle" ]; then
+      echo "Watcher uninstall helper is missing: $lifecycle" >&2
+      echo 'Reinstall this package before removing it so PHP configuration can be cleaned safely.' >&2
+      exit 1
+    fi
+    . "$lifecycle"
+    if ! what_changed_remove_sensor_configuration; then
+      echo 'The sensor ini files were removed, but an active web stack failed validation or reload.' >&2
+      echo 'The watcher library was preserved so PHP does not reference a missing file.' >&2
+      echo 'Correct the reported web-server/PHP error, then rerun: sudo apt-get --fix-broken install' >&2
+      exit 1
+    fi
     ;;
 esac

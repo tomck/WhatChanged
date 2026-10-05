@@ -1,5 +1,23 @@
 # Changelog
 
+## Module 17.0.2.7 / watcher 0.1.10 (unreleased)
+
+- Make embedded and standalone watcher removal safe for Apache and
+  nginx/PHP-FPM by removing every web-SAPI sensor ini, validating and
+  reloading active stacks, and only then deleting the referenced library.
+- Refuse to override another product's `auto_prepend_file` configuration and
+  retain recent attribution evidence when the bounded request log compacts.
+- Protect additional FreePBX credential fields and SIP registration material
+  before persistence, with watcher/framework parity regressions.
+- Repair the missing `incoming` table in existing watcher environments and
+  restrict the generated local database account to existing allowlisted
+  tables plus the reload flag rather than the entire FreePBX schema.
+- Distinguish observed drift without a reload from a clean state, report
+  first-install baseline provenance accurately, and inspect the external
+  watcher's redaction key in doctor output.
+- Add an Apache/nginx uninstall, conflict, live-response, and reinstall smoke
+  scenario to the complete FreePBX 17 gates.
+
 ## Unreleased repository installer and documentation
 
 - Pin the convenience installer to the reviewed public-alpha release instead

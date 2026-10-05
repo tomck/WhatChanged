@@ -82,6 +82,13 @@ SENSITIVE_FIELD_MARKERS = (
     'password', 'passwd', 'secret', 'token', 'value_digest', 'pin',
     'credential', 'private_key', 'api_key', 'apikey', 'auth_key', 'authkey',
 )
+SENSITIVE_SEMANTIC_MARKERS = SENSITIVE_FIELD_MARKERS + (
+    'pass', 'register', 'md5_cred', 'certkey',
+)
+SENSITIVE_EXACT_NAMES = {
+    'ampmgrpass', 'astmgrpass', 'ampdbpass', 'sslpass', 'certkey',
+    'md5_cred', 'register',
+}
 SENSITIVE_VALUE_FIELDS = ('value', 'val', 'data')
 SENSITIVE_SEMANTIC_FIELDS = ('module', 'keyword', 'key', 'variable', 'setting', 'option', 'name')
 PROTECTED_VALUE_PREFIX = '[protected hmac-sha256:'
@@ -378,11 +385,16 @@ def snapshot_rows(cursor, table):
 def semantic_name_sensitive(value):
     """Recognize secret-like setting names without matching words such as secretary."""
     normalized = str(value or '').lower()
+    compact = re.sub(r'[^a-z0-9]', '', normalized)
+    if compact in {re.sub(r'[^a-z0-9]', '', marker) for marker in SENSITIVE_EXACT_NAMES}:
+        return True
     return any(re.search(r'(^|[_.|/\s\-]){}($|[_.|/\s\-])'.format(re.escape(marker)), normalized)
-               for marker in SENSITIVE_FIELD_MARKERS)
+               for marker in SENSITIVE_SEMANTIC_MARKERS)
 
 def sensitive_field(field, row=None):
     name = field.lower()
+    if name in SENSITIVE_EXACT_NAMES or name == 'pass' or name.endswith('_cred'):
+        return True
     if any(marker in name for marker in SENSITIVE_FIELD_MARKERS):
         return True
     # Avoid treating innocent field names such as `keyword` as a secret while
@@ -392,8 +404,10 @@ def sensitive_field(field, row=None):
     # Several FreePBX schemas put the sensitive setting name in one column and
     # its material in a generic value/val/data column.
     if name in SENSITIVE_VALUE_FIELDS and row:
-        setting = ' '.join(str(row.get(key, '')) for key in SENSITIVE_SEMANTIC_FIELDS)
-        return semantic_name_sensitive(setting)
+        return any(
+            semantic_name_sensitive(row.get(key, ''))
+            for key in SENSITIVE_SEMANTIC_FIELDS
+        )
     return False
 
 def redaction_key():
@@ -403,21 +417,56 @@ def redaction_key():
         return REDACTION_KEY_CACHE
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        key = bytes.fromhex(REDACTION_KEY.read_text().strip())
-    except (OSError, ValueError):
+        encoded = REDACTION_KEY.read_text().strip()
+    except FileNotFoundError:
         key = os.urandom(32)
         try:
             descriptor = os.open(str(REDACTION_KEY), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError:
-            key = bytes.fromhex(REDACTION_KEY.read_text().strip())
+            encoded = REDACTION_KEY.read_text().strip()
+            if not re.fullmatch(r'[a-f0-9]{64}', encoded):
+                raise RuntimeError(
+                    'WhatChanged redaction key is invalid; preserve it and follow the documented key recovery procedure'
+                )
+            key = bytes.fromhex(encoded)
         else:
             with os.fdopen(descriptor, 'w') as destination:
                 destination.write(key.hex() + '\n')
             os.chmod(REDACTION_KEY, 0o600)
+    except OSError as error:
+        raise RuntimeError('WhatChanged redaction key cannot be read: {}'.format(error))
+    else:
+        if not re.fullmatch(r'[a-f0-9]{64}', encoded):
+            raise RuntimeError(
+                'WhatChanged redaction key is invalid; preserve it and follow the documented key recovery procedure'
+            )
+        key = bytes.fromhex(encoded)
+    try:
+        # Early watcher builds could leave an otherwise valid key group/world
+        # readable. Repair that upgrade state before using the key; inability
+        # to restore the owner-only boundary must degrade watcher health rather
+        # than silently continuing with exposed fingerprint material.
+        os.chmod(REDACTION_KEY, 0o600)
+    except OSError as error:
+        raise RuntimeError('WhatChanged redaction key permissions cannot be secured: {}'.format(error))
     if len(key) < 32:
         raise RuntimeError('WhatChanged redaction key is invalid')
     REDACTION_KEY_CACHE = key
     return key
+
+def observation_message(baseline_provenance, need_reload, database_drift, astdb_drift, file_drift):
+    if baseline_provenance.get('state') == 'uncertain':
+        return 'Baseline provenance is uncertain after a watcher interruption; reported drift may span an Apply Config.'
+    has_drift = bool(database_drift or astdb_drift or file_drift)
+    if need_reload and not has_drift:
+        return 'Reload requested; origin unavailable.'
+    if need_reload:
+        return 'Configuration drift detected since the applied baseline.'
+    if astdb_drift and not database_drift and not file_drift:
+        return 'Immediate Asterisk state drift detected; it may already be effective.'
+    if has_drift:
+        return 'Observed configuration drift exists without a pending reload; it may already be effective or out of band.'
+    return 'No pending reload or observed drift.'
 
 def protect_value(value):
     if isinstance(value, str) and value.startswith(PROTECTED_VALUE_PREFIX):
@@ -468,6 +517,24 @@ def database_connection_parameters():
     return parameters
 
 
+def probe_unlisted_table(cursor, table):
+    """Distinguish an absent optional table from an unreadable covered table."""
+    try:
+        cursor.execute("SELECT 1 FROM `{}` LIMIT 0".format(table))
+    except pymysql.MySQLError as error:
+        code = error.args[0] if error.args else None
+        if code == 1146:
+            return False, None
+        if code in (1044, 1045, 1142):
+            return False, {
+                'table': table,
+                'reason': 'table_not_readable',
+                'remedy': 'Run: sudo {}/pendingchanges/bin/install-watcher'.format(MODULE_ROOT),
+            }
+        raise
+    return True, None
+
+
 def database_snapshot():
     connection = pymysql.connect(**database_connection_parameters())
     with connection.cursor() as cursor:
@@ -477,9 +544,15 @@ def database_snapshot():
         tables = {column(item, next(iter(item)) if isinstance(item, dict) else '', 0) for item in cursor.fetchall()}
         snapshot = {}
         limitations = []
+        readable_tables = []
         for table in WATCH_TABLES:
             if table not in tables:
-                continue
+                readable, limitation = probe_unlisted_table(cursor, table)
+                if limitation:
+                    limitations.append(limitation)
+                if not readable:
+                    continue
+            readable_tables.append(table)
             cursor.execute(f"SELECT COUNT(*) AS row_count FROM `{table}`")
             row_count = int(column(cursor.fetchone(), 'row_count', 0))
             row_limit = TABLE_ROW_LIMITS.get(table, MAX_TABLE_ROWS)
@@ -496,7 +569,12 @@ def database_snapshot():
             snapshot[table] = {'keys': keys, 'rows': {row_key(item, keys): item for item in rows}}
     connection.close()
     value = column(row, 'value', 0) if row else None
-    return {'need_reload': bool(value == 'true'), 'tables': snapshot, 'limitations': limitations}
+    return {
+        'need_reload': bool(value == 'true'),
+        'tables': snapshot,
+        'limitations': limitations,
+        'readable_tables': readable_tables,
+    }
 
 def reload_requested():
     """Read only FreePBX's lightweight global reload flag."""
@@ -619,7 +697,8 @@ def file_diff(before, after):
     return {name: {'before': before.get(name), 'after': after.get(name)}
             for name in sorted(set(before).union(after)) if before.get(name) != after.get(name)}
 
-def comparable_tables(baseline, current, scope_changed, pending_reload):
+def comparable_tables(baseline, current, scope_changed, pending_reload,
+                      newly_readable=None, unreadable=None, removed_from_configuration=None):
     """Avoid calling newly enabled coverage a pending administrator change.
 
     A watcher upgrade may add tables while FreePBX already has Apply Config
@@ -630,12 +709,18 @@ def comparable_tables(baseline, current, scope_changed, pending_reload):
     """
     if not (scope_changed and pending_reload):
         return baseline, current, []
-    shared = set(baseline).intersection(current)
-    added_coverage = sorted(set(current).difference(baseline))
+    added_coverage = set(current).difference(baseline)
+    if newly_readable is not None:
+        added_coverage.update(newly_readable)
+    ignored = set(unreadable or ()).union(removed_from_configuration or ())
+    added_coverage.difference_update(ignored)
     return (
-        {table: baseline[table] for table in shared},
-        {table: current[table] for table in shared},
-        added_coverage,
+        {table: value for table, value in baseline.items() if table not in ignored},
+        {
+            table: value for table, value in current.items()
+            if table not in ignored and table not in added_coverage
+        },
+        sorted(added_coverage),
     )
 
 def comparable_astdb(baseline, current_state, scope_changed, pending_reload):
@@ -762,6 +847,11 @@ def observe_forever():
         # such a baseline only while FreePBX is clean.
         scope = {
             'watch_tables': list(WATCH_TABLES),
+            # Including the effective readable subset makes a later grant a
+            # scope expansion. If Apply Config is already pending, the newly
+            # visible table is deferred instead of being misreported as all
+            # newly added records.
+            'readable_tables': database['readable_tables'],
             'max_table_rows': MAX_TABLE_ROWS,
             'table_row_limits': TABLE_ROW_LIMITS,
             'astdb_families': list(ASTDB_FAMILIES),
@@ -820,8 +910,23 @@ def observe_forever():
             baseline_provenance = {'state': 'trusted', 'reason': 'baseline_matches_current_state'}
         scope_changed = bool(baseline and baseline.get('scope') != scope)
         if baseline:
+            baseline_scope = baseline.get('scope', {})
+            baseline_readable = set(baseline_scope.get('readable_tables', baseline['tables'].keys()))
+            current_readable = set(database['readable_tables'])
+            unreadable_tables = {
+                item.get('table') for item in database['limitations']
+                if item.get('reason') == 'table_not_readable' and item.get('table')
+            }
+            removed_from_configuration = set(baseline_scope.get('watch_tables', ())).difference(WATCH_TABLES)
             before_tables, after_tables, deferred_coverage = comparable_tables(
-                baseline['tables'], state['tables'], scope_changed, database['need_reload'])
+                baseline['tables'],
+                state['tables'],
+                scope_changed,
+                database['need_reload'],
+                newly_readable=current_readable.difference(baseline_readable),
+                unreadable=unreadable_tables,
+                removed_from_configuration=removed_from_configuration,
+            )
             database_drift = database_diff(
                 without_module_owned_rows(before_tables),
                 without_module_owned_rows(after_tables),
@@ -837,7 +942,6 @@ def observe_forever():
             astdb_deferred = False
             astdb_drift = {}
         file_drift = file_diff(baseline['files'], state['files']) if baseline else {}
-        has_drift = bool(database_drift or astdb_drift or file_drift)
         limitations = list(database['limitations']) + list(astdb['limitations'])
         if deferred_coverage:
             limitations.append({
@@ -874,11 +978,13 @@ def observe_forever():
                 'request_attribution': 'authenticated FreePBX web write metadata; inferred correlation only',
             },
             'attribution': attribution,
-            'message': 'Baseline provenance is uncertain after a watcher interruption; reported drift may span an Apply Config.'
-                       if baseline_provenance.get('state') == 'uncertain' else
-                       ('Reload requested; origin unavailable.' if database['need_reload'] and not has_drift else
-                        ('Configuration drift detected since the applied baseline.' if database['need_reload'] else
-                         ('Immediate Asterisk state drift detected; it may already be effective.' if astdb_drift else 'No pending reload.'))),
+            'message': observation_message(
+                baseline_provenance,
+                database['need_reload'],
+                database_drift,
+                astdb_drift,
+                file_drift,
+            ),
         }
         # A smoke driver or administrator may Apply Config as soon as the
         # published status shows pending drift. Record that transition in

@@ -9,15 +9,27 @@ MODULE_VERSION=$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "$ROOT_DIR/mod
 WATCHER_VERSION=$(sed -n 's/^Version: //p' "$ROOT_DIR/packaging/watcher/DEBIAN/control")
 FREEPBX_LAB_PORT=${FREEPBX_LAB_PORT:-8080}
 FREEPBX_LAB_URL=${FREEPBX_LAB_URL:-http://127.0.0.1:$FREEPBX_LAB_PORT}
-export FREEPBX_LAB_PORT FREEPBX_LAB_URL
+FREEPBX_WEB_SERVER=${FREEPBX_WEB_SERVER:-apache}
+export FREEPBX_LAB_PORT FREEPBX_LAB_URL FREEPBX_WEB_SERVER
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"
 
 # Profile-only services are not rebuilt by `up --build` unless their profile
 # is active. Build the smoke driver explicitly so the gate always tests the
 # checked-out assertions instead of a stale local image.
 docker compose -f "$COMPOSE_FILE" build pbx custom-watcher smoke
+# Recreate the serving containers so a prior nginx or Apache run cannot retain
+# the wrong environment. Named volumes remain intact across this ordinary
+# recreation; only the disposable processes are replaced.
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate pbx custom-watcher
 docker compose -f "$COMPOSE_FILE" up -d
 "$ROOT_DIR/docker/bootstrap-freepbx.sh"
+if [ "$FREEPBX_WEB_SERVER" = apache ]; then
+  docker compose -f "$COMPOSE_FILE" exec -T pbx sh -eu -c '
+    pgrep -x apache2 >/dev/null
+    ! pgrep -x nginx >/dev/null
+    ! pgrep -x php-fpm8.2 >/dev/null
+  '
+fi
 "$ROOT_DIR/scripts/package-module.sh" --target 17 --output-dir "$ROOT_DIR/dist" >/dev/null
 "$ROOT_DIR/scripts/package-watcher.sh" >/dev/null
 "$ROOT_DIR/docker/validate-module-archive.sh" "$ROOT_DIR/dist/pendingchanges-$MODULE_VERSION.tgz"
@@ -43,6 +55,8 @@ docker compose -f "$COMPOSE_FILE" run --rm smoke
 "$ROOT_DIR/docker/smoke-watcher-health-page.sh"
 "$ROOT_DIR/docker/smoke-redaction.sh"
 "$ROOT_DIR/docker/smoke-watcher-recovery.sh"
+"$ROOT_DIR/docker/smoke-watcher-uninstall.sh"
+"$ROOT_DIR/docker/smoke-watcher-health-page.sh"
 
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python -c '
 import json

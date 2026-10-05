@@ -13,8 +13,13 @@ from pathlib import Path
 try:
     import pymysql  # noqa: F401
 except ModuleNotFoundError:
+    class FakeMySQLError(Exception):
+        pass
+
     sys.modules['pymysql'] = types.SimpleNamespace(
-        cursors=types.SimpleNamespace(DictCursor=object)
+        cursors=types.SimpleNamespace(DictCursor=object),
+        MySQLError=FakeMySQLError,
+        err=types.SimpleNamespace(OperationalError=FakeMySQLError),
     )
 
 spec = importlib.util.spec_from_file_location('watcher', Path(__file__).with_name('watcher.py'))
@@ -53,6 +58,19 @@ assert watcher.redact_row({'keyword': 'API_TOKEN', 'value': 'private'})['value']
 assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
 assert watcher.redact_row({'variable': 'TURN_PASSWORD', 'data': 'private'})['data'] == '[redacted]'
 assert watcher.redact_row({'name': 'secretary', 'value': 'visible'})['value'] == 'visible'
+for field in ('AMPMGRPASS', 'ASTMGRPASS', 'AMPDBPASS', 'md5_cred', 'CERTKEY', 'SSLPASS'):
+    assert watcher.redact_row({field: 'private'})[field] == '[redacted]'
+assert watcher.redact_row({
+    'keyword': 'register', 'data': 'account:private-password@sip.example.invalid',
+})['data'] == '[redacted]'
+assert watcher.redact_row({
+    'keyword': 'AMPMGRPASS', 'name': 'Asterisk Manager password', 'value': 'private',
+})['value'] == '[redacted]'
+assert watcher.redact_row({'match_pattern_pass': '18005551212'})['match_pattern_pass'] == '18005551212'
+assert watcher.observation_message({'state': 'trusted'}, False, {'users': {}}, {}, {}) \
+    == 'Observed configuration drift exists without a pending reload; it may already be effective or out of band.'
+assert watcher.observation_message({'state': 'trusted'}, False, {}, {}, {}) \
+    == 'No pending reload or observed drift.'
 class KeyCursor:
     def execute(self, *_): pass
     def fetchall(self): return [{'Field': 'key'}, {'Field': 'id'}]
@@ -140,9 +158,18 @@ with tempfile.TemporaryDirectory() as temporary:
     watcher.REDACTION_KEY_CACHE = None
     raw_state = {
         'scope': {'watch_tables': ['settings']},
-        'tables': {'settings': {'keys': ['variable'], 'rows': {
-            'API_TOKEN': {'variable': 'API_TOKEN', 'value': 'marker-secret-one'},
-        }}},
+        'tables': {
+            'settings': {'keys': ['variable'], 'rows': {
+                'API_TOKEN': {'variable': 'API_TOKEN', 'value': 'marker-secret-one'},
+                'AMPDBPASS': {'variable': 'AMPDBPASS', 'value': 'database-secret-one'},
+            }},
+            'sip': {'keys': ['id', 'keyword'], 'rows': {
+                '1|register': {
+                    'id': '1', 'keyword': 'register',
+                    'data': 'account:registration-secret@sip.example.invalid',
+                },
+            }},
+        },
         'astdb': {'keys': ['key'], 'rows': {
             '/AMPUSER/100/voicemail_pin': {
                 'key': '/AMPUSER/100/voicemail_pin', 'value': '2468',
@@ -153,6 +180,7 @@ with tempfile.TemporaryDirectory() as temporary:
     protected = watcher.protect_state(raw_state)
     serialized = json.dumps(protected)
     assert 'marker-secret-one' not in serialized and '2468' not in serialized
+    assert 'database-secret-one' not in serialized and 'registration-secret' not in serialized
     assert watcher.PROTECTED_VALUE_PREFIX in serialized
     assert (watcher.REDACTION_KEY.stat().st_mode & 0o777) == 0o600
     changed_state = json.loads(json.dumps(raw_state))
@@ -163,6 +191,13 @@ with tempfile.TemporaryDirectory() as temporary:
     assert '[redacted]' in public
     assert watcher.PROTECTED_VALUE_PREFIX not in public
     assert 'marker-secret-one' not in public and 'marker-secret-two' not in public
+
+    # Upgrades repair a valid key created by an older watcher with permissive
+    # mode instead of running indefinitely with fingerprint material exposed.
+    watcher.REDACTION_KEY_CACHE = None
+    watcher.REDACTION_KEY.chmod(0o644)
+    assert watcher.redaction_key() == bytes.fromhex(watcher.REDACTION_KEY.read_text().strip())
+    assert (watcher.REDACTION_KEY.stat().st_mode & 0o777) == 0o600
 
     # The observation loop must compare a protected AstDB baseline with the
     # protected current snapshot. Comparing with raw AstDB values would report
@@ -312,6 +347,21 @@ class NaturalKeyCursor:
         return [] if self.calls == 1 else [{'Field': 'trunkid'}, {'Field': 'name'}]
 assert watcher.primary_key(NaturalKeyCursor(), 'trunks') == ['trunkid']
 
+class ProbeCursor:
+    def __init__(self, error_code=None): self.error_code = error_code
+    def execute(self, *_):
+        if self.error_code is not None:
+            raise watcher.pymysql.err.OperationalError(self.error_code, 'test-only')
+
+readable, limitation = watcher.probe_unlisted_table(ProbeCursor(), 'incoming')
+assert readable and limitation is None
+readable, limitation = watcher.probe_unlisted_table(ProbeCursor(1146), 'optional_table')
+assert not readable and limitation is None
+readable, limitation = watcher.probe_unlisted_table(ProbeCursor(1142), 'incoming')
+assert not readable and limitation['reason'] == 'table_not_readable'
+assert limitation['table'] == 'incoming'
+assert limitation['remedy'].endswith('/pendingchanges/bin/install-watcher')
+
 old_scope = {'users': {'rows': {'1': {'name': 'Before'}}}}
 expanded_scope = {
     'users': {'rows': {'1': {'name': 'After'}}},
@@ -322,6 +372,18 @@ before_scope, after_scope, deferred = watcher.comparable_tables(
 assert set(before_scope) == {'users'} and set(after_scope) == {'users'}
 assert deferred == ['outbound_routes']
 assert watcher.database_diff(before_scope, after_scope)['users']['updated']
+
+# A genuinely dropped table remains visible as removals; a table hidden only
+# by a lost grant is excluded and reported through its coverage limitation.
+dropped_before = {'incoming': {'rows': {'route': {'extension': '15551212'}}}}
+before_scope, after_scope, deferred = watcher.comparable_tables(
+    dropped_before, {}, scope_changed=True, pending_reload=True,
+    newly_readable=set(), unreadable=set(), removed_from_configuration=set())
+assert 'incoming' in watcher.database_diff(before_scope, after_scope)
+before_scope, after_scope, deferred = watcher.comparable_tables(
+    dropped_before, {}, scope_changed=True, pending_reload=True,
+    newly_readable=set(), unreadable={'incoming'}, removed_from_configuration=set())
+assert not watcher.database_diff(before_scope, after_scope)
 
 # The historic `sip` table remains fully explainable: an update names the
 # peer option and its before/after value, while sensitive values stay private.

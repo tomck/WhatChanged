@@ -124,6 +124,29 @@ if [ "$paths_only" -eq 1 ]; then
   exit 0
 fi
 
+case "$db_name" in
+  ''|*[!A-Za-z0-9_]*)
+    echo 'FreePBX AMPDBNAME contains characters that cannot be granted safely.' >&2
+    exit 1
+    ;;
+esac
+
+configured_db_user=$(sed -n 's/^DB_USER=//p' "$environment" | tail -n 1)
+configured_db_password=$(sed -n 's/^DB_PASSWORD=//p' "$environment" | tail -n 1)
+reviewed_database_account=0
+if [ "$configured_db_user" != what_changed_watcher ]; then
+  reviewed_database_account=1
+elif [ -n "$configured_db_password" ] \
+    && [ "$configured_db_password" != replace-with-generated-secret ] \
+    && ! printf '%s\n' "$configured_db_password" | grep -Eq '^[0-9a-f]{64}$'; then
+  reviewed_database_account=1
+fi
+if [ "$reviewed_database_account" -eq 1 ]; then
+  echo 'Preserving the reviewed administrator-supplied watcher database account; automatic credentials and grants were not changed.'
+  systemctl enable --now what-changed-watcher.service
+  exit 0
+fi
+
 if [ -z "$db_socket" ]; then
   case "$db_host" in
     localhost|127.0.0.1) ;;
@@ -134,7 +157,10 @@ if [ -z "$db_socket" ]; then
   esac
 fi
 
-secret=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+secret=$configured_db_password
+if ! printf '%s\n' "$secret" | grep -Eq '^[0-9a-f]{64}$'; then
+  secret=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+fi
 if command -v mariadb >/dev/null 2>&1; then
   mysql_client=mariadb
 elif command -v mysql >/dev/null 2>&1; then
@@ -144,6 +170,29 @@ else
   exit 1
 fi
 
+watch_tables=$(sed -n 's/^WATCH_TABLES=//p' "$environment" | tail -n 1)
+if [ -z "$watch_tables" ]; then
+  echo 'WATCH_TABLES is empty; refusing to create a database account with ambiguous scope.' >&2
+  exit 1
+fi
+grant_tables=admin
+old_ifs=$IFS
+IFS=,
+set -- $watch_tables
+IFS=$old_ifs
+for table in "$@"; do
+  case "$table" in
+    ''|*[!A-Za-z0-9_]*)
+      echo "WATCH_TABLES contains an unsafe table name: $table" >&2
+      exit 1
+      ;;
+  esac
+  case " $grant_tables " in
+    *" $table "*) ;;
+    *) grant_tables="$grant_tables $table" ;;
+  esac
+done
+
 # Root's local MariaDB socket is used only to create/update this dedicated
 # account. The watcher itself receives SELECT and nothing else, and follows
 # FreePBX's configured AMPDBSOCK when present or AMPDBPORT for TCP.
@@ -151,17 +200,43 @@ set -- --protocol=socket
 if [ -n "$db_socket" ]; then
   set -- "$@" "--socket=$db_socket"
 fi
-"$mysql_client" "$@" <<SQL
-  CREATE USER IF NOT EXISTS 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
-  ALTER USER 'what_changed_watcher'@'localhost' IDENTIFIED BY '$secret';
-  GRANT SELECT ON \`$db_name\`.* TO 'what_changed_watcher'@'localhost';
-  CREATE USER IF NOT EXISTS 'what_changed_watcher'@'127.0.0.1' IDENTIFIED BY '$secret';
-  ALTER USER 'what_changed_watcher'@'127.0.0.1' IDENTIFIED BY '$secret';
-  GRANT SELECT ON \`$db_name\`.* TO 'what_changed_watcher'@'127.0.0.1';
-  FLUSH PRIVILEGES;
-SQL
+existing_tables=$("$mysql_client" "$@" --batch --skip-column-names \
+  --execute="SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$db_name'")
+grant_file=$(mktemp /tmp/what-changed-watcher-grants.XXXXXX)
+trap 'rm -f "$grant_file"' EXIT HUP INT TERM
+chmod 0600 "$grant_file"
+{
+  printf "CREATE USER IF NOT EXISTS 'what_changed_watcher'@'localhost' IDENTIFIED BY '%s';\n" "$secret"
+  printf "ALTER USER 'what_changed_watcher'@'localhost' IDENTIFIED BY '%s';\n" "$secret"
+  printf "REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'what_changed_watcher'@'localhost';\n"
+  printf "CREATE USER IF NOT EXISTS 'what_changed_watcher'@'127.0.0.1' IDENTIFIED BY '%s';\n" "$secret"
+  printf "ALTER USER 'what_changed_watcher'@'127.0.0.1' IDENTIFIED BY '%s';\n" "$secret"
+  printf "REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'what_changed_watcher'@'127.0.0.1';\n"
+  for table in $grant_tables; do
+    if printf '%s\n' "$existing_tables" | grep -Fxq "$table"; then
+      printf 'GRANT SELECT ON `%s`.`%s` TO '\''what_changed_watcher'\''@'\''localhost'\'';\n' "$db_name" "$table"
+      printf 'GRANT SELECT ON `%s`.`%s` TO '\''what_changed_watcher'\''@'\''127.0.0.1'\'';\n' "$db_name" "$table"
+    fi
+  done
+  printf 'FLUSH PRIVILEGES;\n'
+} > "$grant_file"
+"$mysql_client" "$@" < "$grant_file"
+rm -f "$grant_file"
+trap - EXIT HUP INT TERM
 
+# Once MariaDB has accepted the credential, persist the matching value before
+# secondary grant verification. A later verification failure must not leave
+# the running watcher holding a password that no longer works.
 update_environment DB_USER what_changed_watcher
 update_environment DB_PASSWORD "$secret"
+
+for host in localhost 127.0.0.1; do
+  grants=$("$mysql_client" "$@" --batch --skip-column-names \
+    --execute="SHOW GRANTS FOR 'what_changed_watcher'@'$host'")
+  if printf '%s\n' "$grants" | grep -Fq "\`$db_name\`.*"; then
+    echo "Watcher account $host still has schema-wide access; refusing to continue." >&2
+    exit 1
+  fi
+done
 systemctl enable --now what-changed-watcher.service
-echo 'WhatChanged watcher configured with a local SELECT-only database account.'
+echo 'WhatChanged watcher configured with SELECT access only to existing allowlisted tables.'

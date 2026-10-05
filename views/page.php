@@ -153,6 +153,9 @@
             AstDB coverage was not read because <?= (int) (isset($limitation['rows']) ? $limitation['rows'] : 0) ?> rows exceeds the <?= (int) (isset($limitation['limit']) ? $limitation['limit'] : 0) ?>-row cap.
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_unavailable'): ?>
             AstDB immediate-state coverage is unavailable on this host.
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'table_not_readable'): ?>
+            <?= $presenter->escape(isset($limitation['table']) ? $limitation['table'] : 'unknown table') ?> is configured for coverage but the watcher database account cannot read it.
+            <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'Re-run the watcher installer to reconcile its read-only grants.') ?>
           <?php else: ?>
             <?= $presenter->escape(json_encode($limitation, JSON_UNESCAPED_SLASHES)) ?>
           <?php endif; ?>

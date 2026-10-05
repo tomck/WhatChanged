@@ -1,5 +1,5 @@
 Package: what-changed-watcher
-Version: 0.1.9
+Version: 0.1.10
 Section: admin
 Priority: optional
 Architecture: all

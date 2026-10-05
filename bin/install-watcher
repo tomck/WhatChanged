@@ -28,7 +28,7 @@ done
 
 module_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 payload=$module_dir/watcher
-required='VERSION watcher.py what-changed-request-audit.php 99-what-changed-attribution.ini configure-database.php what-changed-watcher-configure what-changed-watcher-install-sensor what-changed-watcher.service what-changed-watcher.env'
+required='VERSION watcher.py what-changed-request-audit.php 99-what-changed-attribution.ini configure-database.php what-changed-watcher-configure what-changed-watcher-install-sensor web-sensor-lifecycle.sh what-changed-watcher.service what-changed-watcher.env'
 for file in $required; do
   if [ ! -f "$payload/$file" ]; then
     echo "Embedded watcher payload is incomplete: missing $file." >&2
@@ -323,17 +323,10 @@ echo "asterisk_config=$astetc"
 echo "asterisk_variable_data=$astvarlib"
 [ -z "$db_socket" ] || echo "database_socket=$db_socket"
 
-if [ "$test_mode" != 1 ] && {
-    [ ! -f "$live_environment" ] \
-      || grep -q '^DB_PASSWORD=replace-with-generated-secret$' "$live_environment";
-  }; then
+if [ "$test_mode" != 1 ]; then
   case "$db_socket:$db_host" in
     ?*:*|:localhost|:127.0.0.1)
       local_database=1
-      if ! command -v mariadb >/dev/null 2>&1 && ! command -v mysql >/dev/null 2>&1; then
-        echo 'A MariaDB/MySQL client is required for automatic local database setup.' >&2
-        exit 1
-      fi
       ;;
   esac
 fi
@@ -397,30 +390,76 @@ replace_environment_setting ASTDB_PATH "$astdb_path" "$environment"
 replace_environment_setting STATE_DIR "$state_dir" "$environment"
 replace_environment_setting ATTRIBUTION_LOG "$attribution_log" "$environment"
 
+# 0.1.9 accidentally omitted Core's `incoming` table from the installed
+# environment template even though the watcher and coverage contract included
+# it. Preserve every local customization while repairing that one known gap.
+current_watch_tables=$(sed -n 's/^WATCH_TABLES=//p' "$environment" | tail -n 1)
+case ",$current_watch_tables," in
+  *,incoming,*) ;;
+  ,) replace_environment_setting WATCH_TABLES incoming "$environment" ;;
+  *) replace_environment_setting WATCH_TABLES "$current_watch_tables,incoming" "$environment" ;;
+esac
+
+# Only the account created by this installer is eligible for automatic grant
+# reconciliation. Preserve an administrator-supplied account unchanged.
+configured_db_user=$(sed -n 's/^DB_USER=//p' "$environment" | tail -n 1)
+configured_db_password=$(sed -n 's/^DB_PASSWORD=//p' "$environment" | tail -n 1)
+generated_database_account=0
+if [ "$configured_db_user" = what_changed_watcher ]; then
+  case "$configured_db_password" in
+    replace-with-generated-secret|'') generated_database_account=1 ;;
+    *)
+      if printf '%s\n' "$configured_db_password" | grep -Eq '^[0-9a-f]{64}$'; then
+        generated_database_account=1
+      fi
+      ;;
+  esac
+fi
+
+if [ "$local_database" -eq 1 ] && [ "$generated_database_account" -eq 1 ]; then
+  if ! command -v mariadb >/dev/null 2>&1 && ! command -v mysql >/dev/null 2>&1; then
+    echo 'A MariaDB/MySQL client is required to reconcile the generated local watcher account.' >&2
+    exit 1
+  fi
+fi
+
 if [ "$test_mode" = 1 ]; then
   install -m 0644 "$payload/VERSION" "$(target "$library/VERSION")"
   echo "Watcher payload staged beneath $test_root for validation."
   exit 0
 fi
 
-/usr/sbin/what-changed-watcher-configure --paths-only
-/usr/sbin/what-changed-watcher-install-sensor
-systemctl daemon-reload
-
 start_service=0
-if grep -q '^DB_PASSWORD=replace-with-generated-secret$' "$environment"; then
-  if [ "$local_database" -eq 1 ]; then
-    /usr/sbin/what-changed-watcher-configure
+if [ "$local_database" -eq 1 ] && [ "$generated_database_account" -eq 1 ]; then
+  # Reconcile grants for the installer-managed local account. Its existing
+  # generated credential is preserved so an interrupted upgrade cannot lock
+  # out the still-running watcher.
+  /usr/sbin/what-changed-watcher-configure
+  start_service=1
+else
+  /usr/sbin/what-changed-watcher-configure --paths-only
+  if [ "$generated_database_account" -eq 0 ]; then
+    echo 'Preserving the reviewed administrator-supplied watcher database account; automatic grants were not changed.'
+    systemctl enable what-changed-watcher.service
     start_service=1
-  else
+  elif grep -q '^DB_PASSWORD=replace-with-generated-secret$' "$environment"; then
     systemctl disable --now what-changed-watcher.service >/dev/null 2>&1 || true
     echo "Watcher files installed, but FreePBX uses remote database host '$db_host'."
     echo 'Create a reviewed SELECT-only account, update /etc/what-changed-watcher.env, then enable the service.'
+  else
+    systemctl enable what-changed-watcher.service
+    start_service=1
   fi
-else
-  systemctl enable what-changed-watcher.service
-  start_service=1
 fi
+sensor_state=installed
+sensor_result=0
+/usr/sbin/what-changed-watcher-install-sensor || sensor_result=$?
+case "$sensor_result" in
+  0) ;;
+  3) sensor_state=conflict ;;
+  *) exit "$sensor_result" ;;
+esac
+systemctl daemon-reload
 
 version_backup=
 if [ -f "$library/VERSION" ]; then
@@ -442,4 +481,8 @@ if [ "$start_service" -eq 1 ]; then
   echo 'Watcher service is running with the embedded payload version.'
 fi
 [ -z "$version_backup" ] || rm -f "$version_backup"
+if [ "$sensor_state" = conflict ]; then
+  echo 'Watcher installation completed without administrator request attribution because another PHP prepend integration is active.' >&2
+  echo 'After reviewing that integration, rerun this same install-watcher command to enable attribution.' >&2
+fi
 echo 'WhatChanged embedded watcher installation completed.'

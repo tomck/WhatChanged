@@ -98,11 +98,20 @@ if [ -f "$version_target" ]; then
   cp "$version_target" "$version_backup"
 fi
 install -m 0644 "$source_dir/VERSION" "$version_target"
-if ! (
-  /usr/sbin/what-changed-watcher-configure --paths-only
-  /usr/sbin/what-changed-watcher-install-sensor
-  /usr/sbin/what-changed-watcher-configure
-); then
+configuration_failed=0
+/usr/sbin/what-changed-watcher-configure --paths-only || configuration_failed=1
+sensor_result=0
+if [ "$configuration_failed" -eq 0 ]; then
+  /usr/sbin/what-changed-watcher-install-sensor || sensor_result=$?
+  case "$sensor_result" in
+    0|3) ;;
+    *) configuration_failed=1 ;;
+  esac
+fi
+if [ "$configuration_failed" -eq 0 ]; then
+  /usr/sbin/what-changed-watcher-configure || configuration_failed=1
+fi
+if [ "$configuration_failed" -ne 0 ]; then
   if [ -n "$version_backup" ]; then
     install -m 0644 "$version_backup" "$version_target"
   else
@@ -113,4 +122,7 @@ if ! (
   exit 1
 fi
 [ -z "$version_backup" ] || rm -f "$version_backup"
+if [ "$sensor_result" -eq 3 ]; then
+  echo 'Portable watcher installed without administrator request attribution because another PHP prepend integration is active.' >&2
+fi
 echo 'WhatChanged portable watcher installation completed.'

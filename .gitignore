@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .env.lab
+/INTRAAGENT.md
+/codex-session-*.md
 /uisp_inventory.py
 dist/pendingchanges-*.tgz
 dist/what-changed-watcher*.deb

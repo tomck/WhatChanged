@@ -109,14 +109,30 @@ create or modify web-server virtual hosts or `DocumentRoot` directives. If no
 supported web PHP SAPI is present, the core watcher remains usable but inferred
 administrator attribution is explicitly unavailable.
 
-The watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL, a
-MariaDB/MySQL client, and the normal `asterisk` service account. For a local
-database, the installer creates a random credential for a dedicated
-`what_changed_watcher` account with **SELECT only** access. For remote MariaDB,
+The watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL, and the
+normal `asterisk` service account. Automatic setup of its local database
+account also requires a MariaDB/MySQL client. For a local database, the
+installer creates a random credential for a dedicated `what_changed_watcher`
+account with **SELECT only** access to each existing allowlisted table. It
+preserves that credential on upgrades while reconciling the table grants. If
+an administrator has supplied a different reviewed account, upgrades preserve
+that account and do not alter its grants. For remote MariaDB,
 it installs the files but leaves the service disabled until an administrator
 supplies a reviewed SELECT-only credential. Database transport follows
 FreePBX's configured `AMPDBSOCK` when present, or `AMPDBHOST` and `AMPDBPORT`
 for TCP.
+
+If a covered table is added later but the watcher account cannot read it, the
+report names `table_not_readable` and prints the exact `install-watcher`
+command that reconciles the installer-managed grants. Newly readable coverage
+is deferred while Apply Config is already pending so pre-existing rows are not
+misrepresented as newly staged changes.
+
+PHP supports only one `auto_prepend_file`. If another application already owns
+that setting, WhatChanged leaves it untouched, completes the core watcher
+installation, and reports administrator request attribution as unavailable.
+Review the competing integration before rerunning `install-watcher`; never
+delete another product's PHP configuration blindly.
 
 If PyMySQL is missing, the installer shows the operating-system package
 command and asks before running it. Answering yes installs the dependency and

@@ -75,9 +75,11 @@ cp "$root_dir/deploy/what-changed-watcher.env.example" "$module_dir/watcher/what
 cp "$root_dir/packaging/module-watcher/configure-database.php" "$module_dir/watcher/configure-database.php"
 cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-configure" "$module_dir/watcher/what-changed-watcher-configure"
 cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-install-sensor" "$module_dir/watcher/what-changed-watcher-install-sensor"
+cp "$root_dir/packaging/common/web-sensor-lifecycle.sh" "$module_dir/watcher/web-sensor-lifecycle.sh"
 chmod 0755 "$module_dir/bin/install-watcher" "$module_dir/bin/uninstall-watcher" \
   "$module_dir/watcher/what-changed-watcher-configure" \
-  "$module_dir/watcher/what-changed-watcher-install-sensor"
+  "$module_dir/watcher/what-changed-watcher-install-sensor" \
+  "$module_dir/watcher/web-sensor-lifecycle.sh"
 
 COPYFILE_DISABLE=1 tar --no-xattrs -C "$temp_dir" -czf "$archive" "$version"
 echo "$archive"

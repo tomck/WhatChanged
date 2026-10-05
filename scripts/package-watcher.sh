@@ -42,11 +42,13 @@ cp "$root/deploy/99-what-changed-attribution.ini" "$stage/usr/lib/what-changed-w
 cp "$root/deploy/what-changed-watcher.service" "$stage/lib/systemd/system/what-changed-watcher.service"
 cp "$root/deploy/what-changed-watcher.service" "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service"
 cp "$root/deploy/what-changed-watcher.env.example" "$stage/etc/what-changed-watcher.env"
+cp "$root/packaging/common/web-sensor-lifecycle.sh" "$stage/usr/lib/what-changed-watcher/web-sensor-lifecycle.sh"
 # Distribution-managed packages use /usr/lib; the reviewed manual/portable
 # installation deliberately remains under /usr/local/lib.
 sed -i 's#/usr/local/lib/what-changed-watcher#/usr/lib/what-changed-watcher#g' \
   "$stage/lib/systemd/system/what-changed-watcher.service" \
   "$stage/usr/lib/what-changed-watcher/what-changed-watcher.service" \
+  "$stage/usr/lib/what-changed-watcher/web-sensor-lifecycle.sh" \
   "$stage/usr/lib/what-changed-watcher/99-what-changed-attribution.ini"
 chmod 0644 "$stage/usr/lib/what-changed-watcher/VERSION" \
   "$stage/usr/lib/what-changed-watcher/watcher.py" \
@@ -57,6 +59,7 @@ chmod 0644 "$stage/usr/lib/what-changed-watcher/VERSION" \
   "$stage/etc/what-changed-watcher.env" \
   "$stage/usr/share/doc/what-changed-watcher/copyright"
 chmod 0755 "$stage/DEBIAN/postinst" "$stage/DEBIAN/prerm" "$stage/DEBIAN/postrm"
+chmod 0755 "$stage/usr/lib/what-changed-watcher/web-sensor-lifecycle.sh"
 chmod 0755 "$stage/usr/sbin/what-changed-watcher-configure" \
   "$stage/usr/sbin/what-changed-watcher-install-sensor"
 # The checkout is commonly on a restrictive umask.  Debian requires the

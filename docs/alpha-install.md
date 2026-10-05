@@ -8,6 +8,10 @@ warnings remain visible during validation. WhatChanged does not create or
 modify web-server virtual hosts or `DocumentRoot` directives. If no supported
 web PHP SAPI is present, the core watcher remains available but inferred
 administrator attribution is explicitly unavailable.
+If another product already configures PHP's single `auto_prepend_file`, the
+installer likewise leaves that integration untouched and completes without
+request attribution. It prints every conflicting configuration path so the
+administrator can review the overlap before rerunning the installer.
 
 ## Before installing
 
@@ -23,8 +27,9 @@ administrator attribution is explicitly unavailable.
    identity into its installer.
 
 The embedded watcher requires systemd, PHP CLI, Python 3.6 or newer, PyMySQL
-for that Python, a MariaDB/MySQL client, and the normal `asterisk` service
-account. The installer checks these prerequisites before changing the host,
+for that Python, and the normal `asterisk` service account. Automatic local
+database-account setup also requires a MariaDB/MySQL client. The installer
+checks these prerequisites before changing the host,
 shows the distribution-specific package command if PyMySQL is absent, and asks
 before installing it. Accepting the prompt installs the dependency and
 continues the same watcher installation.
@@ -133,13 +138,18 @@ and `/lib/systemd/system`; RHEL, CentOS, and Sangoma-family systems use
 `/usr/local/lib` and `/etc/systemd/system`. It refuses unknown systems unless
 the administrator explicitly chooses a reviewed layout. It generates a random
 password, creates a local MariaDB account named `what_changed_watcher` with
-**SELECT only** on the FreePBX database, installs the authenticated-request
+**SELECT only** on each existing allowlisted FreePBX table, installs the authenticated-request
 sensor, and starts the watcher. Existing watcher configuration and evidence
-are preserved during upgrades. A configured `AMPDBSOCK` is used for local
+are preserved during upgrades. The generated credential is preserved while
+grants are reconciled; a different administrator-supplied account and its
+grants are never replaced automatically. A configured `AMPDBSOCK` is used for local
 Unix-socket connections; otherwise the watcher follows `AMPDBHOST` and
 `AMPDBPORT` for TCP.
 An existing install keeps the filesystem and systemd-unit layout used by its
 active service, even when that is the portable `/usr/local` layout on Debian.
+If a later-installed module creates an allowlisted table, the report identifies
+that table as unreadable and gives the exact embedded installer command needed
+to reconcile the installer-managed grants.
 
 Standalone `.deb` and portable watcher packages remain available for operators
 who prefer operating-system package management, but are not required.

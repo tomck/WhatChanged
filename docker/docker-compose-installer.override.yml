@@ -1,0 +1,8 @@
+services:
+  pbx:
+    volumes:
+      # The normal lab intentionally gives the PBX container a read-only view
+      # of watcher state because the sidecar owns it. The embedded installer
+      # smoke test stops that sidecar and temporarily makes the same named
+      # volume writable so it can exercise the production systemd layout.
+      - watcher-data:/var/lib/asterisk/pendingchanges-watcher

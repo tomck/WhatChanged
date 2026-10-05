@@ -133,7 +133,9 @@ if (!function_exists('whatchanged_audit_scalar')) {
         }
 
         // The breadcrumb file is intentionally bounded. At roughly 300 bytes
-        // per request, one MiB retains thousands of rare administrative writes.
+        // per request, one MiB retains thousands of rare administrative
+        // writes. Compact to the newest half rather than erasing the complete
+        // pending interval when the cap is crossed.
         $handle = @fopen($path, 'c+');
         if ($handle === false) {
             return;
@@ -141,11 +143,17 @@ if (!function_exists('whatchanged_audit_scalar')) {
         if (flock($handle, LOCK_EX)) {
             $stat = fstat($handle);
             if ((isset($stat['size']) ? $stat['size'] : 0) > 1048576) {
+                fseek($handle, -524288, SEEK_END);
+                $tail = stream_get_contents($handle);
+                $firstCompleteLine = is_string($tail) ? strpos($tail, "\n") : false;
+                $tail = $firstCompleteLine === false ? '' : substr($tail, $firstCompleteLine + 1);
                 ftruncate($handle, 0);
                 rewind($handle);
-            } else {
-                fseek($handle, 0, SEEK_END);
+                if ($tail !== '') {
+                    fwrite($handle, $tail);
+                }
             }
+            fseek($handle, 0, SEEK_END);
             fwrite($handle, $encoded."\n");
             fflush($handle);
             flock($handle, LOCK_UN);

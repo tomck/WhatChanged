@@ -41,10 +41,13 @@ class ChangePresenter
             ? $baselineProvenance['state']
             : '') === 'trusted';
         $severity = isset($watcherHealth['severity']) ? $watcherHealth['severity'] : '';
+        $hasDrift = !empty($status['database'])
+            || !empty($status['astdb'])
+            || !empty($status['files']);
 
         if ($severity === 'danger') {
             $messageClass = 'alert-danger';
-        } elseif ($severity === 'warning' || !$baselineTrusted || $status['pending']) {
+        } elseif ($severity === 'warning' || !$baselineTrusted || $status['pending'] || $hasDrift) {
             $messageClass = 'alert-warning';
         } else {
             $messageClass = 'alert-success';

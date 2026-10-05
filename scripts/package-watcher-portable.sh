@@ -24,13 +24,15 @@ cp "$root_dir/deploy/what-changed-watcher.env.example" "$bundle/files/what-chang
 cp "$root_dir/packaging/watcher/usr/lib/what-changed-watcher/configure-database.php" "$bundle/files/configure-database.php"
 cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-configure" "$bundle/files/what-changed-watcher-configure"
 cp "$root_dir/packaging/watcher/usr/sbin/what-changed-watcher-install-sensor" "$bundle/files/what-changed-watcher-install-sensor"
+cp "$root_dir/packaging/common/web-sensor-lifecycle.sh" "$bundle/files/web-sensor-lifecycle.sh"
 cp "$root_dir/packaging/portable/install.sh" "$bundle/install.sh"
 cp "$root_dir/packaging/portable/uninstall.sh" "$bundle/uninstall.sh"
 cp "$root_dir/LICENSE" "$bundle/LICENSE"
 cp "$root_dir/docs/legacy-alpha-install.md" "$bundle/README.md"
 chmod 0755 "$bundle/install.sh" "$bundle/uninstall.sh" \
   "$bundle/files/what-changed-watcher-configure" \
-  "$bundle/files/what-changed-watcher-install-sensor"
+  "$bundle/files/what-changed-watcher-install-sensor" \
+  "$bundle/files/web-sensor-lifecycle.sh"
 
 tar -C "$stage" -czf "$archive" "$(basename "$bundle")"
 echo "$archive"

@@ -22,7 +22,8 @@ printf 'ID=debian\nID_LIKE=debian\n' > "$stage/os-release-debian"
 printf 'ID=sangoma\nID_LIKE="rhel fedora"\n' > "$stage/os-release-sangoma"
 printf 'ID=unknown\n' > "$stage/os-release-unknown"
 
-sh -n "$module/bin/install-watcher" "$module/bin/uninstall-watcher"
+sh -n "$module/bin/install-watcher" "$module/bin/uninstall-watcher" \
+  "$module/watcher/web-sensor-lifecycle.sh"
 php -l "$module/bin/pendingchanges" >/dev/null
 php -l "$module/page.pendingchanges.php" >/dev/null
 if command -v python3 >/dev/null 2>&1; then
@@ -184,6 +185,8 @@ for layout in debian portable; do
   grep -qx "MODULE_PATH=$test_webroot/admin/modules" "$root/etc/what-changed-watcher.env"
   grep -qx "ASTDB_PATH=$test_astvarlib/astdb.sqlite3" "$root/etc/what-changed-watcher.env"
   grep -qx "STATE_DIR=$test_astvarlib/pendingchanges-watcher" "$root/etc/what-changed-watcher.env"
+  grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+    | grep -Eq '(^|,)incoming(,|$)'
   grep -q "auto_prepend_file=$library/what-changed-request-audit.php" \
     "$root$library/99-what-changed-attribution.ini"
   cmp "$root$library/watcher.py" "$module/watcher/watcher.py"

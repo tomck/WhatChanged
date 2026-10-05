@@ -69,8 +69,15 @@ connection = pymysql.connect(
 try:
     with connection.cursor() as cursor:
         # Added record.
-        reset_baseline(cursor)
+        clean = reset_baseline(cursor)
         cursor.execute(f'CREATE TABLE `{TABLE}` (id INT PRIMARY KEY, value VARCHAR(50))')
+        # The watcher must first observe the newly available covered table
+        # while FreePBX is clean. Otherwise its pre-existing contents are
+        # deliberately deferred as scope expansion behind a pending reload.
+        wait_for('fixture table did not enter the clean watcher scope', lambda item:
+                 item['observed_at'] > clean['observed_at'] and
+                 not item['need_reload'] and
+                 TABLE in json.loads(BASELINE.read_text()).get('scope', {}).get('readable_tables', []))
         cursor.execute(f"INSERT INTO `{TABLE}` VALUES (1, 'before')")
         set_reload(cursor, True)
         state = wait_for('added record was not reported', lambda item:

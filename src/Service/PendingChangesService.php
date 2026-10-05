@@ -191,9 +191,14 @@ class PendingChangesService
         } elseif (strpos($health['state'], 'payload_') === 0) {
             $message = 'The installed watcher payload does not match this module; '
                 . 'current full-scope coverage cannot be confirmed.';
-        } elseif ((isset($provenance['state']) ? $provenance['state'] : '') !== 'trusted') {
+        } elseif ((isset($provenance['state']) ? $provenance['state'] : '') === 'uncertain') {
             $message = 'Baseline provenance is uncertain after a watcher interruption; '
                 . 'reported drift may span an Apply Config.';
+        } elseif ((isset($provenance['state']) ? $provenance['state'] : '') === 'unavailable') {
+            $message = 'No applied baseline is available because Apply Config was already pending '
+                . 'when the watcher started; the earlier origin cannot be reconstructed.';
+        } elseif ((isset($provenance['state']) ? $provenance['state'] : '') !== 'trusted') {
+            $message = 'Baseline provenance is not trusted; review the reported evidence and watcher health.';
         }
 
         return array(

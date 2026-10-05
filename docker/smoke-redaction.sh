@@ -24,6 +24,10 @@ assert ($expression)
     'import json; print(json.dumps(json.load(open("/var/lib/pendingchanges-watcher/status.json")), indent=2))'
   return 1
 }
+observed_at() {
+  compose exec -T custom-watcher python -c \
+    'import json; print(json.load(open("/var/lib/pendingchanges-watcher/status.json"))["observed_at"])'
+}
 
 table=pc_redaction_fixture
 before=whatchanged-secret-marker-before
@@ -35,29 +39,38 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 assert_status "not s['need_reload'] and s.get('baseline_provenance', {}).get('state') == 'trusted'"
-sql "CREATE TABLE \`$table\` (variable VARCHAR(64) PRIMARY KEY, value VARCHAR(128)); INSERT INTO \`$table\` VALUES ('API_TOKEN', '$before'); UPDATE admin SET value='true' WHERE variable='need_reload';"
-assert_status "s['database_drift']['$table']['added'][0]['value'] == '[redacted]'"
+clean_observed=$(observed_at)
+sql "CREATE TABLE \`$table\` (variable VARCHAR(64) PRIMARY KEY, value VARCHAR(128));"
+assert_status "s['observed_at'] > $clean_observed and not s['need_reload'] and '$table' in json.load(open('/var/lib/pendingchanges-watcher/baseline.json')).get('scope', {}).get('readable_tables', [])"
+before_observed=$(observed_at)
+sql "INSERT INTO \`$table\` VALUES ('API_TOKEN', '$before'); UPDATE admin SET value='true' WHERE variable='need_reload';"
+assert_status "s['observed_at'] > $before_observed and s['database_drift']['$table']['added'][0]['value'] == '[redacted]'"
 compose exec -T custom-watcher sh -c \
   "! grep -F '$before' /var/lib/pendingchanges-watcher/status.json && ! grep -F '[protected hmac-sha256:' /var/lib/pendingchanges-watcher/status.json"
 
+before_observed=$(observed_at)
 "$ROOT_DIR/docker/apply-freepbx.sh" >/dev/null
-assert_status "not s['need_reload'] and not s['database_drift']"
+assert_status "s['observed_at'] > $before_observed and not s['need_reload'] and not s['database_drift']"
 compose exec -T custom-watcher sh -c \
   "! grep -F '$before' /var/lib/pendingchanges-watcher/baseline.json && grep -F '[protected hmac-sha256:' /var/lib/pendingchanges-watcher/baseline.json >/dev/null"
 compose exec -T custom-watcher python -c \
   "import os,stat; assert stat.S_IMODE(os.stat('/var/lib/pendingchanges-watcher/redaction.key').st_mode) == 0o600"
 
+before_observed=$(observed_at)
 sql "UPDATE \`$table\` SET value='$after' WHERE variable='API_TOKEN'; UPDATE admin SET value='true' WHERE variable='need_reload';"
-assert_status "s['database_drift']['$table']['updated'][0]['fields']['value'] == {'before': '[redacted]', 'after': '[redacted]'}"
+assert_status "s['observed_at'] > $before_observed and s['database_drift']['$table']['updated'][0]['fields']['value'] == {'before': '[redacted]', 'after': '[redacted]'}"
 compose exec -T custom-watcher sh -c \
   "! grep -F '$before' /var/lib/pendingchanges-watcher/status.json && ! grep -F '$after' /var/lib/pendingchanges-watcher/status.json && ! grep -F '[protected hmac-sha256:' /var/lib/pendingchanges-watcher/status.json"
 
+before_observed=$(observed_at)
 "$ROOT_DIR/docker/apply-freepbx.sh" >/dev/null
-assert_status "not s['need_reload'] and not s['database_drift']"
+assert_status "s['observed_at'] > $before_observed and not s['need_reload'] and not s['database_drift']"
+before_observed=$(observed_at)
 sql "DROP TABLE \`$table\`; UPDATE admin SET value='true' WHERE variable='need_reload';"
-assert_status "s['need_reload'] and '$table' in s['database_drift']"
+assert_status "s['observed_at'] > $before_observed and s['need_reload'] and '$table' in s['database_drift']"
+before_observed=$(observed_at)
 "$ROOT_DIR/docker/apply-freepbx.sh" >/dev/null
-assert_status "not s['need_reload'] and not s['database_drift']"
+assert_status "s['observed_at'] > $before_observed and not s['need_reload'] and not s['database_drift']"
 
 trap - EXIT HUP INT TERM
 echo 'Persisted-baseline and public-output redaction lifecycle passed'

@@ -64,10 +64,32 @@ if (count($lines ?: []) !== 1) {
 
 // Preserve coverage for the rare administrative GET paths that really are
 // state-changing.
+$_SERVER['REQUEST_METHOD'] = 'GET';
 $_REQUEST = ['display' => 'modules', 'action' => 'disable'];
 whatchanged_audit_request();
 $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 if (count($lines ?: []) !== 2) {
     throw new RuntimeException('Destructive GET was not recorded');
+}
+
+// Crossing the cap retains the newest complete historical events instead of
+// erasing the entire attribution interval.
+$retained = json_encode([
+    'schema' => 1,
+    'event_id' => 'must-survive-compaction',
+    'finished_at' => 1,
+    'username' => 'fixture',
+])."\n";
+file_put_contents($path, str_repeat($retained, (int) ceil(1100000 / strlen($retained))));
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_REQUEST = ['display' => 'extensions', 'action' => 'edit'];
+whatchanged_audit_request();
+$compacted = file_get_contents($path);
+if (!is_string($compacted)
+    || strpos($compacted, 'must-survive-compaction') === false
+    || strpos($compacted, '"display":"extensions"') === false
+    || strlen($compacted) >= 1048576
+) {
+    throw new RuntimeException('Attribution compaction did not retain bounded recent evidence');
 }
 echo "request audit checks passed\n";

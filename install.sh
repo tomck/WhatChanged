@@ -10,7 +10,7 @@ github_root="https://github.com/$repo"
 # Pin the reviewed release explicitly. GitHub's /releases/latest endpoint omits
 # prereleases, while WhatChanged public alphas are intentionally prereleases.
 # Release preparation must update this value only after signed-archive gates.
-module_version=${WHAT_CHANGED_VERSION:-17.0.2.6}
+module_version=${WHAT_CHANGED_VERSION:-17.0.2.7}
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'WhatChanged installer: %s\n' "$*" >&2; exit 1; }

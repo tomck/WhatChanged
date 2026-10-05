@@ -19,18 +19,40 @@ class Redactor
     public static function semanticNameSensitive($value)
     {
         $pattern = '/(^|[_.|\/\s\-])'
-            . '(password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|auth_key|authkey)'
+            . '(password|passwd|secret|token|value_digest|pin|credential|private_key|api_key|apikey|'
+            . 'auth_key|authkey|pass|register|md5_cred|certkey)'
             . '($|[_.|\/\s\-])/i';
+
+        $normalized = strtolower((string) $value);
+        $compact = preg_replace('/[^a-z0-9]/', '', $normalized);
+        if (in_array(
+            $compact,
+            array('ampmgrpass', 'astmgrpass', 'ampdbpass', 'sslpass', 'certkey', 'md5cred', 'register'),
+            true
+        )) {
+            return true;
+        }
 
         return preg_match(
             $pattern,
-            (string) $value
+            $normalized
         ) === 1;
     }
 
     public static function sensitiveField($field, array $row)
     {
         $name = strtolower((string) $field);
+        if (
+            in_array(
+                $name,
+                array('ampmgrpass', 'astmgrpass', 'ampdbpass', 'sslpass', 'certkey', 'md5_cred', 'register'),
+                true
+            )
+            || $name === 'pass'
+            || substr($name, -5) === '_cred'
+        ) {
+            return true;
+        }
         $pattern = '/password|passwd|secret|token|value_digest|pin|credential|'
             . 'private_key|api_key|apikey|auth_key|authkey/i';
         if (preg_match($pattern, $name)) {
@@ -42,12 +64,12 @@ class Redactor
         }
 
         if (in_array($name, array('value', 'val', 'data'), true)) {
-            $semantic = array();
             foreach (array('module', 'keyword', 'key', 'variable', 'setting', 'option', 'name') as $semanticField) {
-                $semantic[] = isset($row[$semanticField]) ? $row[$semanticField] : '';
+                $semanticValue = isset($row[$semanticField]) ? $row[$semanticField] : '';
+                if (self::semanticNameSensitive($semanticValue)) {
+                    return true;
+                }
             }
-
-            return self::semanticNameSensitive(implode(' ', $semantic));
         }
 
         return false;
@@ -97,16 +119,24 @@ class Redactor
      */
     public function keyStatus()
     {
-        $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-redaction.key';
+        $variableRoot = $this->paths->asteriskVariableRoot();
+        $watcherPath = $variableRoot . '/pendingchanges-watcher/redaction.key';
+        $fallbackPath = $variableRoot . '/pendingchanges-redaction.key';
+        $path = file_exists($watcherPath) || is_dir(dirname($watcherPath))
+            ? $watcherPath
+            : $fallbackPath;
         // Doctor may inspect the key repeatedly in one PHP process after an
         // operator repairs its permissions. Avoid PHP's cached stat result.
         clearstatcache(true, $path);
         if (!file_exists($path)) {
+            $watcherOwnsKey = $path === $watcherPath;
             return array(
                 'state' => 'absent',
                 'path' => $path,
                 'detail' => 'No redaction key exists yet; one is created automatically on the next baseline snapshot.',
-                'remedy' => 'No action required. Seed an applied baseline to create it.',
+                'remedy' => $watcherOwnsKey
+                    ? 'No action required. The watcher creates it during its next completed observation.'
+                    : 'No action required. The module creates it if fallback snapshot comparison is needed.',
             );
         }
         if (!is_readable($path)) {

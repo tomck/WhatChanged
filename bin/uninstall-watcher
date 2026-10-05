@@ -8,6 +8,24 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Remove the web-SAPI configuration and reload every active stack while the
+# referenced PHP library still exists. A failure stops here and preserves the
+# library, avoiding a host-wide PHP outage from a dangling auto_prepend_file.
+module_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+lifecycle=$module_dir/watcher/web-sensor-lifecycle.sh
+if [ ! -r "$lifecycle" ]; then
+  echo "Watcher uninstall helper is missing: $lifecycle" >&2
+  echo 'Reinstall the Pending Changes module archive, then run this command again.' >&2
+  exit 1
+fi
+. "$lifecycle"
+if ! what_changed_remove_sensor_configuration; then
+  echo 'The sensor ini files were removed, but an active web stack failed validation or reload.' >&2
+  echo 'The watcher library was preserved so PHP does not reference a missing file.' >&2
+  echo "Correct the reported web-server/PHP error, then rerun: sudo $module_dir/bin/uninstall-watcher" >&2
+  exit 1
+fi
+
 systemctl disable --now what-changed-watcher.service >/dev/null 2>&1 || true
 rm -f /lib/systemd/system/what-changed-watcher.service
 rm -f /etc/systemd/system/what-changed-watcher.service
@@ -15,18 +33,7 @@ rm -f /usr/sbin/what-changed-watcher-configure
 rm -f /usr/sbin/what-changed-watcher-install-sensor
 rm -rf /usr/lib/what-changed-watcher /usr/local/lib/what-changed-watcher
 
-for sensor in /etc/php/*/apache2/conf.d/99-what-changed-attribution.ini /etc/php.d/99-what-changed-attribution.ini; do
-  [ ! -f "$sensor" ] || rm -f "$sensor"
-done
-
 systemctl daemon-reload >/dev/null 2>&1 || true
-if command -v apachectl >/dev/null 2>&1 && apachectl configtest >/dev/null 2>&1; then
-  if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
-    systemctl reload apache2 >/dev/null 2>&1 || true
-  elif systemctl list-unit-files httpd.service >/dev/null 2>&1; then
-    systemctl reload httpd >/dev/null 2>&1 || true
-  fi
-fi
 
 echo 'Watcher executables and web-PHP sensor removed.'
 echo 'Evidence, /etc/what-changed-watcher.env, and the database account were preserved.'

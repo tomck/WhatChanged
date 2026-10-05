@@ -4,7 +4,15 @@ set -eu
 case "${1:-configure}" in
   configure)
     /usr/sbin/what-changed-watcher-configure --paths-only
-    /usr/sbin/what-changed-watcher-install-sensor
+    sensor_result=0
+    /usr/sbin/what-changed-watcher-install-sensor || sensor_result=$?
+    case "$sensor_result" in
+      0) ;;
+      3)
+        echo 'Watcher package installed without administrator request attribution because another PHP prepend integration is active.' >&2
+        ;;
+      *) exit "$sensor_result" ;;
+    esac
     # A fresh package deliberately remains inactive until its dedicated,
     # read-only database account has been configured.
     if grep -q '^DB_PASSWORD=replace-with-generated-secret$' /etc/what-changed-watcher.env; then

@@ -28,6 +28,26 @@ namespace {
     if ($redactor::sensitiveField('value', ['name' => 'secretary', 'value' => 'visible'])) {
         throw new RuntimeException('Innocent semantic value was classified as secret');
     }
+    foreach (['AMPMGRPASS', 'ASTMGRPASS', 'AMPDBPASS', 'md5_cred', 'CERTKEY', 'SSLPASS'] as $field) {
+        if (!$redactor::sensitiveField($field, [$field => 'private'])) {
+            throw new RuntimeException('Known credential field was not classified: ' . $field);
+        }
+    }
+    if (!$redactor::sensitiveField(
+        'data',
+        ['keyword' => 'register', 'data' => 'account:private-password@sip.example.invalid']
+    )) {
+        throw new RuntimeException('SIP registration material was not classified');
+    }
+    if (!$redactor::sensitiveField(
+        'value',
+        ['keyword' => 'AMPMGRPASS', 'name' => 'Asterisk Manager password', 'value' => 'private']
+    )) {
+        throw new RuntimeException('Exact semantic secret in a multi-column row was not classified');
+    }
+    if ($redactor::sensitiveField('match_pattern_pass', ['match_pattern_pass' => '18005551212'])) {
+        throw new RuntimeException('Outbound-route match pattern was misclassified as a credential');
+    }
 
     $pathClass = 'FreePBX\\modules\\Pendingchanges\\Support\\PathResolver';
     $paths = new $pathClass();
@@ -65,7 +85,9 @@ namespace {
     $keyDir = sys_get_temp_dir() . '/pendingchanges-keystatus-' . getmypid();
     @mkdir($keyDir, 0700, true);
     $GLOBALS['amp_conf']['ASTVARLIBDIR'] = $keyDir;
-    $keyPath = $keyDir . '/pendingchanges-redaction.key';
+    $watcherKeyDir = $keyDir . '/pendingchanges-watcher';
+    mkdir($watcherKeyDir, 0700, true);
+    $keyPath = $watcherKeyDir . '/redaction.key';
     $keyReport = $redactorInstance->keyStatus();
     if ($keyReport['state'] !== 'absent' || $keyReport['path'] !== $keyPath) {
         throw new RuntimeException('Missing redaction key was not reported as absent');
@@ -88,6 +110,7 @@ namespace {
         throw new RuntimeException('Corrupt redaction key was not reported as invalid with a remedy');
     }
     unlink($keyPath);
+    rmdir($watcherKeyDir);
     rmdir($keyDir);
 
     echo "framework fallback security checks passed\n";

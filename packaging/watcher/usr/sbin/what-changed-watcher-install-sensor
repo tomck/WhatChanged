@@ -26,6 +26,76 @@ if [ -z "$targets" ]; then
   exit 0
 fi
 
+# PHP permits only one auto_prepend_file. Silently replacing a security agent
+# or site bootstrap would be an unsafe host-wide side effect, so detect any
+# pre-existing directive before writing WhatChanged's deliberately last-sorted
+# ini. Report paths only; configuration values may themselves be sensitive.
+prepend_conflicts=
+append_conflict() {
+  case " $prepend_conflicts " in
+    *" $1 "*) : ;;
+    *) prepend_conflicts="$prepend_conflicts $1" ;;
+  esac
+}
+for target in $targets; do
+  main_ini=$(dirname "$target")/php.ini
+  for candidate in "$main_ini" "$target"/*.ini; do
+    [ -f "$candidate" ] || continue
+    [ "$(basename "$candidate")" != 99-what-changed-attribution.ini ] || continue
+    if grep -Eq '^[[:space:]]*auto_prepend_file[[:space:]]*=[[:space:]]*[^[:space:]]' "$candidate"; then
+      append_conflict "$candidate"
+    fi
+  done
+done
+if [ -f /etc/php.ini ] \
+    && grep -Eq '^[[:space:]]*auto_prepend_file[[:space:]]*=[[:space:]]*[^[:space:]]' /etc/php.ini; then
+  append_conflict /etc/php.ini
+fi
+
+# PHP-FPM pools and Apache virtual hosts can set the same directive outside
+# php.ini. Scan only active configuration locations and report paths, never
+# the configured value.
+for candidate in /etc/php/*/fpm/pool.d/*.conf; do
+  [ -f "$candidate" ] || continue
+  if grep -Eq '^[[:space:]]*php_(admin_)?value\[auto_prepend_file\][[:space:]]*=[[:space:]]*[^[:space:]]' "$candidate"; then
+    append_conflict "$candidate"
+  fi
+done
+for candidate in /etc/apache2/apache2.conf /etc/apache2/conf-enabled/*.conf \
+    /etc/apache2/sites-enabled/*.conf /etc/httpd/conf/httpd.conf /etc/httpd/conf.d/*.conf; do
+  [ -f "$candidate" ] || continue
+  if grep -Eq '^[[:space:]]*php_(admin_)?value[[:space:]]+auto_prepend_file[[:space:]]+[^[:space:]]' "$candidate"; then
+    append_conflict "$candidate"
+  fi
+done
+
+module_path=/var/www/html/admin/modules
+if [ -r /etc/what-changed-watcher.env ]; then
+  configured_module_path=$(sed -n 's/^MODULE_PATH=//p' /etc/what-changed-watcher.env | tail -n 1)
+  case "$configured_module_path" in
+    /*) module_path=$configured_module_path ;;
+  esac
+fi
+freepbx_webroot=${module_path%/admin/modules}
+for candidate in "$freepbx_webroot/.user.ini" "$freepbx_webroot/admin/.user.ini"; do
+  [ -f "$candidate" ] || continue
+  if grep -Eq '^[[:space:]]*auto_prepend_file[[:space:]]*=[[:space:]]*[^[:space:]]' "$candidate"; then
+    append_conflict "$candidate"
+  fi
+done
+if [ -n "$prepend_conflicts" ]; then
+  echo 'WhatChanged did not install its administrator request sensor because another auto_prepend_file is active.' >&2
+  for conflict in $prepend_conflicts; do
+    echo "conflicting_configuration=$conflict" >&2
+  done
+  echo 'The core database/file watcher remains usable, but administrator attribution is unavailable.' >&2
+  echo 'Review the existing prepend integration, then rerun this installer; do not delete another product configuration blindly.' >&2
+  # Exit 3 is a deliberate degraded outcome, not a failed core watcher
+  # installation. Package/module installers recognize it and continue while
+  # leaving administrator attribution disabled.
+  exit 3
+fi
+
 attribution_log=/var/lib/asterisk/pendingchanges-attribution/requests.jsonl
 if [ -r /etc/what-changed-watcher.env ]; then
   configured_log=$(sed -n 's/^ATTRIBUTION_LOG=//p' /etc/what-changed-watcher.env | tail -n 1)
