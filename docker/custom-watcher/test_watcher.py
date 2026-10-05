@@ -353,14 +353,18 @@ class ProbeCursor:
         if self.error_code is not None:
             raise watcher.pymysql.err.OperationalError(self.error_code, 'test-only')
 
-readable, limitation = watcher.probe_unlisted_table(ProbeCursor(), 'incoming')
-assert readable and limitation is None
-readable, limitation = watcher.probe_unlisted_table(ProbeCursor(1146), 'optional_table')
-assert not readable and limitation is None
-readable, limitation = watcher.probe_unlisted_table(ProbeCursor(1142), 'incoming')
-assert not readable and limitation['reason'] == 'table_not_readable'
-assert limitation['table'] == 'incoming'
-assert limitation['remedy'].endswith('/pendingchanges/bin/install-watcher')
+assert watcher.probe_unlisted_table(ProbeCursor(), 'incoming') == 'readable'
+assert watcher.probe_unlisted_table(ProbeCursor(1146), 'optional_table') == 'absent'
+# A limited account receives 1142 for both absent and existing-but-ungranted
+# tables. Never turn that ambiguous database response into a false claim.
+assert watcher.probe_unlisted_table(ProbeCursor(1142), 'optional_table') == 'ambiguous'
+visibility_limits = watcher.table_visibility_limitations(
+    {'optional_table', 'incoming'}, {'incoming'})
+assert visibility_limits[0]['reason'] == 'table_visibility_regressed'
+assert visibility_limits[0]['tables'] == ['incoming']
+assert visibility_limits[1]['reason'] == 'optional_table_visibility_unknown'
+assert visibility_limits[1]['tables'] == ['optional_table']
+assert visibility_limits[1]['remedy'].endswith('/pendingchanges/bin/install-watcher')
 
 old_scope = {'users': {'rows': {'1': {'name': 'Before'}}}}
 expanded_scope = {
@@ -381,9 +385,19 @@ before_scope, after_scope, deferred = watcher.comparable_tables(
     newly_readable=set(), unreadable=set(), removed_from_configuration=set())
 assert 'incoming' in watcher.database_diff(before_scope, after_scope)
 before_scope, after_scope, deferred = watcher.comparable_tables(
-    dropped_before, {}, scope_changed=True, pending_reload=True,
+    dropped_before, {}, scope_changed=False, pending_reload=False,
     newly_readable=set(), unreadable={'incoming'}, removed_from_configuration=set())
 assert not watcher.database_diff(before_scope, after_scope)
+
+base_scope = {'watch_tables': ['incoming'], 'readable_tables': ['incoming']}
+expanded_scope = {'watch_tables': ['incoming'], 'readable_tables': ['incoming', 'users']}
+contract_scope = {'watch_tables': ['incoming'], 'readable_tables': []}
+assert watcher.clean_scope_refresh_allowed(base_scope, expanded_scope)
+assert not watcher.clean_scope_refresh_allowed(base_scope, contract_scope)
+assert not watcher.clean_scope_refresh_allowed(
+    base_scope, {'watch_tables': ['incoming', 'users'], 'readable_tables': []})
+assert watcher.clean_scope_refresh_allowed(
+    base_scope, {'watch_tables': ['users'], 'readable_tables': []})
 
 # The historic `sip` table remains fully explainable: an update names the
 # peer option and its before/after value, while sensitive values stay private.

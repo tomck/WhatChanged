@@ -122,11 +122,15 @@ supplies a reviewed SELECT-only credential. Database transport follows
 FreePBX's configured `AMPDBSOCK` when present, or `AMPDBHOST` and `AMPDBPORT`
 for TCP.
 
-If a covered table is added later but the watcher account cannot read it, the
-report names `table_not_readable` and prints the exact `install-watcher`
-command that reconciles the installer-managed grants. Newly readable coverage
-is deferred while Apply Config is already pending so pre-existing rows are not
-misrepresented as newly staged changes.
+With table-scoped MariaDB grants, an absent optional-module table and an
+existing table without permission produce the same database error. WhatChanged
+therefore reports never-observed sources together as optional visibility of
+unknown status, rather than falsely claiming that a missing table exists. A
+source that was previously readable but disappears receives a stronger
+coverage-regression warning. Both reports give the exact `install-watcher`
+command to reconcile installer-managed grants when the table should exist.
+Newly readable coverage is deferred while Apply Config is already pending so
+pre-existing rows are not misrepresented as newly staged changes.
 
 PHP supports only one `auto_prepend_file`. If another application already owns
 that setting, WhatChanged leaves it untouched, completes the core watcher

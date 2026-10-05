@@ -518,21 +518,47 @@ def database_connection_parameters():
 
 
 def probe_unlisted_table(cursor, table):
-    """Distinguish an absent optional table from an unreadable covered table."""
+    """Classify a table hidden from SHOW TABLES without overstating certainty.
+
+    A schema-wide account receives 1146 for an absent table. A table-scoped
+    account receives 1142 both when the table is absent and when it exists but
+    lacks a grant, so that outcome must remain explicitly ambiguous.
+    """
     try:
         cursor.execute("SELECT 1 FROM `{}` LIMIT 0".format(table))
     except pymysql.MySQLError as error:
         code = error.args[0] if error.args else None
         if code == 1146:
-            return False, None
+            return 'absent'
         if code in (1044, 1045, 1142):
-            return False, {
-                'table': table,
-                'reason': 'table_not_readable',
-                'remedy': 'Run: sudo {}/pendingchanges/bin/install-watcher'.format(MODULE_ROOT),
-            }
+            return 'ambiguous'
         raise
-    return True, None
+    return 'readable'
+
+
+def table_visibility_limitations(ambiguous_tables, baseline_readable):
+    """Explain hidden optional sources without claiming that they exist."""
+    ambiguous = set(ambiguous_tables)
+    previously_readable = ambiguous.intersection(baseline_readable)
+    never_readable = ambiguous.difference(previously_readable)
+    remedy = (
+        'If these tables should exist, run: sudo '
+        '{}/pendingchanges/bin/install-watcher'.format(MODULE_ROOT)
+    )
+    limitations = []
+    if previously_readable:
+        limitations.append({
+            'reason': 'table_visibility_regressed',
+            'tables': sorted(previously_readable),
+            'remedy': remedy,
+        })
+    if never_readable:
+        limitations.append({
+            'reason': 'optional_table_visibility_unknown',
+            'tables': sorted(never_readable),
+            'remedy': remedy,
+        })
+    return limitations
 
 
 def database_snapshot():
@@ -545,12 +571,13 @@ def database_snapshot():
         snapshot = {}
         limitations = []
         readable_tables = []
+        ambiguous_tables = []
         for table in WATCH_TABLES:
             if table not in tables:
-                readable, limitation = probe_unlisted_table(cursor, table)
-                if limitation:
-                    limitations.append(limitation)
-                if not readable:
+                visibility = probe_unlisted_table(cursor, table)
+                if visibility == 'ambiguous':
+                    ambiguous_tables.append(table)
+                if visibility != 'readable':
                     continue
             readable_tables.append(table)
             cursor.execute(f"SELECT COUNT(*) AS row_count FROM `{table}`")
@@ -574,6 +601,7 @@ def database_snapshot():
         'tables': snapshot,
         'limitations': limitations,
         'readable_tables': readable_tables,
+        'ambiguous_tables': ambiguous_tables,
     }
 
 def reload_requested():
@@ -707,21 +735,38 @@ def comparable_tables(baseline, current, scope_changed, pending_reload,
     proven old scope comparable until the pending work is applied; the next
     clean baseline then begins coverage for the new tables.
     """
+    ignored = set(unreadable or ()).union(removed_from_configuration or ())
+    baseline = {table: value for table, value in baseline.items() if table not in ignored}
+    current = {table: value for table, value in current.items() if table not in ignored}
     if not (scope_changed and pending_reload):
         return baseline, current, []
     added_coverage = set(current).difference(baseline)
     if newly_readable is not None:
         added_coverage.update(newly_readable)
-    ignored = set(unreadable or ()).union(removed_from_configuration or ())
     added_coverage.difference_update(ignored)
     return (
-        {table: value for table, value in baseline.items() if table not in ignored},
+        baseline,
         {
             table: value for table, value in current.items()
-            if table not in ignored and table not in added_coverage
+            if table not in added_coverage
         },
         sorted(added_coverage),
     )
+
+
+def clean_scope_refresh_allowed(previous_scope, current_scope):
+    """Allow clean scope upgrades, but never normalize lost table visibility."""
+    previous_without_readable = dict(previous_scope)
+    current_without_readable = dict(current_scope)
+    previous_readable = set(previous_without_readable.pop('readable_tables', ()))
+    current_readable = set(current_without_readable.pop('readable_tables', ()))
+    current_configured = set(current_without_readable.get('watch_tables', ()))
+    retained_previous = previous_readable.intersection(current_configured)
+    if not retained_previous.issubset(current_readable):
+        return False
+    if previous_without_readable != current_without_readable:
+        return True
+    return previous_readable.issubset(current_readable)
 
 def comparable_astdb(baseline, current_state, scope_changed, pending_reload):
     """Compare private baseline fingerprints with the protected current state."""
@@ -892,7 +937,8 @@ def observe_forever():
         if not BASELINE.exists() and not database['need_reload']:
             save_baseline(state)
             baseline_provenance = {'state': 'trusted', 'reason': 'initial_clean_baseline'}
-        elif existing and existing.get('scope') != scope and not database['need_reload']:
+        elif existing and existing.get('scope') != scope and not database['need_reload'] \
+                and clean_scope_refresh_allowed(existing.get('scope', {}), scope):
             if baseline_provenance.get('state') == 'trusted':
                 save_baseline(state)
                 baseline_provenance = {'state': 'trusted', 'reason': 'clean_scope_upgrade'}
@@ -909,14 +955,12 @@ def observe_forever():
         if baseline and baseline == state:
             baseline_provenance = {'state': 'trusted', 'reason': 'baseline_matches_current_state'}
         scope_changed = bool(baseline and baseline.get('scope') != scope)
+        ambiguous_tables = set(database.get('ambiguous_tables', ()))
+        baseline_readable = set()
         if baseline:
             baseline_scope = baseline.get('scope', {})
             baseline_readable = set(baseline_scope.get('readable_tables', baseline['tables'].keys()))
             current_readable = set(database['readable_tables'])
-            unreadable_tables = {
-                item.get('table') for item in database['limitations']
-                if item.get('reason') == 'table_not_readable' and item.get('table')
-            }
             removed_from_configuration = set(baseline_scope.get('watch_tables', ())).difference(WATCH_TABLES)
             before_tables, after_tables, deferred_coverage = comparable_tables(
                 baseline['tables'],
@@ -924,7 +968,7 @@ def observe_forever():
                 scope_changed,
                 database['need_reload'],
                 newly_readable=current_readable.difference(baseline_readable),
-                unreadable=unreadable_tables,
+                unreadable=ambiguous_tables,
                 removed_from_configuration=removed_from_configuration,
             )
             database_drift = database_diff(
@@ -942,7 +986,9 @@ def observe_forever():
             astdb_deferred = False
             astdb_drift = {}
         file_drift = file_diff(baseline['files'], state['files']) if baseline else {}
-        limitations = list(database['limitations']) + list(astdb['limitations'])
+        limitations = list(database['limitations'])
+        limitations.extend(table_visibility_limitations(ambiguous_tables, baseline_readable))
+        limitations.extend(astdb['limitations'])
         if deferred_coverage:
             limitations.append({
                 'reason': 'scope_expanded_while_pending',

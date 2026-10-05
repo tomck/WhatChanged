@@ -36,6 +36,7 @@ fi
 "$ROOT_DIR/docker/smoke-embedded-watcher.sh"
 "$ROOT_DIR/docker/validate-watcher-package.sh" "$ROOT_DIR/dist/what-changed-watcher_${WATCHER_VERSION}_all.deb"
 docker compose -f "$COMPOSE_FILE" exec -T custom-watcher python /usr/local/bin/test_watcher.py
+"$ROOT_DIR/docker/smoke-limited-database-account.sh"
 docker compose -f "$COMPOSE_FILE" exec -T pbx sh -lc \
   'php /srv/pendingchanges/docker/test-request-audit.php /tmp/what-changed-request-audit-test.jsonl && rm -f /tmp/what-changed-request-audit-test.jsonl'
 docker compose -f "$COMPOSE_FILE" exec -T pbx php \

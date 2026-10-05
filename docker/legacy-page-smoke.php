@@ -123,7 +123,11 @@ namespace {
                 ],
                 'generated_files' => [],
                 'module_files' => [],
-                'coverage_limitations' => [],
+                'coverage_limitations' => [[
+                    'reason' => 'optional_table_visibility_unknown',
+                    'tables' => ['optional_one', 'optional_two'],
+                    'remedy' => 'If these tables should exist, run the watcher installer.',
+                ]],
                 'coverage' => ['database_tables' => ['users']],
                 'attribution' => [
                     'enabled' => true,
@@ -171,7 +175,7 @@ namespace {
     $html = ob_get_clean();
     $expectedText = isset($argv[2]) && $argv[2] === 'degraded'
         ? ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence']
-        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value'];
+        : ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value', '2 optional table sources are not visible', 'Show optional source names', 'optional_one, optional_two'];
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);

@@ -153,9 +153,15 @@
             AstDB coverage was not read because <?= (int) (isset($limitation['rows']) ? $limitation['rows'] : 0) ?> rows exceeds the <?= (int) (isset($limitation['limit']) ? $limitation['limit'] : 0) ?>-row cap.
           <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'astdb_unavailable'): ?>
             AstDB immediate-state coverage is unavailable on this host.
-          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'table_not_readable'): ?>
-            <?= $presenter->escape(isset($limitation['table']) ? $limitation['table'] : 'unknown table') ?> is configured for coverage but the watcher database account cannot read it.
-            <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'Re-run the watcher installer to reconcile its read-only grants.') ?>
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'table_visibility_regressed'): ?>
+            Previously covered table sources are no longer visible: <?= $presenter->escape(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : array())) ?>.
+            They may have been removed with a module or the watcher account may have lost read access.
+            <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'If the tables should exist, re-run the watcher installer.') ?>
+          <?php elseif ((isset($limitation['reason']) ? $limitation['reason'] : '') === 'optional_table_visibility_unknown'): ?>
+            <?= count(isset($limitation['tables']) ? $limitation['tables'] : array()) ?> optional table sources are not visible.
+            This is expected when their owning modules are not installed; MariaDB does not distinguish that case from missing table-level permission for this account.
+            <?= $presenter->escape(isset($limitation['remedy']) ? $limitation['remedy'] : 'If those modules are installed, re-run the watcher installer.') ?>
+            <details><summary>Show optional source names</summary><?= $presenter->escape(implode(', ', isset($limitation['tables']) ? $limitation['tables'] : array())) ?></details>
           <?php else: ?>
             <?= $presenter->escape(json_encode($limitation, JSON_UNESCAPED_SLASHES)) ?>
           <?php endif; ?>
