@@ -62,13 +62,19 @@ docker compose -f "$compose_file" --profile "$target" up -d --force-recreate --n
 wait_healthy "$watcher_service"
 
 if [[ "$target" == 16 ]]; then
-  # The historical image ships the pm2 module tree but can leave it locally
-  # available rather than installed. Current Framework 16 requires its BMO
-  # during reload, so make that bundled dependency deterministic.
+  # Current Framework 16 requires the pm2 BMO during reload. Some copies of
+  # the historical image contain the module tree and some pristine volumes do
+  # not, so make the fixture deterministic. The download fallback deliberately
+  # depends on the configured FreePBX module mirror.
   docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" \
     sh -eu -c "
       if ! /var/lib/asterisk/bin/fwconsole ma list | grep -E 'pm2.*Enabled' >/dev/null; then
-        /var/lib/asterisk/bin/fwconsole ma install pm2
+        if /var/lib/asterisk/bin/fwconsole ma list | grep -E 'pm2' >/dev/null; then
+          /var/lib/asterisk/bin/fwconsole ma install pm2
+        else
+          echo 'The pristine FreePBX 16 fixture lacks pm2; downloading it from the configured module mirror.'
+          /var/lib/asterisk/bin/fwconsole ma downloadinstall pm2
+        fi
       fi
       /var/lib/asterisk/bin/fwconsole ma list | grep -E 'pm2.*Enabled'
     "

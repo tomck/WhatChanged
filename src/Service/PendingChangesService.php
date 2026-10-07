@@ -127,6 +127,49 @@ class PendingChangesService
         return $this->frameworkStatus($health);
     }
 
+    public static function coverageRegression(array $limitations)
+    {
+        $regressed = false;
+        $tables = array();
+
+        foreach ($limitations as $limitation) {
+            if (
+                !is_array($limitation)
+                || (isset($limitation['reason']) ? $limitation['reason'] : '')
+                    !== 'table_visibility_regressed'
+            ) {
+                continue;
+            }
+
+            $regressed = true;
+            if (isset($limitation['tables']) && is_array($limitation['tables'])) {
+                $tables = array_merge($tables, $limitation['tables']);
+            }
+        }
+
+        $tables = array_values(array_unique(array_map('strval', $tables)));
+        sort($tables, SORT_STRING);
+
+        return array(
+            'regressed' => $regressed,
+            'tables' => $tables,
+        );
+    }
+
+    public static function doctorExitCode(array $status, $payloadCurrent, $keyBroken)
+    {
+        $trusted = isset($status['baseline_provenance']['state'])
+            && $status['baseline_provenance']['state'] === 'trusted';
+
+        return empty($status['data_current'])
+            || !$trusted
+            || !$payloadCurrent
+            || $keyBroken
+            || !empty($status['coverage_regressed'])
+                ? 2
+                : 0;
+    }
+
     public function feedback()
     {
         $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-watcher/feedback.jsonl';
@@ -172,6 +215,11 @@ class PendingChangesService
     private function watcherStatus(array $watcher, array $health)
     {
         $files = $watcher['file_drift'];
+        $coverageLimitations = isset($watcher['coverage_limitations'])
+            && is_array($watcher['coverage_limitations'])
+            ? $watcher['coverage_limitations']
+            : array();
+        $coverageRegression = self::coverageRegression($coverageLimitations);
         $current = $health['state'] === 'healthy';
         $provenance = isset($watcher['baseline_provenance'])
             && is_array($watcher['baseline_provenance'])
@@ -208,9 +256,12 @@ class PendingChangesService
             'files' => $files,
             'generated_files' => $this->differ->fileScope($files, 'generated/'),
             'module_files' => $this->differ->fileScope($files, 'module/'),
-            'coverage_limitations' => isset($watcher['coverage_limitations'])
-                ? $watcher['coverage_limitations']
-                : array(),
+            'coverage_limitations' => $coverageLimitations,
+            'coverage_regressed' => $coverageRegression['regressed'],
+            'coverage_regressed_tables' => $coverageRegression['tables'],
+            'coverage_regression_remedy' => $coverageRegression['regressed']
+                ? 'sudo ' . $this->paths->pendingChangesModuleRoot() . '/bin/install-watcher'
+                : null,
             'coverage' => isset($watcher['coverage']) ? $watcher['coverage'] : array(),
             'attribution' => isset($watcher['attribution']) ? $watcher['attribution'] : array(),
             'message' => $message,
@@ -240,6 +291,9 @@ class PendingChangesService
                 'generated_files' => array(),
                 'module_files' => array(),
                 'coverage_limitations' => array(),
+                'coverage_regressed' => false,
+                'coverage_regressed_tables' => array(),
+                'coverage_regression_remedy' => null,
                 'coverage' => array(),
                 'attribution' => $this->unavailableAttribution($pending),
                 'baseline' => false,
@@ -256,9 +310,10 @@ class PendingChangesService
             );
         }
 
+        $currentDatabase = $this->databaseSnapshotter->capture();
         $database = $this->differ->database(
             $baseline['database'],
-            $this->databaseSnapshotter->capture()
+            $currentDatabase
         );
         $files = $this->differ->files(
             $baseline['files'],
@@ -283,9 +338,17 @@ class PendingChangesService
             'generated_files' => $this->differ->fileScope($files, 'generated/'),
             'module_files' => $this->differ->fileScope($files, 'module/'),
             'coverage_limitations' => array(),
+            'coverage_regressed' => false,
+            'coverage_regressed_tables' => array(),
+            'coverage_regression_remedy' => null,
             'astdb' => array(),
             'coverage' => array(
-                'database_tables' => $this->tables,
+                'database_tables_configured' => $this->tables,
+                'database_tables_visible' => array_keys($currentDatabase),
+                'database_tables_not_visible' => array_values(array_diff(
+                    $this->tables,
+                    array_keys($currentDatabase)
+                )),
                 'database_exclusions' => array('modules.modulename=pendingchanges'),
                 'framework_fallback_uncovered_tables' => self::FRAMEWORK_FALLBACK_UNCOVERED_TABLES,
                 'astdb_families' => array(),

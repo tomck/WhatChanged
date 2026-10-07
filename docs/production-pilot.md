@@ -89,6 +89,13 @@ first baseline snapshot; no manual step is needed on install.
   `redaction_key_remedy`). `ok` and `absent` (pre-first-snapshot) are normal.
   `invalid` or `unreadable` fails doctor (exit 2); `insecure` (group/other
   readable — fix with `chmod 0600` as root) warns.
+- Require `coverage_regressed=no`. The doctor exits 2 if a table that was
+  readable in the applied baseline is no longer visible, lists it in
+  `coverage_regressed_tables`, and prints the exact embedded installer command
+  in `coverage_regression_remedy`. Restore installer-managed grants or, when a
+  legitimate reviewed Apply Config is already appropriate, let that applied
+  state establish a new baseline. A still-unavailable table then becomes an
+  optional visibility limitation rather than an all-clear claim.
 - **Loss is not exposure.** Fingerprints are one-way; a lost key reveals no
   secrets. It does break comparability: every protected field will report as
   changed against the new key. Rotate deliberately only after confirming that

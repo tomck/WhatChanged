@@ -35,5 +35,41 @@ namespace {
     if ($invalid['state'] !== 'invalid') {
         throw new \RuntimeException('Invalid watcher classification failed');
     }
+    $service = 'FreePBX\\modules\\Pendingchanges\\Service\\PendingChangesService';
+    $coverage = $service::coverageRegression([
+        [
+            'reason' => 'table_visibility_regressed',
+            'tables' => ['endpoint_extensions', 'incoming'],
+        ],
+        [
+            'reason' => 'optional_table_visibility_unknown',
+            'tables' => ['optional_module_table'],
+        ],
+        [
+            'reason' => 'table_visibility_regressed',
+            'tables' => ['incoming'],
+        ],
+    ]);
+    if (!$coverage['regressed'] || $coverage['tables'] !== ['endpoint_extensions', 'incoming']) {
+        throw new \RuntimeException('Coverage regression classification failed');
+    }
+    $coverage = $service::coverageRegression([
+        ['reason' => 'optional_table_visibility_unknown', 'tables' => ['optional_module_table']],
+    ]);
+    if ($coverage['regressed'] || $coverage['tables'] !== []) {
+        throw new \RuntimeException('Optional table visibility was misclassified as a regression');
+    }
+    $doctorStatus = [
+        'data_current' => true,
+        'baseline_provenance' => ['state' => 'trusted'],
+        'coverage_regressed' => false,
+    ];
+    if ($service::doctorExitCode($doctorStatus, true, false) !== 0) {
+        throw new \RuntimeException('Authoritative doctor status did not exit cleanly');
+    }
+    $doctorStatus['coverage_regressed'] = true;
+    if ($service::doctorExitCode($doctorStatus, true, false) !== 2) {
+        throw new \RuntimeException('Coverage regression did not fail doctor closed');
+    }
     echo "watcher health classification checks passed\n";
 }

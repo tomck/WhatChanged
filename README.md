@@ -180,6 +180,12 @@ cannot prove that a web request loaded it. Confirm the runtime line
 It also reports the bundled and installed watcher versions. If they do not
 match, it prints the exact full-path `install-watcher` command needed to update
 the payload.
+The doctor reports `coverage_regressed=yes` and exits 2 if a table that was
+readable in the applied baseline is no longer visible. It prints the affected
+table names and the exact `install-watcher` command that reconciles
+installer-managed grants. A reviewed Apply Config also establishes a new
+baseline; if the table remains unavailable, it is then reported as an optional
+visibility limitation rather than silently treated as covered.
 
 A Module Admin upgrade does not silently replace the root-owned system service.
 When a release contains a newer embedded watcher, the report page and doctor

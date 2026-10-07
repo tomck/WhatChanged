@@ -33,8 +33,7 @@ print(json.dumps({"need_reload":s.get("need_reload"),"database_drift":s.get("dat
 }
 
 apply_and_wait_clean() {
-  compose exec -T pbx sh -lc \
-    'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
+  "$ROOT_DIR/docker/reload-freepbx-lab.sh" >/dev/null
   watcher_assert "not s['need_reload'] and not s['database_drift'] and not s['file_drift']"
 }
 

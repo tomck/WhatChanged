@@ -28,6 +28,9 @@ namespace {
                         'tables' => ['endpoint_extensions'],
                         'remedy' => 'Re-run the watcher installer.',
                     ]],
+                    'coverage_regressed' => true,
+                    'coverage_regressed_tables' => ['endpoint_extensions'],
+                    'coverage_regression_remedy' => 'sudo /module/bin/install-watcher',
                     'coverage' => [
                         'database_tables_configured' => ['users', 'endpoint_extensions'],
                         'database_tables_visible' => ['users'],

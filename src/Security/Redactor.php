@@ -25,11 +25,13 @@ class Redactor
 
         $normalized = strtolower((string) $value);
         $compact = preg_replace('/[^a-z0-9]/', '', $normalized);
-        if (in_array(
-            $compact,
-            array('ampmgrpass', 'astmgrpass', 'ampdbpass', 'sslpass', 'certkey', 'md5cred', 'register'),
-            true
-        )) {
+        if (
+            in_array(
+                $compact,
+                array('ampmgrpass', 'astmgrpass', 'ampdbpass', 'sslpass', 'certkey', 'md5cred', 'register'),
+                true
+            )
+        ) {
             return true;
         }
 
@@ -143,8 +145,10 @@ class Redactor
             return array(
                 'state' => 'unreadable',
                 'path' => $path,
-                'detail' => 'The redaction key exists but cannot be read by this process; snapshots cannot protect secrets.',
-                'remedy' => 'As root, confirm ownership by the Asterisk service account with mode 0600, then re-run doctor.',
+                'detail' => 'The redaction key exists but cannot be read by this process; '
+                    . 'snapshots cannot protect secrets.',
+                'remedy' => 'As root, confirm ownership by the Asterisk service account with mode 0600, '
+                    . 'then re-run doctor.',
             );
         }
         $encoded = @file_get_contents($path);
@@ -152,8 +156,10 @@ class Redactor
             return array(
                 'state' => 'invalid',
                 'path' => $path,
-                'detail' => 'The redaction key is not a 64-character hex value; protected baselines cannot be verified against it.',
-                'remedy' => 'Follow the redaction key rotation procedure, then seed a fresh baseline after a clean Apply Config.',
+                'detail' => 'The redaction key is not a 64-character hex value; '
+                    . 'protected baselines cannot be verified against it.',
+                'remedy' => 'Follow the redaction key rotation procedure, then seed a fresh baseline '
+                    . 'after a clean Apply Config.',
             );
         }
         $permissions = @fileperms($path);

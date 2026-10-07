@@ -19,6 +19,11 @@ try {
             ? $health['payload']
             : array();
         $payloadCurrent = !empty($payload['current']);
+        $coverageRegressed = !empty($status['coverage_regressed']);
+        $coverageRegressedTables = isset($status['coverage_regressed_tables'])
+            && is_array($status['coverage_regressed_tables'])
+            ? $status['coverage_regressed_tables']
+            : array();
         $sensorConfigured = false;
         $sensorCandidates = array('/etc/php.d/99-what-changed-attribution.ini');
         foreach (array('apache2', 'fpm') as $webSapi) {
@@ -47,6 +52,8 @@ try {
             'watcher_label=' . (isset($health['label']) ? $health['label'] : 'Unknown'),
             'data_current=' . (!empty($status['data_current']) ? 'yes' : 'no'),
             'coverage_mode=' . (isset($status['coverage_mode']) ? $status['coverage_mode'] : 'unknown'),
+            'coverage_regressed=' . ($coverageRegressed ? 'yes' : 'no'),
+            'coverage_regressed_tables=' . implode(',', $coverageRegressedTables),
             'baseline_provenance=' . (
                 isset($status['baseline_provenance']['state'])
                     ? $status['baseline_provenance']['state'] : 'unknown'
@@ -84,14 +91,23 @@ try {
         } elseif ($state === 'not_installed' || $state === 'installed_unconfigured') {
             $lines[] = 'remedy=sudo ' . dirname(__FILE__) . '/install-watcher';
         }
+        if ($coverageRegressed) {
+            $lines[] = 'coverage_regression_remedy=' . (
+                isset($status['coverage_regression_remedy'])
+                    ? $status['coverage_regression_remedy']
+                    : 'sudo ' . dirname(__FILE__) . '/install-watcher'
+            );
+        }
         echo implode(PHP_EOL, $lines) . PHP_EOL;
-        $trusted = isset($status['baseline_provenance']['state'])
-            && $status['baseline_provenance']['state'] === 'trusted';
         $keyBroken = $keyState === 'invalid' || $keyState === 'unreadable';
         if (!empty($keyStatus['remedy']) && ($keyBroken || $keyState === 'insecure' || $keyState === 'absent')) {
             echo 'redaction_key_remedy=' . $keyStatus['remedy'] . PHP_EOL;
         }
-        exit(empty($status['data_current']) || !$trusted || !$payloadCurrent || $keyBroken ? 2 : 0);
+        exit(\FreePBX\modules\Pendingchanges\Service\PendingChangesService::doctorExitCode(
+            $status,
+            $payloadCurrent,
+            $keyBroken
+        ));
     } else {
         throw new RuntimeException('Usage: pendingchanges [status|seed|feedback|doctor]');
     }

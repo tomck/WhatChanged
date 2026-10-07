@@ -21,9 +21,14 @@
 - Fail closed in the page when previously readable table coverage disappears,
   preserve legacy-baseline visibility during upgrades, and defer unrelated
   scope expansion while that regression remains unresolved.
+- Make the command-line doctor fail with exit 2 when previously readable table
+  coverage disappears, with machine-readable table names and an exact repair
+  command shared from the service status.
 - Observe the commercial Endpoint Manager extension map so an authenticated
   "Update Config and Refresh Phone" action can be explained as record drift
   rather than only an unattributed reload request.
+- Make the disposable module-state and FreePBX 16 real-image fixtures
+  reproducible from pristine volumes instead of relying on saved module state.
 - Add an Apache/nginx uninstall, conflict, live-response, and reinstall smoke
   scenario to the complete FreePBX 17 gates.
 

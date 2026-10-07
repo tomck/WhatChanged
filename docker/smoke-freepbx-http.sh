@@ -76,7 +76,7 @@ if [ "$cleanup_reload" = true ]; then
   # `fwconsole reload` can complete a few seconds after returning in this lab.
   # Waiting first for the removal to be observed prevents a stale clean status
   # from being mistaken for the new post-reload baseline.
-  $docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
+  "$root_dir/docker/reload-freepbx-lab.sh" >/dev/null
   sleep 8
   wait_clean
 else
@@ -137,7 +137,7 @@ missing = sorted(
 )
 assert not missing, f"fixture deletion drift missing removals: {missing}; observed: {s['"'"'database_drift'"'"']}"
 '
-$docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null || true
+"$root_dir/docker/reload-freepbx-lab.sh" >/dev/null
 sleep 8
 wait_clean
 echo "authenticated FreePBX fixture create/delete lifecycle passed"

@@ -44,21 +44,7 @@ class ChangePresenter
         $hasDrift = !empty($status['database'])
             || !empty($status['astdb'])
             || !empty($status['files']);
-        $coverageRegressed = false;
-        $coverageLimitations = isset($status['coverage_limitations'])
-            && is_array($status['coverage_limitations'])
-            ? $status['coverage_limitations']
-            : array();
-        foreach ($coverageLimitations as $limitation) {
-            if (
-                is_array($limitation)
-                && (isset($limitation['reason']) ? $limitation['reason'] : '')
-                    === 'table_visibility_regressed'
-            ) {
-                $coverageRegressed = true;
-                break;
-            }
-        }
+        $coverageRegressed = !empty($status['coverage_regressed']);
         $coverageComplete = $dataCurrent && !$coverageRegressed;
 
         if ($coverageRegressed && !$status['pending'] && !$hasDrift) {
@@ -248,8 +234,11 @@ class ChangePresenter
         foreach ($details as $field => $value) {
             $before = '';
             $after = '';
-            if ($kind === 'updated' && is_array($value)
-                && (array_key_exists('before', $value) || array_key_exists('after', $value))) {
+            if (
+                $kind === 'updated'
+                && is_array($value)
+                && (array_key_exists('before', $value) || array_key_exists('after', $value))
+            ) {
                 $before = array_key_exists('before', $value) ? $value['before'] : '';
                 $after = array_key_exists('after', $value) ? $value['after'] : '';
             } elseif ($kind === 'added') {

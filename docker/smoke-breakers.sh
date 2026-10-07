@@ -32,10 +32,7 @@ observed_at() {
 
 apply_config() {
   before=$(observed_at)
-  # Some lab reloads return from fwconsole before its AMI work has completed.
-  # The watcher assertion below, rather than that transient exit status, is
-  # the authoritative test outcome.
-  $docker_cmd exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null || true
+  "$root_dir/docker/reload-freepbx-lab.sh" >/dev/null
   # FreePBX/Asterisk finalizes the reload asynchronously in this lab.
   sleep 8
   wait_status clean "$before"

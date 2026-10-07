@@ -188,6 +188,15 @@ the exact full command to run.
 It also reports `redaction_key_state`: `ok` (or `absent` before the first
 snapshot) is normal; `invalid` or `unreadable` fails doctor with exit 2 and
 prints `redaction_key_remedy` with the exact next step.
+The doctor also exits 2 when a table that was readable in the applied baseline
+is no longer visible. It reports `coverage_regressed=yes`, lists the table names
+in `coverage_regressed_tables`, and prints `coverage_regression_remedy` with the
+exact embedded installer command. Restoring the grants clears the condition.
+A reviewed Apply Config establishes a new baseline; if the table remains
+unavailable, it then becomes an optional visibility limitation. An upgrade
+from a watcher that did not record readable-table scope may expose this once
+when a baseline table is no longer visible. That fail-closed result is
+intentional.
 
 Module Admin upgrades do not silently replace the root-owned watcher service.
 If a new module includes a newer watcher payload, the page and doctor report

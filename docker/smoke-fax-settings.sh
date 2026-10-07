@@ -29,7 +29,7 @@ run_fixture() {
 }
 
 apply_clean() {
-  compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null || true
+  "$ROOT_DIR/docker/reload-freepbx-lab.sh" >/dev/null
   wait_for "not s['need_reload'] and not s['database_drift'] and not s['astdb_drift'] and not s['file_drift']"
 }
 

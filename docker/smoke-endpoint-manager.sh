@@ -1,7 +1,10 @@
 #!/bin/sh
 # Exercise the commercial Endpoint Manager extension-map storage contract in
 # the disposable lab. The commercial module is not redistributed here; the
-# fixture mirrors only the value-free schema boundary verified on a real host.
+# fixture mirrors only the value-free schema boundary verified by read-only
+# inspection of an installed commercial module. It includes the table identity,
+# a readable configuration field, and the only observed secret-like column;
+# the watcher still discovers and handles every column present at runtime.
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

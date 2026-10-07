@@ -15,7 +15,7 @@ wait_for() {
   return 1
 }
 apply_clean() {
-  compose exec -T pbx sh -lc 'su -s /bin/sh asterisk -c "/var/lib/asterisk/bin/fwconsole reload"' >/dev/null
+  "$ROOT_DIR/docker/reload-freepbx-lab.sh" >/dev/null
   wait_for "not s['need_reload'] and not s['database_drift'] and not s['file_drift']"
 }
 FREEPBX_TRUNK_ACTION=cleanup "$ROOT_DIR/docker/seed-trunk.sh"

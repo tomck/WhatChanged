@@ -341,6 +341,9 @@ renamed_only = {'userman_users_settings': {'keys': ['uid', 'module', 'key'], 'ro
 }}}
 assert not watcher.database_diff(userman_before, renamed_only)
 assert watcher.redact_row({'module': 'example', 'key': 'api_token', 'val': 'private'})['val'] == '[redacted]'
+endpoint_token = {'ext': '7999', 'dpma_token_seq': 'private-endpoint-token'}
+assert watcher.sensitive_field('dpma_token_seq', endpoint_token)
+assert watcher.redact_row(endpoint_token)['dpma_token_seq'] == '[redacted]'
 class NaturalKeyCursor:
     def __init__(self): self.calls = 0
     def execute(self, *_): self.calls += 1

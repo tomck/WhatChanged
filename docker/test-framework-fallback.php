@@ -48,6 +48,10 @@ namespace {
     if ($redactor::sensitiveField('match_pattern_pass', ['match_pattern_pass' => '18005551212'])) {
         throw new RuntimeException('Outbound-route match pattern was misclassified as a credential');
     }
+    $endpointToken = ['ext' => '7999', 'dpma_token_seq' => 'private-endpoint-token'];
+    if (!$redactor::sensitiveField('dpma_token_seq', $endpointToken)) {
+        throw new RuntimeException('Endpoint Manager token sequence was not classified as sensitive');
+    }
 
     $pathClass = 'FreePBX\\modules\\Pendingchanges\\Support\\PathResolver';
     $paths = new $pathClass();
@@ -70,6 +74,10 @@ namespace {
         'variable' => 'API_TOKEN', 'value' => $prefix.str_repeat('b', 64).']',
     ]]];
     $redactorInstance = new $redactor($paths);
+    $publicEndpoint = $redactorInstance->publicRow($endpointToken);
+    if ($publicEndpoint['dpma_token_seq'] !== '[redacted]') {
+        throw new RuntimeException('Endpoint Manager token sequence was exposed');
+    }
     $differClass = 'FreePBX\\modules\\Pendingchanges\\Diff\\SnapshotDiffer';
     $differ = new $differClass($redactorInstance);
     $diff = $differ->database($before, $after);
