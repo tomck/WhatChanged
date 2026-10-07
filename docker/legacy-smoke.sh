@@ -7,6 +7,12 @@ target=${1:-16}
 source "$root_dir/deploy/release-versions.sh"
 archive="$root_dir/dist/pendingchanges-$module_version.tgz"
 
+# Optional isolated project names let the first-boot path be exercised from
+# pristine volumes without touching the preserved normal legacy fixtures.
+if [[ -n ${LEGACY_COMPOSE_PROJECT_NAME:-} ]]; then
+  export COMPOSE_PROJECT_NAME=$LEGACY_COMPOSE_PROJECT_NAME
+fi
+
 case "$target" in
   16)
     pbx_service=fpbx16
@@ -52,20 +58,30 @@ wait_healthy() {
 }
 
 wait_fpbx16_bootstrap() {
-  local voicemail_table
+  local container started_at voicemail_table initialization_complete
   for _ in $(seq 1 360); do
+    container=$(docker compose -f "$compose_file" --profile 16 ps -q fpbx16)
+    initialization_complete=0
+    if [[ -n "$container" ]]; then
+      started_at=$(docker inspect --format '{{.State.StartedAt}}' "$container")
+      if docker logs --since "$started_at" "$container" 2>&1 \
+          | grep -F 'container initialization completed' >/dev/null; then
+        initialization_complete=1
+      fi
+    fi
     if ! docker compose -f "$compose_file" --profile 16 exec -T fpbx16 \
         pgrep -f '[f]wconsole ma downloadinstall' >/dev/null 2>&1; then
       voicemail_table=$(docker compose -f "$compose_file" --profile 16 exec -T fpbx16-database \
         mariadb -uasterisk -plegacy-freepbx -N asterisk -e \
-          'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="voicemail_admin";')
-      if [[ "$voicemail_table" == 1 ]]; then
+          'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="voicemail_admin";' \
+          2>/dev/null || true)
+      if [[ "$voicemail_table" == 1 && "$initialization_complete" == 1 ]]; then
         return 0
       fi
     fi
     sleep 5
   done
-  echo 'Timed out waiting for the FreePBX 16 first-boot module installer and voicemail schema.' >&2
+  echo 'Timed out waiting for the current FreePBX 16 boot to finish module installation, create the voicemail schema, and report container initialization complete.' >&2
   docker compose -f "$compose_file" --profile 16 logs --tail=200 fpbx16 >&2
   return 1
 }
@@ -87,10 +103,11 @@ watcher_diagnostics() {
 }
 
 wait_for_settled_fixture() {
+  local minimum_observed=${1:-0}
   local last_observed=0 consecutive=0 observation observed clean
   for _ in $(seq 1 90); do
     observation=$(docker compose -f "$compose_file" --profile "$target" exec -T "$watcher_service" \
-      python -c 'import json; s=json.load(open("/var/lib/pendingchanges-watcher/status.json")); clean=(s.get("baseline_available") and not s.get("need_reload") and not s.get("database_drift") and not s.get("astdb_drift") and not s.get("file_drift") and s.get("baseline_provenance", {}).get("state") == "trusted"); print("%s %s" % (s.get("observed_at", 0), int(bool(clean))))')
+      python -c 'import json,sys; s=json.load(open("/var/lib/pendingchanges-watcher/status.json")); observed=s.get("observed_at", 0); clean=(observed >= int(sys.argv[1]) and s.get("baseline_available") and not s.get("need_reload") and not s.get("database_drift") and not s.get("astdb_drift") and not s.get("file_drift") and s.get("baseline_provenance", {}).get("state") == "trusted"); print("%s %s" % (observed, int(bool(clean))))' "$minimum_observed")
     read -r observed clean <<<"$observation"
     if [[ "$observed" != "$last_observed" ]]; then
       if [[ "$clean" == 1 ]]; then
@@ -114,8 +131,9 @@ docker compose -f "$compose_file" --profile "$target" up -d --build "$watcher_se
 wait_healthy "$pbx_service"
 if [[ "$target" == 16 ]]; then
   # The historical image declares itself healthy while its default module
-  # download/install job is still running. Wait for that authoritative process
-  # and its voicemail schema to finish before installing any fixture modules.
+  # download/install job is still running, then writes its RTP defaults after
+  # that job exits. Require the completion marker from this exact container
+  # boot as well as the installer and schema checks before touching the fixture.
   wait_fpbx16_bootstrap
 fi
 # A PBX image/config recreation can invalidate the watcher container's old DNS
@@ -166,12 +184,10 @@ docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh 
 ' 
 
 if [[ "$target" == 16 ]]; then
-  # A pristine FreePBX 16 image continues installing and normalizing modules
-  # briefly after it first reports healthy. Apply those fixture-owned changes,
-  # then require three distinct clean observations before replacing the
-  # disposable baseline so background first-boot work cannot race the smoke.
+  # Normalize the fixture after the image's current boot has conclusively
+  # finished. The disposable baseline is recreated below before cleanliness is
+  # assessed, so no first-boot value can become permanent post-baseline drift.
   reload_freepbx
-  wait_for_settled_fixture
 fi
 
 database_sql() {
@@ -206,17 +222,23 @@ baseline_started=$(date +%s)
 docker compose -f "$compose_file" --profile "$target" start "$watcher_service" >/dev/null
 wait_healthy "$watcher_service"
 
-# Wait for a clean observation to establish the applied baseline.
-for _ in $(seq 1 30); do
-  clean=$(docker compose -f "$compose_file" --profile "$target" exec -T "$watcher_service" \
-    python -c 'import json,sys; s=json.load(open("/var/lib/pendingchanges-watcher/status.json")); print(int(s["baseline_available"] and not s["need_reload"] and s["observed_at"] >= int(sys.argv[1])))' "$baseline_started")
-  [[ "$clean" == 1 ]] && break
-  sleep 2
-done
-if [[ "${clean:-0}" != 1 ]]; then
-  echo "Timed out waiting for the FreePBX $target fixture baseline to become clean." >&2
-  watcher_diagnostics
-  exit 1
+# Wait for a clean observation to establish the applied baseline. FreePBX 16
+# requires three distinct observations so a late first-boot write cannot slip
+# through the gap between one snapshot and the staged-drift fixture.
+if [[ "$target" == 16 ]]; then
+  wait_for_settled_fixture "$baseline_started"
+else
+  for _ in $(seq 1 30); do
+    clean=$(docker compose -f "$compose_file" --profile "$target" exec -T "$watcher_service" \
+      python -c 'import json,sys; s=json.load(open("/var/lib/pendingchanges-watcher/status.json")); print(int(s["baseline_available"] and not s["need_reload"] and s["observed_at"] >= int(sys.argv[1])))' "$baseline_started")
+    [[ "$clean" == 1 ]] && break
+    sleep 2
+  done
+  if [[ "${clean:-0}" != 1 ]]; then
+    echo "Timed out waiting for the FreePBX $target fixture baseline to become clean." >&2
+    watcher_diagnostics
+    exit 1
+  fi
 fi
 
 staged_at=$(date +%s)
