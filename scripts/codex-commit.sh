@@ -2,13 +2,15 @@
 
 set -euo pipefail
 
-# Compatibility wrapper for Codex; see scripts/ai-commit.sh. Accepts the same
-# options as before (--model, --reasoning-effort, --thread) or the
-# CODEX_COMMIT_* environment variables.
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-extra=()
-[[ -n ${CODEX_COMMIT_MODEL:-} ]] && extra+=(--model "$CODEX_COMMIT_MODEL")
-[[ -n ${CODEX_COMMIT_REASONING_EFFORT:-} ]] && extra+=(--effort "$CODEX_COMMIT_REASONING_EFFORT")
-[[ -n ${CODEX_COMMIT_THREAD_ID:-} ]] && extra+=(--thread "$CODEX_COMMIT_THREAD_ID")
+# Keep the repository entry point while delegating identity detection to the
+# user-level tool. It reads Codex's own session record and fails with status 3
+# when it cannot determine the model and effort with certainty.
+commit_tool=${AI_TOOLS_COMMIT:-${HOME}/.ai-tools/ai-commit}
 
-exec "$here/ai-commit.sh" --agent Codex ${extra[@]+"${extra[@]}"} "$@"
+if [[ ! -x $commit_tool ]]; then
+    echo "Codex attribution tool is unavailable: ${commit_tool}" >&2
+    echo "Install ~/.ai-tools or set AI_TOOLS_COMMIT to its ai-commit executable." >&2
+    exit 3
+fi
+
+exec "$commit_tool" "$@"

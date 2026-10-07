@@ -183,17 +183,23 @@ reviewed source commit used to build the signed module.
 ## Codex-assisted commits
 
 This repository keeps AI attribution in Git instead of relying on a client
-setting. Enable the versioned hook once per checkout:
+setting. Codex contributors use the user-level `~/.ai-tools` detector, which
+reads the active harness's own session record instead of asking an agent to
+type or remember its model. The repository entry point delegates to it:
+
+```sh
+./scripts/codex-commit.sh -- -m "Describe the change"
+```
+
+The detector exits with status 3 if it cannot determine the model and reasoning
+effort with certainty. In that case, ask the user for the exact values; never
+guess or reuse values from an earlier turn.
+
+The versioned hook remains available for other project-integrated agents.
+Enable it once per checkout before using those wrappers:
 
 ```sh
 ./scripts/install-git-hooks.sh
-```
-
-AI-assisted commits use a wrapper and name the actual model:
-
-```sh
-./scripts/codex-commit.sh --model gpt-5.6-sol --reasoning-effort high \
-  -- -m "Describe the change"
 ./scripts/claude-commit.sh --model claude-sonnet-5-5 --effort high \
   -- -m "Describe the change"
 ```
@@ -201,7 +207,8 @@ AI-assisted commits use a wrapper and name the actual model:
 Other agents use `./scripts/ai-commit.sh --agent NAME --model MODEL ...`.
 The commit receives `Assisted-by: AGENT:MODEL` and, when known,
 `Agent-Version`, `Reasoning-Effort` and `Agent-Thread` trailers
-(`claude-commit.sh` detects the Claude Code version itself). A missing model is
-refused rather than guessed. Ordinary `git commit` remains untouched. Run
+(`claude-commit.sh` detects the Claude Code version itself). A missing identity
+is refused rather than guessed. Ordinary human-created `git commit` remains
+untouched. Run
 `./scripts/test-git-attribution.sh` to test the hook without creating a
 commit.

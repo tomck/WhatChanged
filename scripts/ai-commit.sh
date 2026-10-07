@@ -11,7 +11,9 @@ Usage:
 
 Adds Assisted-by: AGENT:MODEL (plus Agent-Version, Reasoning-Effort and
 Agent-Thread when supplied) through the repository's prepare-commit-msg hook.
-Prefer scripts/claude-commit.sh or scripts/codex-commit.sh for those agents.
+Codex uses scripts/codex-commit.sh, which obtains its identity from the
+user-level ~/.ai-tools detector. This wrapper remains available for other
+project-integrated agents whose identity was supplied authoritatively.
 EOT
 }
 
