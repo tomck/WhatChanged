@@ -59,7 +59,7 @@ services:
       ENABLE_SSL: "FALSE"
       TIMEZONE: America/Chicago
     ports:
-      - "127.0.0.1:8160:80"
+      - "127.0.0.1:${FREEPBX16_LAB_PORT:-8160}:80"
     volumes:
       - fpbx16-data:/data
       - fpbx16-web:/var/www/html
@@ -112,7 +112,7 @@ services:
       ENABLE_DELETE_OLD_RECORDINGS: "false"
       DISABLE_SIGNATURE_CHECK: "true"
     ports:
-      - "127.0.0.1:8150:80"
+      - "127.0.0.1:${FREEPBX15_LAB_PORT:-8150}:80"
     volumes:
       - fpbx15-database:/var/lib/mysql
       - fpbx15-asterisk-config:/etc/asterisk
@@ -169,7 +169,7 @@ services:
       ENABLE_DELETE_OLD_RECORDINGS: "false"
       DISABLE_SIGNATURE_CHECK: "true"
     ports:
-      - "127.0.0.1:8140:80"
+      - "127.0.0.1:${FREEPBX14_LAB_PORT:-8140}:80"
     volumes:
       - fpbx14-database:/var/lib/mysql
       - fpbx14-asterisk-config:/etc/asterisk

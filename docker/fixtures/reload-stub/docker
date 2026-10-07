@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+is_reload=false
+for argument in "$@"; do
+  case "$argument" in
+    *'fwconsole reload'*) is_reload=true ;;
+  esac
+done
+
+if [ "$is_reload" = false ]; then
+  # The helper polls for the absence of the lock between attempts.
+  exit 0
+fi
+
+count=0
+if [ -f "$STUB_STATE" ]; then
+  count=$(cat "$STUB_STATE")
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >"$STUB_STATE"
+
+case "$STUB_MODE" in
+  success)
+    echo 'Reload Complete'
+    exit 0
+    ;;
+  failure)
+    echo 'boom' >&2
+    exit 7
+    ;;
+  lock)
+    echo 'gpg: cannot create /var/lib/asterisk/.gnupg/pubring.kbx.lock' >&2
+    exit 9
+    ;;
+  lock-then-success)
+    if [ "$count" -eq 1 ]; then
+      echo 'gpg: cannot create /var/lib/asterisk/.gnupg/pubring.kbx.lock' >&2
+      exit 9
+    fi
+    echo 'Reload Complete'
+    exit 0
+    ;;
+  *)
+    echo "Unknown stub mode: $STUB_MODE" >&2
+    exit 64
+    ;;
+esac

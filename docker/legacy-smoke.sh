@@ -51,10 +51,73 @@ wait_healthy() {
   return 1
 }
 
+wait_fpbx16_bootstrap() {
+  local voicemail_table
+  for _ in $(seq 1 360); do
+    if ! docker compose -f "$compose_file" --profile 16 exec -T fpbx16 \
+        pgrep -f '[f]wconsole ma downloadinstall' >/dev/null 2>&1; then
+      voicemail_table=$(docker compose -f "$compose_file" --profile 16 exec -T fpbx16-database \
+        mariadb -uasterisk -plegacy-freepbx -N asterisk -e \
+          'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="voicemail_admin";')
+      if [[ "$voicemail_table" == 1 ]]; then
+        return 0
+      fi
+    fi
+    sleep 5
+  done
+  echo 'Timed out waiting for the FreePBX 16 first-boot module installer and voicemail schema.' >&2
+  docker compose -f "$compose_file" --profile 16 logs --tail=200 fpbx16 >&2
+  return 1
+}
+
+reload_freepbx() {
+  COMPOSE_FILE="$compose_file" \
+    COMPOSE_PROFILE="$target" \
+    PBX_SERVICE="$pbx_service" \
+    FWCONSOLE_RUN_AS=root \
+    "$root_dir/docker/reload-freepbx-lab.sh"
+}
+
+watcher_diagnostics() {
+  echo "Watcher status for the failed FreePBX $target fixture:" >&2
+  docker compose -f "$compose_file" --profile "$target" exec -T "$watcher_service" \
+    python -m json.tool /var/lib/pendingchanges-watcher/status.json >&2 || true
+  docker compose -f "$compose_file" --profile "$target" logs --tail=120 \
+    "$pbx_service" "$watcher_service" >&2 || true
+}
+
+wait_for_settled_fixture() {
+  local last_observed=0 consecutive=0 observation observed clean
+  for _ in $(seq 1 90); do
+    observation=$(docker compose -f "$compose_file" --profile "$target" exec -T "$watcher_service" \
+      python -c 'import json; s=json.load(open("/var/lib/pendingchanges-watcher/status.json")); clean=(s.get("baseline_available") and not s.get("need_reload") and not s.get("database_drift") and not s.get("astdb_drift") and not s.get("file_drift") and s.get("baseline_provenance", {}).get("state") == "trusted"); print("%s %s" % (s.get("observed_at", 0), int(bool(clean))))')
+    read -r observed clean <<<"$observation"
+    if [[ "$observed" != "$last_observed" ]]; then
+      if [[ "$clean" == 1 ]]; then
+        consecutive=$((consecutive + 1))
+      else
+        consecutive=0
+      fi
+      last_observed=$observed
+    fi
+    [[ "$consecutive" -ge 3 ]] && return 0
+    sleep 2
+  done
+  echo "Timed out waiting for three consecutive clean FreePBX $target fixture observations." >&2
+  watcher_diagnostics
+  return 1
+}
+
 test -f "$archive"
 # Rebuild local wrappers and watcher changes, while preserving named volumes.
 docker compose -f "$compose_file" --profile "$target" up -d --build "$watcher_service"
 wait_healthy "$pbx_service"
+if [[ "$target" == 16 ]]; then
+  # The historical image declares itself healthy while its default module
+  # download/install job is still running. Wait for that authoritative process
+  # and its voicemail schema to finish before installing any fixture modules.
+  wait_fpbx16_bootstrap
+fi
 # A PBX image/config recreation can invalidate the watcher container's old DNS
 # endpoint without changing its own configuration. Recreate only the watcher
 # after the PBX is healthy so every run starts with a current network binding.
@@ -102,6 +165,15 @@ docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" sh 
   php -r "echo PHP_VERSION, PHP_EOL;"
 ' 
 
+if [[ "$target" == 16 ]]; then
+  # A pristine FreePBX 16 image continues installing and normalizing modules
+  # briefly after it first reports healthy. Apply those fixture-owned changes,
+  # then require three distinct clean observations before replacing the
+  # disposable baseline so background first-boot work cannot race the smoke.
+  reload_freepbx
+  wait_for_settled_fixture
+fi
+
 database_sql() {
   local statement=$1
   if [[ "$target" == 16 ]]; then
@@ -141,7 +213,11 @@ for _ in $(seq 1 30); do
   [[ "$clean" == 1 ]] && break
   sleep 2
 done
-[[ "${clean:-0}" == 1 ]]
+if [[ "${clean:-0}" != 1 ]]; then
+  echo "Timed out waiting for the FreePBX $target fixture baseline to become clean." >&2
+  watcher_diagnostics
+  exit 1
+fi
 
 staged_at=$(date +%s)
 database_sql "
@@ -181,8 +257,7 @@ docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" php
   );
 '
 
-docker compose -f "$compose_file" --profile "$target" exec -T "$pbx_service" \
-  /var/lib/asterisk/bin/fwconsole reload
+reload_freepbx
 reload_completed=$(date +%s)
 
 for _ in $(seq 1 30); do

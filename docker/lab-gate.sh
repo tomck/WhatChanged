@@ -13,6 +13,8 @@ FREEPBX_WEB_SERVER=${FREEPBX_WEB_SERVER:-apache}
 export FREEPBX_LAB_PORT FREEPBX_LAB_URL FREEPBX_WEB_SERVER
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"
 
+"$ROOT_DIR/docker/test-reload-freepbx-lab.sh"
+
 # Profile-only services are not rebuilt by `up --build` unless their profile
 # is active. Build the smoke driver explicitly so the gate always tests the
 # checked-out assertions instead of a stale local image.
