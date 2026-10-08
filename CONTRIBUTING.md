@@ -183,9 +183,11 @@ reviewed source commit used to build the signed module.
 ## Codex-assisted commits
 
 This repository keeps AI attribution in Git instead of relying on a client
-setting. Codex contributors use the user-level `~/.ai-tools` detector, which
-reads the active harness's own session record instead of asking an agent to
-type or remember its model. The repository entry point delegates to it:
+setting. Codex contributors use `scripts/codex-commit.sh`. If the optional
+user-level `ai-commit` detector is installed (`~/.ai-tools/ai-commit`, or the
+path in `AI_TOOLS_COMMIT`), the script delegates to it, and the detector reads
+the active harness's own session record instead of asking an agent to type or
+remember its model:
 
 ```sh
 ./scripts/codex-commit.sh -- -m "Describe the change"
@@ -194,6 +196,15 @@ type or remember its model. The repository entry point delegates to it:
 The detector exits with status 3 if it cannot determine the model and reasoning
 effort with certainty. In that case, ask the user for the exact values; never
 guess or reuse values from an earlier turn.
+
+The detector is not part of this repository and you do not need it. Without it,
+`scripts/codex-commit.sh` falls back to `scripts/ai-commit.sh`, so supply the
+values yourself after enabling the hook (see below):
+
+```sh
+./scripts/codex-commit.sh --agent Codex --model MODEL --effort LEVEL \
+  -- -m "Describe the change"
+```
 
 The versioned hook remains available for other project-integrated agents.
 Enable it once per checkout before using those wrappers:
@@ -204,10 +215,12 @@ Enable it once per checkout before using those wrappers:
   -- -m "Describe the change"
 ```
 
-Other agents use `./scripts/ai-commit.sh --agent NAME --model MODEL ...`.
+Other agents use `./scripts/ai-commit.sh --agent NAME --model MODEL --effort LEVEL ...`.
 The commit receives `Assisted-by: AGENT:MODEL` and, when known,
-`Agent-Version`, `Reasoning-Effort` and `Agent-Thread` trailers
-(`claude-commit.sh` detects the Claude Code version itself). A missing identity
+`Agent-Version` and `Reasoning-Effort` trailers (`claude-commit.sh` detects the
+Claude Code version itself). An `Agent-Thread` trailer is written only when you
+pass `--thread ID` explicitly (`--with-thread` on the optional detector); it
+identifies a conversation at the AI provider, so it is off by default. A missing identity
 is refused rather than guessed. Ordinary human-created `git commit` remains
 untouched. Run
 `./scripts/test-git-attribution.sh` to test the hook without creating a

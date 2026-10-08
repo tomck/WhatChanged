@@ -63,22 +63,78 @@ AI_COMMIT_TEST_LOG="${test_dir}/arguments" \
 printf '%s\n' -- -m 'Detected identity' >"${test_dir}/expected"
 cmp "${test_dir}/expected" "${test_dir}/arguments"
 
-# A missing universal detector fails closed with the detector's uncertainty
-# status instead of falling back to a hard-coded or environment model name.
-set +e
-AI_TOOLS_COMMIT="${test_dir}/missing" \
-    "${repo_root}/scripts/codex-commit.sh" -- -m x >/dev/null 2>&1
-codex_status=$?
-set -e
-if [[ $codex_status != 3 ]]; then
-    echo "codex-commit.sh did not fail closed when its detector was unavailable" >&2
+# The detector is optional. When it is missing, codex-commit.sh falls back to
+# scripts/ai-commit.sh: it refuses to commit without supplied values rather
+# than inventing a model, and records exactly the values it is given.
+fallback_repo=${test_dir}/fallback-repo
+git init -q "$fallback_repo"
+git -C "$fallback_repo" config core.hooksPath .githooks
+mkdir "${fallback_repo}/.githooks"
+cp "$hook" "${fallback_repo}/.githooks/prepare-commit-msg"
+export GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid
+export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid
+
+if (cd "$fallback_repo" && AI_TOOLS_COMMIT="${test_dir}/missing" \
+        "${repo_root}/scripts/codex-commit.sh" -- --allow-empty --no-gpg-sign -m x >/dev/null 2>&1); then
+    echo "codex-commit.sh committed without a detector and without supplied values" >&2
     exit 1
 fi
+if git -C "$fallback_repo" rev-parse --verify -q HEAD >/dev/null; then
+    echo "codex-commit.sh created a commit with no attribution values" >&2
+    exit 1
+fi
+
+# Agent and model without an effort level must also be refused.
+if (cd "$fallback_repo" && AI_TOOLS_COMMIT="${test_dir}/missing" \
+        "${repo_root}/scripts/codex-commit.sh" --agent Codex --model gpt-test-model \
+        -- --allow-empty --no-gpg-sign -m x >/dev/null 2>&1); then
+    echo "codex-commit.sh committed without a reasoning effort" >&2
+    exit 1
+fi
+if git -C "$fallback_repo" rev-parse --verify -q HEAD >/dev/null; then
+    echo "codex-commit.sh created a commit with no reasoning effort" >&2
+    exit 1
+fi
+
+# A stand-in codex binary supplies the version, as the real one would.
+mkdir "${test_dir}/bin"
+printf '#!/bin/sh\necho "codex-cli 9.9.9"\n' >"${test_dir}/bin/codex"
+chmod +x "${test_dir}/bin/codex"
+
+(cd "$fallback_repo" && PATH="${test_dir}/bin:${PATH}" AI_TOOLS_COMMIT="${test_dir}/missing" \
+    "${repo_root}/scripts/codex-commit.sh" --agent Codex --model gpt-test-model --effort high \
+    -- --allow-empty --no-gpg-sign -m 'Supplied identity' >/dev/null 2>&1)
+fallback_message=$(git -C "$fallback_repo" log -1 --format=%B)
+grep -Fqx 'Assisted-by: Codex:gpt-test-model' <<<"$fallback_message"
+grep -Fqx 'Reasoning-Effort: high' <<<"$fallback_message"
+grep -Fqx 'Agent-Version: codex-cli 9.9.9' <<<"$fallback_message"
+if grep -Fq 'Agent-Thread:' <<<"$fallback_message"; then
+    echo "codex-commit.sh fallback recorded a thread id nobody asked for" >&2
+    exit 1
+fi
+
+# A version the caller supplied wins over the locally discovered one.
+(cd "$fallback_repo" && PATH="${test_dir}/bin:${PATH}" AI_TOOLS_COMMIT="${test_dir}/missing" \
+    "${repo_root}/scripts/codex-commit.sh" --agent Codex --model gpt-test-model --effort high \
+    --agent-version 'codex-cli 1.2.3' \
+    -- --allow-empty --no-gpg-sign -m 'Supplied version' >/dev/null 2>&1)
+supplied_message=$(git -C "$fallback_repo" log -1 --format=%B)
+grep -Fqx 'Agent-Version: codex-cli 1.2.3' <<<"$supplied_message"
+[[ $(grep -Fc 'Agent-Version:' <<<"$supplied_message") == 1 ]]
 
 # The older project-integrated wrapper also refuses to run without a model.
 if "${repo_root}/scripts/claude-commit.sh" -- -m x 2>/dev/null; then
     echo "claude-commit.sh accepted a missing model" >&2
     exit 1
 fi
+
+# The shared wrapper now needs an effort level, so the Claude entry point does too.
+before_count=$(git -C "$fallback_repo" rev-list --count HEAD)
+if (cd "$fallback_repo" && "${repo_root}/scripts/claude-commit.sh" --model claude-test-model \
+        -- --allow-empty --no-gpg-sign -m x >/dev/null 2>&1); then
+    echo "claude-commit.sh accepted a missing reasoning effort" >&2
+    exit 1
+fi
+[[ $(git -C "$fallback_repo" rev-list --count HEAD) == "$before_count" ]]
 
 printf 'Git attribution hook tests passed.\n'

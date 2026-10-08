@@ -5,15 +5,18 @@ set -euo pipefail
 usage() {
     cat <<'EOT'
 Usage:
-  scripts/ai-commit.sh --agent AGENT --model MODEL [--effort EFFORT]
+  scripts/ai-commit.sh --agent AGENT --model MODEL --effort EFFORT
                        [--agent-version VERSION] [--thread ID]
                        -- GIT_COMMIT_ARGUMENTS...
 
-Adds Assisted-by: AGENT:MODEL (plus Agent-Version, Reasoning-Effort and
+Adds Assisted-by: AGENT:MODEL and Reasoning-Effort (plus Agent-Version and
 Agent-Thread when supplied) through the repository's prepare-commit-msg hook.
-Codex uses scripts/codex-commit.sh, which obtains its identity from the
-user-level ~/.ai-tools detector. This wrapper remains available for other
-project-integrated agents whose identity was supplied authoritatively.
+Agent, model and effort are all required; none is ever guessed.
+Codex uses scripts/codex-commit.sh, which delegates to the optional user-level
+ai-commit detector when it is installed and otherwise falls back to this
+wrapper. Use this wrapper directly for other project-integrated agents whose
+identity was supplied authoritatively. The thread id is recorded only when
+--thread is passed.
 EOT
 }
 
@@ -45,8 +48,8 @@ while (($#)); do
     esac
 done
 
-if [[ -z $agent || -z $model ]]; then
-    echo "Both --agent and a precise --model are required; refusing to guess attribution." >&2
+if [[ -z $agent || -z $model || -z $effort ]]; then
+    echo "--agent, a precise --model and --effort are all required; refusing to guess attribution." >&2
     exit 2
 fi
 

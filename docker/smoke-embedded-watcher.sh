@@ -144,6 +144,17 @@ fi
 for layout in debian portable; do
   root="$stage/root-$layout"
   mkdir -p "$root"
+  # Model an upgrade from 0.1.9 on one layout: that release could leave an
+  # explicitly configured table list without `incoming` or Endpoint Manager.
+  # The installer must retain administrator additions while merging newly
+  # supported tables, or upgrading the payload would leave coverage disabled.
+  if [ "$layout" = portable ]; then
+    mkdir -p "$root/etc"
+    sed -e 's/,endpoint_extensions//' -e 's/,incoming//' \
+      -e 's/^WATCH_TABLES=/WATCH_TABLES=pc_local_fixture,/' \
+      "$module/watcher/what-changed-watcher.env" \
+      > "$root/etc/what-changed-watcher.env"
+  fi
   test_webroot=/srv/freepbx-web
   test_astetc=/srv/asterisk-config
   test_astvarlib=/srv/asterisk-data
@@ -189,6 +200,10 @@ for layout in debian portable; do
     | grep -Eq '(^|,)incoming(,|$)'
   grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
     | grep -Eq '(^|,)endpoint_extensions(,|$)'
+  if [ "$layout" = portable ]; then
+    grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+      | grep -Eq '(^|[=,])pc_local_fixture(,|$)'
+  fi
   grep -q "auto_prepend_file=$library/what-changed-request-audit.php" \
     "$root$library/99-what-changed-attribution.ini"
   cmp "$root$library/watcher.py" "$module/watcher/watcher.py"

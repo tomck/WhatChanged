@@ -194,10 +194,16 @@ These rules apply to the entire repository.
   owned by `tomck`.
 - Every AI-assisted commit must carry an `Assisted-by: AGENT:MODEL` trailer
   with the precise agent and model, and must never invent a model name.
-  Codex-created commits must use `scripts/codex-commit.sh`, which delegates to
-  `~/.ai-tools/ai-commit` so model and effort come from the active Codex session
-  record rather than hand-entered values. If detection exits with status 3,
-  ask the user for the exact model slug and reasoning effort; never guess.
+  Codex-created commits must use `scripts/codex-commit.sh`. If the optional
+  user-level `ai-commit` detector is installed (`~/.ai-tools/ai-commit`, or the
+  path in `AI_TOOLS_COMMIT`), the script delegates to it, so model and effort
+  come from the active Codex session record; when it is present, use it rather
+  than typing values. If it exits with status 3, ask the user for the exact
+  model slug and reasoning effort; never guess. The detector is not part of
+  this repository and no contributor is required to install it: without it the
+  script falls back to `scripts/ai-commit.sh`, so pass the exact `--agent`,
+  `--model` and `--effort` the user gave you. The session or thread id is never
+  recorded unless the user asks for it.
   Claude-created commits must use `scripts/claude-commit.sh`, so the repository
   hook adds the expected attribution trailers. Any
   other agent uses `scripts/ai-commit.sh`. Do not substitute `Co-Authored-By`. Leave published history alone:
