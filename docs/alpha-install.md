@@ -17,8 +17,8 @@ administrator can review the overlap before rerunning the installer.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching files from the
-   [17.0.2.6 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.6):
-   - `pendingchanges-17.0.2.6.tgz` and `pendingchanges-17.0.2.6.tgz.asc`
+   [17.0.2.7 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.7):
+   - `pendingchanges-17.0.2.7.tgz` and `pendingchanges-17.0.2.7.tgz.asc`
    - `SHA256SUMS` and `SHA256SUMS.asc`
    - `WHAT_CHANGED_SIGNING_KEY.asc`
 3. Obtain the expected primary-key fingerprint through a channel you trust.
@@ -64,8 +64,8 @@ GNUPGHOME="$verification_home" gpg --batch --import WHAT_CHANGED_SIGNING_KEY.asc
 GNUPGHOME="$verification_home" gpg --batch \
   --verify SHA256SUMS.asc SHA256SUMS || exit 1
 GNUPGHOME="$verification_home" gpg --batch \
-  --verify pendingchanges-17.0.2.6.tgz.asc pendingchanges-17.0.2.6.tgz || exit 1
-awk '$2 == "pendingchanges-17.0.2.6.tgz" { print }' SHA256SUMS |
+  --verify pendingchanges-17.0.2.7.tgz.asc pendingchanges-17.0.2.7.tgz || exit 1
+awk '$2 == "pendingchanges-17.0.2.7.tgz" { print }' SHA256SUMS |
   sha256sum -c - || exit 1
 ```
 
@@ -98,7 +98,7 @@ if [ ! -d "$module_parent" ]; then
   exit 1
 fi
 
-sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$module_parent"
+sudo tar -xzf pendingchanges-17.0.2.7.tgz -C "$module_parent"
 sudo chown -R asterisk:asterisk "$module_dir"
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 sudo "$module_dir/bin/install-watcher"
@@ -124,7 +124,7 @@ installed with:
 curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
 ```
 
-The script is currently pinned to 17.0.2.6 because GitHub's
+The script is currently pinned to 17.0.2.7 because GitHub's
 `/releases/latest` redirect excludes alpha prereleases. It downloads the
 archive and verification material, requires GnuPG, and verifies both the
 signed manifest and detached archive signature before installation. If GnuPG

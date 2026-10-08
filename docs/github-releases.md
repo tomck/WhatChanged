@@ -8,7 +8,7 @@ archives are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-17.0.2.6` | 14–17 | `pendingchanges-17.0.2.6.tgz` with embedded watcher | Optional Debian and portable 0.1.9 packages |
+| `pendingchanges-17.0.2.7` | 14–17 | `pendingchanges-17.0.2.7.tgz` with embedded watcher | Optional Debian and portable 0.1.12 packages |
 
 One module tag identifies the source commit. The release is marked as an
 alpha prerelease. Passing the Docker gates is representative compatibility,
@@ -27,7 +27,7 @@ Hold the annotated release tag until the signed set returns and verifies:
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-17.0.2.6.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-17.0.2.7.tar.gz`. It contains
 the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -37,8 +37,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-17.0.2.6.tar.gz
-cd what-changed-signing-17.0.2.6
+tar -xzf what-changed-signing-17.0.2.7.tar.gz
+cd what-changed-signing-17.0.2.7
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
@@ -75,7 +75,7 @@ current commit, a missing signature, or an existing GitHub release. After the
 signed set has been reviewed:
 
 ```sh
-git tag -a pendingchanges-17.0.2.6 -m 'Pending Changes Tripwire 17.0.2.6 alpha'
+git tag -a pendingchanges-17.0.2.7 -m 'Pending Changes Tripwire 17.0.2.7 alpha'
 ./scripts/publish-github-releases.sh dist/signed-release
 ```
 

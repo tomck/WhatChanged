@@ -4,7 +4,7 @@ These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use the published `pendingchanges-17.0.2.6.tgz`.
+All four FreePBX versions use the published `pendingchanges-17.0.2.7.tgz`.
 Authenticate and verify it using the
 [shared release procedure](alpha-install.md#verify-the-downloaded-release)
 before copying it to the PBX.
@@ -59,7 +59,7 @@ if [ ! -d "$module_parent" ]; then
   exit 1
 fi
 
-sudo tar -xzf pendingchanges-17.0.2.6.tgz -C "$module_parent"
+sudo tar -xzf pendingchanges-17.0.2.7.tgz -C "$module_parent"
 sudo chown -R asterisk:asterisk "$module_dir"
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 sudo "$module_dir/bin/install-watcher"

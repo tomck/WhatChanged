@@ -7,6 +7,7 @@ release_dir=${1:-"$root_dir/dist/signed-release"}
 source "$root_dir/deploy/release-versions.sh"
 cd "$root_dir"
 
+"$root_dir/scripts/check-current-release-docs.sh"
 "$root_dir/scripts/verify-github-release-set.sh" "$release_dir"
 
 if [[ -n "$(git status --porcelain)" ]]; then
