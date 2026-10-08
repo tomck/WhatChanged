@@ -1,6 +1,6 @@
 # Changelog
 
-## Module 17.0.2.7 / watcher 0.1.12 (unreleased)
+## Module 17.0.2.7 / watcher 0.1.12
 
 - Make embedded and standalone watcher removal safe for Apache and
   nginx/PHP-FPM by removing every web-SAPI sensor ini, validating and
