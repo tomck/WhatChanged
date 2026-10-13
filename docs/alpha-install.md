@@ -117,11 +117,11 @@ systemd unit.
 ## Convenience install (trust GitHub and run)
 
 For an operator who explicitly trusts the copy of `install.sh` delivered from
-the GitHub repository, the release pinned by that reviewed script can be
-installed with:
+the project's GitHub Pages site, the release pinned by that reviewed script
+can be installed with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+curl -fsSL https://tomck.github.io/WhatChanged/install.sh | sudo bash
 ```
 
 The script is currently pinned to 17.0.2.7 because GitHub's
@@ -129,7 +129,7 @@ The script is currently pinned to 17.0.2.7 because GitHub's
 archive and verification material, requires GnuPG, and verifies both the
 signed manifest and detached archive signature before installation. If GnuPG
 is absent, it stops and prints the platform-appropriate package command. This
-path uses the GitHub repository itself as the bootstrap trust boundary; use
+path uses the project's GitHub Pages site as the bootstrap trust boundary; use
 the manual path above when the signing-key identity must be authenticated
 independently.
 
@@ -222,6 +222,16 @@ Do one normal, known Apply Config only when you were already ready to apply
 the PBX's existing pending work. The watcher then captures its first clean
 baseline automatically. Do not seed a baseline while changes are pending.
 
+The module's report page shows the installed module version at the top.
+Automatic release checks are enabled by default and can be disabled there.
+When enabled, the PBX reads
+`https://tomck.github.io/WhatChanged/install.sh` no more than once every six
+hours and caches only the checked time and strictly parsed version. When
+disabled, the page offers an explicit **Check now** button and makes no
+automatic request. No PBX configuration, credentials, request values, or host
+identifier is added to the request; the GitHub Pages host still receives
+ordinary HTTPS connection metadata such as the source address.
+
 ## Optional local signing for private modifications
 
 If an operator modifies the installed module, FreePBX's `--local` signing mode
@@ -232,8 +242,9 @@ detached release signature or signed APT repository metadata for that artifact.
 
 ## Alpha feedback and uninstall
 
-The watcher does not upload anything. To share its privacy-preserving
-recognition summary voluntarily:
+The watcher does not upload change evidence. The only automatic outbound
+request is the optional, user-controllable release check described above. To
+share its privacy-preserving recognition summary voluntarily:
 
 ```sh
 freepbx_webroot=$(

@@ -84,12 +84,13 @@ the reviewed installer can be downloaded, checksum-verified,
 OpenPGP-verified, and installed with one command:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/tomck/WhatChanged/main/install.sh | sudo bash
+curl -fsSL https://tomck.github.io/WhatChanged/install.sh | sudo bash
 ```
 
 This convenience command trusts the copy of `install.sh` served from the
-GitHub repository as its bootstrap. It is currently pinned to 17.0.2.7 rather
-than GitHub's `/releases/latest` redirect, which excludes alpha prereleases.
+project's GitHub Pages site as its bootstrap. It is currently pinned to
+17.0.2.7 rather than GitHub's `/releases/latest` redirect, which excludes alpha
+prereleases.
 The script requires GnuPG, verifies
 both the signed checksum manifest and the detached archive signature, discovers
 FreePBX's configured `AMPWEBROOT`, installs the module, and launches its
@@ -205,6 +206,15 @@ A running service alone is not enough. Missing, delayed, stale, malformed, or
 unconfigured watcher states are shown as degraded and never produce an
 all-clear result.
 
+The report begins with the installed module version and its release-check
+status. Automatic checks are enabled by default and may be disabled on the
+page. When enabled, the PBX reads the public GitHub Pages installer no more
+than once every six hours and caches only the checked time and strictly parsed
+version. When disabled, no automatic request is made and **Check now** remains
+available. No PBX configuration, credentials, request values, or host
+identifier is added to the request; as with any HTTPS connection, the hosting
+provider can observe ordinary connection metadata such as the source address.
+
 If Apply Config was already pending when WhatChanged was installed, the watcher
 will not invent or overwrite a baseline. Review the existing work first. After
 a known, successful Apply Config, it automatically captures the clean baseline
@@ -226,7 +236,8 @@ used for subsequent comparisons.
 Password-, secret-, token-, PIN-, and key-like values are converted to keyed
 fingerprints before baseline persistence and displayed only as `[redacted]`.
 CDR, CEL, queue logs, call traffic, and unknown add-on tables are deliberately excluded.
-The watcher never uploads telemetry.
+The watcher never uploads change telemetry. The optional module release check
+is limited to the public installer request described above.
 
 FreePBX itself stores Apply Config as a single `admin.need_reload` flag. It does
 not record which page, module, or person set that flag. When the flag is present
@@ -276,7 +287,7 @@ sudo -u asterisk \
 The export includes timestamps, change categories, counts, changed field names,
 and coverage-limit reasons. It omits configuration values, extension numbers,
 AstDB keys, filenames, module names, hostnames, credentials, and call data.
-Nothing is sent automatically.
+The feedback export is never sent automatically.
 
 Use the coverage-gap issue template for sanitized missed-change reports. Send
 security concerns privately through [GitHub Security Advisories](SECURITY.md),

@@ -33,11 +33,72 @@
   .pendingchanges-health-state-warning { color:#a86d00; }
   .pendingchanges-health-state-danger { color:#bb2d3b; }
   .pendingchanges-evidence-controls { display:none; gap:8px; margin:12px 0; }
+  .pendingchanges-update { padding:12px 14px; }
+  .pendingchanges-update-summary { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pendingchanges-update-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .pendingchanges-update-actions form { display:inline-flex; align-items:center; gap:8px; margin:0; }
+  .pendingchanges-update-actions label { margin:0; font-weight:normal; }
+  .pendingchanges-update-note { color:#65756f; font-size:12px; margin:8px 0 0; }
 </style>
 <div class="container-fluid">
   <h1>Pending Changes Tripwire</h1>
   <p class="text-muted">Read-only comparison against the last applied baseline, with cautious correlation to authenticated administrator write requests.</p>
   <?= $notice ?>
+  <section class="pendingchanges-card">
+    <h3>Module version</h3>
+    <div class="pendingchanges-update">
+      <div class="pendingchanges-update-summary">
+        <strong>Installed:</strong>
+        <span><?= $presenter->escape(isset($releaseUpdate['installed_version']) && $releaseUpdate['installed_version'] !== null ? $releaseUpdate['installed_version'] : 'Unknown') ?></span>
+        <?php if ($releaseUpdate['state'] === 'update_available'): ?>
+          <span class="label label-warning">Update available</span>
+          <span>Version <?= $presenter->escape($releaseUpdate['available_version']) ?> is available.</span>
+          <a href="<?= $presenter->escape($releaseUpdate['releases_url']) ?>" target="_blank" rel="noopener noreferrer">Review release</a>
+        <?php elseif ($releaseUpdate['state'] === 'current'): ?>
+          <span class="label label-success">Current</span>
+        <?php elseif ($releaseUpdate['state'] === 'ahead'): ?>
+          <span class="label label-info">Newer than published installer</span>
+        <?php elseif ($releaseUpdate['state'] === 'unavailable'): ?>
+          <span class="label label-default">Check unavailable</span>
+          <span>The latest published version could not be verified.</span>
+        <?php else: ?>
+          <span class="label label-default">Automatic checks off</span>
+          <?php if (!empty($releaseUpdate['available_version'])): ?>
+            <span>Last observed published version: <?= $presenter->escape($releaseUpdate['available_version']) ?>.</span>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
+      <?php if (!empty($releaseUpdate['checked_at'])): ?>
+        <p class="pendingchanges-update-note">
+          <?= !empty($releaseUpdate['stale']) ? 'Last checked' : 'Checked' ?>:
+          <?= $presenter->escape(date('Y-m-d H:i:s T', (int) $releaseUpdate['checked_at'])) ?>
+        </p>
+      <?php endif; ?>
+      <div class="pendingchanges-update-actions">
+        <form method="post">
+          <input type="hidden" name="automatic_release_checks" value="0">
+          <label>
+            <input
+              type="checkbox"
+              name="automatic_release_checks"
+              value="1"
+              <?= !empty($releaseUpdate['automatic']) ? 'checked' : '' ?>
+            >
+            Automatically check for new versions
+          </label>
+          <button class="btn btn-default btn-sm" type="submit" name="save_update_preference" value="1">Save</button>
+        </form>
+        <?php if (empty($releaseUpdate['automatic'])): ?>
+          <form method="post">
+            <button class="btn btn-default btn-sm" type="submit" name="check_for_updates" value="1">Check now</button>
+          </form>
+        <?php endif; ?>
+      </div>
+      <p class="pendingchanges-update-note">
+        Automatic checks read the public installer at most once every six hours. No PBX configuration or credentials are sent.
+      </p>
+    </div>
+  </section>
   <div class="alert <?= $presenter->escape($messageClass) ?>"><?= $presenter->escape($status['message']) ?></div>
   <div class="pendingchanges-evidence-controls" id="pendingchanges-evidence-controls">
     <button class="btn btn-default" id="pendingchanges-toggle-evidence" type="button" aria-expanded="false">Expand all evidence</button>

@@ -11,11 +11,12 @@ github_root="https://github.com/$repo"
 # prereleases, while WhatChanged public alphas are intentionally prereleases.
 # Release preparation must update this value only after signed-archive gates.
 module_version=${WHAT_CHANGED_VERSION:-17.0.2.7}
+installer_url=${WHAT_CHANGED_INSTALLER_URL:-https://tomck.github.io/WhatChanged/install.sh}
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'WhatChanged installer: %s\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" -eq 0 ] || die "run as root, for example: curl -fsSL https://raw.githubusercontent.com/$repo/main/install.sh | sudo bash"
+[ "$(id -u)" -eq 0 ] || die "run as root, for example: curl -fsSL $installer_url | sudo bash"
 command -v curl >/dev/null 2>&1 || die 'curl is required.'
 command -v tar >/dev/null 2>&1 || die 'tar is required.'
 if ! command -v gpg >/dev/null 2>&1; then

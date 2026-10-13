@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WATCHER_VERSION=$(sed -n 's/^watcher_version=//p' "$ROOT_DIR/deploy/release-versions.sh")
+MODULE_VERSION=$(sed -n 's/^module_version=//p' "$ROOT_DIR/deploy/release-versions.sh")
 ENV_FILE=${FREEPBX_LAB_ENV_FILE:-"$ROOT_DIR/.env.lab"}
 BASE_URL=${FREEPBX_LAB_URL:-http://127.0.0.1:8080}
 
@@ -26,6 +27,13 @@ curl -fsS -L -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
 curl -fsS -b "$COOKIE_JAR" -o "$PAGE_FILE" \
   "$BASE_URL/admin/config.php?display=pendingchanges"
 grep -q 'Watcher health' "$PAGE_FILE"
+grep -q 'Module version' "$PAGE_FILE"
+grep -q "<span>$MODULE_VERSION</span>" "$PAGE_FILE"
+grep -q 'Automatically check for new versions' "$PAGE_FILE"
+if grep -q "<span>-$MODULE_VERSION</span>" "$PAGE_FILE"; then
+  echo 'Module update panel rendered the shell fallback operator as part of the version.' >&2
+  exit 1
+fi
 grep -q '>Healthy<' "$PAGE_FILE"
 grep -q 'Current full watcher snapshot' "$PAGE_FILE"
 grep -q 'Watcher payload' "$PAGE_FILE"

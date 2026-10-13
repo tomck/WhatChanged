@@ -54,6 +54,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
     -v "$root_dir/docker/watcher-health-smoke.php:/tmp/watcher-health-smoke.php:ro" \
     -v "$root_dir/docker/test-watcher-payload.php:/tmp/test-watcher-payload.php:ro" \
     -v "$root_dir/docker/test-framework-fallback.php:/tmp/test-framework-fallback.php:ro" \
+    -v "$root_dir/docker/test-release-checker.php:/tmp/test-release-checker.php:ro" \
     -v "$root_dir/docker/test-table-parity.php:/tmp/test-table-parity.php:ro" \
     "php:$php_version-cli" sh -eu -c '
       work=$(mktemp -d)
@@ -66,6 +67,7 @@ for specification in '14 5.6' '15 5.6' '16 7.4' '17 8.2'; do
       php /tmp/watcher-health-smoke.php "$work/pendingchanges"
       php /tmp/test-watcher-payload.php "$work/pendingchanges"
       php /tmp/test-framework-fallback.php "$work/pendingchanges"
+      php /tmp/test-release-checker.php "$work/pendingchanges"
       php /tmp/test-table-parity.php "$work/pendingchanges" "$work/pendingchanges/watcher/watcher.py"
     '
   echo "FreePBX $target candidate passed PHP $php_version syntax and metadata checks"

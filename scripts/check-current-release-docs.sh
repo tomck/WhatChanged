@@ -12,6 +12,7 @@ active_docs=(
   docs/shared-module.md
   docs/github-releases.md
 )
+installer_url='https://tomck.github.io/WhatChanged/install.sh'
 
 for relative in "${active_docs[@]}"; do
   document="$root_dir/$relative"
@@ -28,6 +29,18 @@ for relative in "${active_docs[@]}"; do
     exit 1
   fi
 done
+
+for relative in README.md docs/alpha-install.md; do
+  grep -Fq "$installer_url" "$root_dir/$relative" || {
+    echo "$relative does not use the GitHub Pages installer URL." >&2
+    exit 1
+  }
+done
+
+grep -Fq "$installer_url" "$root_dir/install.sh" || {
+  echo 'install.sh does not direct operators to the GitHub Pages installer URL.' >&2
+  exit 1
+}
 
 grep -Fq "watcher payload version $watcher_version" \
   "$root_dir/docs/shared-module.md" || {

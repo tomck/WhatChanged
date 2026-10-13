@@ -8,6 +8,10 @@ namespace {
 
     class PendingchangesLegacyFixture
     {
+        private $moduleConfig = [
+            'automatic_release_checks' => '0',
+        ];
+
         public function status()
         {
             if (isset($GLOBALS['argv'][2]) && $GLOBALS['argv'][2] === 'regressed') {
@@ -188,6 +192,11 @@ namespace {
                         'username' => 'legacy_admin',
                         'display' => 'extensions',
                         'method' => 'POST',
+                    ], [
+                        'finished_at' => 1700000025,
+                        'username' => 'self_service_noise',
+                        'display' => 'pendingchanges',
+                        'method' => 'POST',
                     ]],
                 ],
             ];
@@ -196,6 +205,18 @@ namespace {
         public function seedBaseline()
         {
             return ['tables' => 1, 'files' => 0];
+        }
+
+        public function readModuleConfig($key)
+        {
+            return array_key_exists($key, $this->moduleConfig)
+                ? $this->moduleConfig[$key]
+                : null;
+        }
+
+        public function writeModuleConfig($key, $value)
+        {
+            $this->moduleConfig[$key] = $value;
         }
     }
 
@@ -222,17 +243,28 @@ namespace {
     ob_start();
     require $argv[1].'/page.pendingchanges.php';
     $html = ob_get_clean();
+    $moduleXml = file_get_contents($argv[1].'/module.xml');
+    if (
+        !is_string($moduleXml)
+        || preg_match('/<version>\s*([^<]+)\s*<\/version>/', $moduleXml, $versionMatch) !== 1
+    ) {
+        throw new \RuntimeException('Fixture module version could not be read');
+    }
+    $moduleVersion = trim($versionMatch[1]);
     if (isset($argv[2]) && $argv[2] === 'degraded') {
         $expectedText = ['Pending Changes Tripwire', 'Watcher health', 'Not Installed', 'cannot be declared clear', 'install-watcher', 'No drift appears in the available evidence'];
     } elseif (isset($argv[2]) && $argv[2] === 'regressed') {
         $expectedText = ['Pending Changes Tripwire', 'Watcher database coverage regressed', 'Reduced or last-known coverage', 'Previously available configuration coverage has been lost', 'endpoint_extensions', 'lost coverage prevents an all-clear'];
     } else {
-        $expectedText = ['Pending Changes Tripwire', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value', 'Optional table sources not visible: 2', 'Show optional source names', 'optional_one, optional_two'];
+        $expectedText = ['Pending Changes Tripwire', 'Module version', $moduleVersion, 'Automatic checks off', 'Check now', 'Watcher health', 'Healthy', 'Watcher payload', 'Current', 'Current full watcher snapshot', 'Expand all evidence', 'Collapse all evidence', '/AMPUSER/7001/password', '7001', 'Legacy test', 'legacy_admin', 'Module: core', 'Installed version', 'Hidden from menus', 'Empty value allowed', 'Whether FreePBX hides this setting', 'Whether FreePBX accepts an empty value', 'Optional table sources not visible: 2', 'Show optional source names', 'optional_one, optional_two'];
     }
     foreach ($expectedText as $expected) {
         if (strpos($html, $expected) === false) {
             throw new \RuntimeException('Rendered page omitted: '.$expected);
         }
+    }
+    if (strpos($html, 'self_service_noise') !== false) {
+        throw new \RuntimeException('Module-owned preference request was presented as PBX-change attribution');
     }
     if (isset($argv[2]) && $argv[2] === 'degraded' && strpos($html, 'No attributable configuration or watched-file drift is currently present.') !== false) {
         throw new \RuntimeException('Degraded watcher page claimed a current clean state');

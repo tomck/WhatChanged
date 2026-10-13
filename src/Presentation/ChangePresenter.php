@@ -71,7 +71,12 @@ class ChangePresenter
             'extensionChanges' => $extensionChanges,
             'otherDatabaseChanges' => $otherDatabaseChanges,
             'astdbChanges' => isset($status['astdb']) ? $status['astdb'] : array(),
-            'attribution' => isset($status['attribution']) ? $status['attribution'] : array(),
+            'attribution' => $this->attribution(
+                isset($status['attribution']) && is_array($status['attribution'])
+                    ? $status['attribution']
+                    : array(),
+                !empty($status['pending'])
+            ),
             'watcherHealth' => $watcherHealth,
             'watcherPayload' => $watcherPayload,
             'dataCurrent' => $dataCurrent,
@@ -123,6 +128,58 @@ class ChangePresenter
         }
 
         return 'FreePBX admin request';
+    }
+
+    private function attribution(array $attribution, $pending)
+    {
+        if (empty($attribution['requests']) || !is_array($attribution['requests'])) {
+            return $attribution;
+        }
+
+        $requests = array();
+        foreach ($attribution['requests'] as $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+            $display = strtolower(isset($event['display']) ? (string) $event['display'] : '');
+            $module = strtolower(isset($event['module']) ? (string) $event['module'] : '');
+            if ($display === 'pendingchanges' || $module === 'pendingchanges') {
+                continue;
+            }
+            $requests[] = $event;
+        }
+
+        $actors = array();
+        foreach ($requests as $event) {
+            $username = isset($event['username']) ? (string) $event['username'] : '';
+            if ($username !== '') {
+                $actors[$username] = true;
+            }
+        }
+        $actors = array_keys($actors);
+        sort($actors, SORT_STRING);
+
+        $attribution['requests'] = $requests;
+        $attribution['request_count'] = count($requests);
+        $attribution['actors'] = $actors;
+        if (!$pending) {
+            $attribution['confidence'] = 'none';
+            $attribution['note'] = 'No pending reload interval is available for actor correlation.';
+        } elseif (count($actors) === 1) {
+            $attribution['confidence'] = 'likely';
+            $attribution['note'] = 'One authenticated administrator account made matching write requests '
+                . 'during this pending interval.';
+        } elseif (count($actors) > 1) {
+            $attribution['confidence'] = 'possible';
+            $attribution['note'] = 'Multiple authenticated administrator accounts made write requests '
+                . 'during this pending interval.';
+        } else {
+            $attribution['confidence'] = 'unavailable';
+            $attribution['note'] = 'No matching authenticated web request was observed; the change may have '
+                . 'come from CLI, API, automation, or an uncovered path.';
+        }
+
+        return $attribution;
     }
 
     public function record($kind, $table, array $item)
