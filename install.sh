@@ -3,14 +3,14 @@ set -Eeuo pipefail
 
 # Convenience installer for operators who explicitly trust this repository's
 # hosted installer. The normal release verification and manual install paths
-# remain documented in docs/alpha-install.md.
+# remain documented in docs/install.md.
 
 repo=${WHAT_CHANGED_REPO:-tomck/WhatChanged}
 github_root="https://github.com/$repo"
-# Pin the reviewed release explicitly. GitHub's /releases/latest endpoint omits
-# prereleases, while WhatChanged public alphas are intentionally prereleases.
-# Release preparation must update this value only after signed-archive gates.
-module_version=${WHAT_CHANGED_VERSION:-17.0.2.7}
+# Pin the reviewed release explicitly so this bootstrap never changes its
+# payload merely because GitHub's Latest metadata changed. Release preparation
+# updates this value only after the exact signed-archive gates pass.
+module_version=${WHAT_CHANGED_VERSION:-17.0.2.8}
 installer_url=${WHAT_CHANGED_INSTALLER_URL:-https://tomck.github.io/WhatChanged/install.sh}
 
 say() { printf '%s\n' "$*"; }

@@ -1,10 +1,10 @@
-# WhatChanged legacy public-alpha test
+# WhatChanged legacy compatibility installation
 
 These are compatibility candidates for FreePBX 14, 15, and 16. They are for
 voluntary testing on backed-up, noncritical PBXs. FreePBX 14 and 15 are old
 platforms and may contain unrelated security or operating-system risks.
 
-All four FreePBX versions use the published `pendingchanges-17.0.2.7.tgz`.
+All four FreePBX versions use the published `pendingchanges-17.0.2.8.tgz`.
 Authenticate and verify it using the
 [shared release procedure](alpha-install.md#verify-the-downloaded-release)
 before copying it to the PBX.
@@ -34,7 +34,7 @@ test -f /etc/freepbx.conf
 ```
 
 Do not replace the system Python or enable an unreviewed third-party package
-repository merely to satisfy this alpha dependency.
+repository merely to satisfy this dependency.
 
 ## Install the shared module and embedded watcher
 
@@ -59,7 +59,7 @@ if [ ! -d "$module_parent" ]; then
   exit 1
 fi
 
-sudo tar -xzf pendingchanges-17.0.2.7.tgz -C "$module_parent"
+sudo tar -xzf pendingchanges-17.0.2.8.tgz -C "$module_parent"
 sudo chown -R asterisk:asterisk "$module_dir"
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 sudo "$module_dir/bin/install-watcher"
@@ -91,7 +91,7 @@ clear. On legacy distributions, also confirm that the report page says
 **Loaded for this FreePBX web request** if administrator-request correlation is
 expected. The CLI doctor cannot perform that Apache-runtime check.
 
-## Send useful alpha feedback
+## Send useful compatibility feedback
 
 ```sh
 freepbx_webroot=$(

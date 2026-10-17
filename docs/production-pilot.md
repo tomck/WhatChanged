@@ -156,7 +156,7 @@ state; other module enable/disable/version records remain covered.
 User Management coverage includes the bounded `userman_users` and
 `userman_users_settings` tables. The latter is joined to the username for a
 readable local report; secret-looking setting values are redacted, and the
-public-alpha feedback export retains only source/count/field-name metadata.
+public feedback export retains only source/count/field-name metadata.
 
 Fax Configuration coverage includes the bounded `fax_details` settings table,
 including the concurrent fax channel limit. Fax store/history records are not

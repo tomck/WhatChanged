@@ -1,5 +1,5 @@
 #!/bin/sh
-# Create detached OpenPGP signatures for an alpha release's module archive,
+# Create detached OpenPGP signatures for a release's module archive,
 # watcher Debian package, and checksum manifest. Run this interactively on the
 # signing host that holds the user's signing subkey; never copy a secret key
 # into the repository or Docker lab.

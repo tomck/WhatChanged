@@ -12,4 +12,4 @@ create FreePBX module signatures, and produce a new `signed/` directory. Do not
 edit or rebuild anything inside that directory after signing.
 
 Return the entire `signed/` directory for independent verification and GitHub
-prerelease publication.
+release publication.

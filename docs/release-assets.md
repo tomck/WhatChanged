@@ -1,4 +1,4 @@
-# WhatChanged alpha release verification
+# WhatChanged release verification
 
 Every release asset has an armored detached OpenPGP signature. `SHA256SUMS`
 also covers the unsigned content files and has its own detached signature.
@@ -27,7 +27,7 @@ run. The separately signed Debian and portable watcher packages are optional
 alternatives for operators who prefer operating-system package management.
 Follow the installation guide linked from the unified release notes.
 
-These are alpha diagnostics. They are read-only with respect to FreePBX
+These are operational diagnostics. They are read-only with respect to FreePBX
 configuration, but they do install a local observer service and Apache request
 sensor. Back up the PBX first, begin with a noncritical host, and remember that
 a clean report covers only the explicitly listed sources.

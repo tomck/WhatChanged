@@ -6,6 +6,7 @@ source "$root_dir/deploy/release-versions.sh"
 
 active_docs=(
   README.md
+  docs/install.md
   docs/alpha-install.md
   docs/legacy-alpha-install.md
   docs/legacy-test-matrix.md
@@ -30,7 +31,7 @@ for relative in "${active_docs[@]}"; do
   fi
 done
 
-for relative in README.md docs/alpha-install.md; do
+for relative in README.md docs/install.md docs/alpha-install.md; do
   grep -Fq "$installer_url" "$root_dir/$relative" || {
     echo "$relative does not use the GitHub Pages installer URL." >&2
     exit 1

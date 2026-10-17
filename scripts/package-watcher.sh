@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the alpha watcher as a Debian package inside the disposable Debian 12
+# Build the watcher as a Debian package inside the disposable Debian 12
 # lab. The host never needs dpkg-deb; the package payload is copied back into
 # this checkout's dist/ directory.
 

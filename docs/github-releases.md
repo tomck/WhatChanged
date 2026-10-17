@@ -1,4 +1,4 @@
-# GitHub prerelease runbook
+# GitHub release runbook
 
 WhatChanged uses one reviewed source commit for a coordinated release set. The
 module implementation and archive are shared across FreePBX 14–17. Generated
@@ -8,11 +8,12 @@ archives are GitHub Release assets and are not committed as source files.
 
 | Tag | FreePBX target | Primary asset | Watcher asset |
 | --- | --- | --- | --- |
-| `pendingchanges-17.0.2.7` | 14–17 | `pendingchanges-17.0.2.7.tgz` with embedded watcher | Optional Debian and portable 0.1.12 packages |
+| `pendingchanges-17.0.2.8` | 14–17 | `pendingchanges-17.0.2.8.tgz` with embedded watcher | Optional Debian and portable 0.1.12 packages |
 
-One module tag identifies the source commit. The release is marked as an
-alpha prerelease. Passing the Docker gates is representative compatibility,
-not a claim that every third-party FreePBX module or state store is covered.
+One module tag identifies the source commit. Version 17.0.2.8 and later are
+normal public releases and explicitly update GitHub's Latest pointer. Passing
+the Docker gates is representative compatibility, not a claim that every
+third-party FreePBX module or state store is covered.
 
 ## 1. Build the unsigned signing bundle
 
@@ -27,7 +28,7 @@ Hold the annotated release tag until the signed set returns and verifies:
 ./scripts/package-release-signing-bundle.sh
 ```
 
-The final command creates `dist/what-changed-signing-17.0.2.7.tar.gz`. It contains
+The final command creates `dist/what-changed-signing-17.0.2.8.tar.gz`. It contains
 the single shared module, both watcher formats, the interactive signing
 program, and release instructions. It never contains a private key.
 
@@ -37,8 +38,8 @@ Copy the signing bundle to the FreePBX signing host, extract it as the normal
 administrator, and run:
 
 ```sh
-tar -xzf what-changed-signing-17.0.2.7.tar.gz
-cd what-changed-signing-17.0.2.7
+tar -xzf what-changed-signing-17.0.2.8.tar.gz
+cd what-changed-signing-17.0.2.8
 export WHAT_CHANGED_SIGNING_SUBKEY='<full signing-subkey fingerprint>'
 ./sign.sh
 ```
@@ -75,9 +76,10 @@ current commit, a missing signature, or an existing GitHub release. After the
 signed set has been reviewed:
 
 ```sh
-git tag -a pendingchanges-17.0.2.7 -m 'Pending Changes Tripwire 17.0.2.7 alpha'
+git tag -a pendingchanges-17.0.2.8 -m 'Pending Changes Tripwire 17.0.2.8'
 ./scripts/publish-github-releases.sh dist/signed-release
 ```
 
-It pushes `main` and the module tag, then creates one GitHub alpha prerelease
-containing the module and both watcher package formats.
+It verifies the active GitHub identity, pushes `main` and the module tag,
+creates one normal public release containing the module and both watcher
+package formats, and fails unless GitHub reports that tag as Latest.

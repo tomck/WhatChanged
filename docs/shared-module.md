@@ -1,6 +1,6 @@
-# Shared module release 17.0.2.7
+# Shared module release 17.0.2.8
 
-The default archive, pendingchanges-17.0.2.7.tgz, declares FreePBX 14.0,
+The default archive, pendingchanges-17.0.2.8.tgz, declares FreePBX 14.0,
 15.0, 16.0 and 17.0 support and requires PHP 5.6 or newer.
 The module version is a release identifier, not the minimum FreePBX version.
 
@@ -13,7 +13,7 @@ the FreePBX version. It also reads FreePBX's configured `AMPWEBROOT` so
 module-file monitoring follows nonstandard web roots. Standalone Debian and
 portable packages remain available but are optional.
 
-Validation: the exact unsigned 17.0.2.7 archive passed full Apache and
+Validation: the exact unsigned 17.0.2.8 candidate passed full Apache and
 nginx/PHP-FPM FreePBX 17 gates, PHP compatibility checks, and FreePBX 14, 15,
 and 16 real-image lifecycles. These covered Module Admin installation, watcher
 health, staged drift, Apply Config, and a clean baseline. Both embedded
@@ -22,18 +22,18 @@ in disposable containers. Live systemd activation of the embedded portable
 layout still requires voluntary testing on a maintained
 RHEL/CentOS/Sangoma-family PBX.
 
-The release checksums, detached signatures, and embedded `module.sig` were
-verified after signing. The exact signed archive installed through FreePBX
-Module Admin in the disposable Docker lab; its key may be labeled "Unknown"
-until certified. No production PBX was changed for this validation.
+Publication is held until the returned release checksums, detached signatures,
+and embedded `module.sig` pass independent verification and the exact signed
+archive installs through FreePBX Module Admin in the disposable Docker lab.
+No production PBX is changed by this validation.
 
-Version 17.0.2.7 also records watcher payload version 0.1.12 in every embedded,
+Version 17.0.2.8 also records watcher payload version 0.1.12 in every embedded,
 Debian, and portable package. The UI and CLI compare that marker with the
 module's bundled payload and provide the exact update command when they differ.
 The interactive installer offers, but never silently performs, the appropriate
 operating-system PyMySQL installation.
 
-FreePBX 17: the Apache and nginx gates passed October 7 with extension,
+FreePBX 17: the Apache and nginx gates passed October 16 with extension,
 inbound-route, ring-group, queue, SIP and Advanced Settings, immediate AstDB,
 module disable, User Management UCP, fax-channel, outbound-route, and
 custom-trunk changes. They also passed watcher-health, keyed redaction,

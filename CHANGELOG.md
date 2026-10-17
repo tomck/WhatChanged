@@ -1,5 +1,22 @@
 # Changelog
 
+## Module 17.0.2.8 / watcher 0.1.12
+
+- Publish WhatChanged as a normal public GitHub release while retaining its
+  explicit, bounded coverage contract.
+- Add a cached public-release check to the Reports page, enabled by default no
+  more than once every six hours, with a visible opt-out and manual check.
+- Strictly parse the version from the GitHub Pages installer, show current,
+  available, unavailable, and ahead states, and exclude module-owned check
+  requests from inferred administrator attribution.
+- Use the GitHub Pages convenience URL throughout current documentation while
+  keeping the installer pinned to the reviewed release.
+- Require GnuPG and verify both the signed checksum manifest and detached
+  module-archive signature; no checksum-only fallback remains.
+- Put the independently authenticated manual path first, document the GitHub
+  bootstrap trust boundary, and distinguish primary and legacy compatibility
+  evidence from operating-system support.
+
 ## Module 17.0.2.7 / watcher 0.1.12
 
 - Make embedded and standalone watcher removal safe for Apache and
@@ -31,15 +48,6 @@
   reproducible from pristine volumes instead of relying on saved module state.
 - Add an Apache/nginx uninstall, conflict, live-response, and reinstall smoke
   scenario to the complete FreePBX 17 gates.
-
-## Unreleased repository installer and documentation
-
-- Pin the convenience installer to the reviewed public-alpha release instead
-  of GitHub's stable-only `/releases/latest` redirect.
-- Require GnuPG and verify both the signed checksum manifest and detached
-  module-archive signature; no checksum-only fallback remains.
-- Put the independently authenticated manual path first, document the GitHub
-  bootstrap trust boundary, and clarify support evidence.
 
 ## Module 17.0.2.6 / watcher 0.1.9
 
