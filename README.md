@@ -23,7 +23,7 @@ Tripwire** is the FreePBX module title, and its raw module name is
 
 | FreePBX | Release status | Validation evidence |
 | --- | --- | --- |
-| 17 | Primary tested target | Exact 17.0.2.8 candidate passed the complete Apache and nginx/PHP-FPM gates; publication remains conditional on exact signed-archive validation |
+| 17 | Primary tested target | Exact 17.0.2.8 candidate passed the complete Apache and nginx/PHP-FPM gates; the returned signed archive passed independent verification and Module Admin installation |
 | 16 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the real-image lifecycle; maintained-host feedback is still wanted |
 | 15 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
 | 14 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |

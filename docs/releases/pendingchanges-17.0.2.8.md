@@ -27,7 +27,7 @@ no PBX configuration, credentials, form values, or host identifier; the
 hosting provider still receives ordinary HTTPS connection metadata such as
 the source address.
 
-Publication requires the complete disposable Apache, nginx/PHP-FPM, PHP 5.6,
-7.4 and 8.2, and real-image FreePBX 14–16 gates. It also requires independent
-verification of the returned signed set and installation of the exact signed
-archive through FreePBX Module Admin.
+The complete disposable Apache, nginx/PHP-FPM, PHP 5.6, 7.4 and 8.2, and
+real-image FreePBX 14–16 gates passed. The returned signed set passed checksum,
+OpenPGP, embedded `module.sig`, and exact-candidate identity verification, and
+the exact signed archive installed through FreePBX Module Admin.

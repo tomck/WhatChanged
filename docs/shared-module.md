@@ -22,10 +22,11 @@ in disposable containers. Live systemd activation of the embedded portable
 layout still requires voluntary testing on a maintained
 RHEL/CentOS/Sangoma-family PBX.
 
-Publication is held until the returned release checksums, detached signatures,
-and embedded `module.sig` pass independent verification and the exact signed
-archive installs through FreePBX Module Admin in the disposable Docker lab.
-No production PBX is changed by this validation.
+The returned release checksums, detached signatures, and embedded `module.sig`
+passed independent verification. The verifier also proved that the signed
+module content and watcher packages match the exact candidates built from this
+checkout. The exact signed archive installed through FreePBX Module Admin in
+the disposable Docker lab. No production PBX was changed by this validation.
 
 Version 17.0.2.8 also records watcher payload version 0.1.12 in every embedded,
 Debian, and portable package. The UI and CLI compare that marker with the
