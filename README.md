@@ -6,7 +6,7 @@ records in a readable diff, separates immediate Asterisk state and file drift,
 and can show which authenticated administrator accounts may have staged work.
 
 One module archive supports FreePBX 14, 15, 16, and 17. The current public
-release is **17.0.2.8**. **WhatChanged** is the project; **Pending Changes
+release is **17.0.2.9**. **WhatChanged** is the project; **Pending Changes
 Tripwire** is the FreePBX module title, and its raw module name is
 `pendingchanges`.
 
@@ -23,10 +23,10 @@ Tripwire** is the FreePBX module title, and its raw module name is
 
 | FreePBX | Release status | Validation evidence |
 | --- | --- | --- |
-| 17 | Primary tested target | Exact 17.0.2.8 candidate passed the complete Apache and nginx/PHP-FPM gates; the returned signed archive passed independent verification and Module Admin installation |
-| 16 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the real-image lifecycle; maintained-host feedback is still wanted |
-| 15 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
-| 14 | Compatibility-tested legacy target | Exact 17.0.2.8 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
+| 17 | Primary tested target | Exact 17.0.2.9 candidate passed the complete Apache and nginx/PHP-FPM gates; the returned signed archive passed independent verification and Module Admin installation |
+| 16 | Compatibility-tested legacy target | Exact 17.0.2.9 candidate passed the real-image lifecycle; maintained-host feedback is still wanted |
+| 15 | Compatibility-tested legacy target | Exact 17.0.2.9 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
+| 14 | Compatibility-tested legacy target | Exact 17.0.2.9 candidate passed the PHP 5.6 real-image lifecycle; the underlying platform may itself be unsupported |
 
 See the [compatibility evidence](docs/legacy-test-matrix.md) for the exact
 runtime versions and limits. These are test results, not a promise that an old
@@ -38,14 +38,14 @@ FreePBX operating system remains secure or vendor-supported.
 
 Download the matching archive, checksum manifest, detached signatures, and
 public key from the
-[17.0.2.8 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.8).
+[17.0.2.9 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.9).
 Authenticate the public-key fingerprint through a channel you trust, then
 follow the exact OpenPGP and checksum commands in the
 [full installation guide](docs/install.md). A key downloaded from the
 same release can prove that the files agree with one another, but by itself it
 cannot prove who controls that key.
 
-After verification, copy `pendingchanges-17.0.2.8.tgz` to the PBX and run:
+After verification, copy `pendingchanges-17.0.2.9.tgz` to the PBX and run:
 
 ```sh
 freepbx_webroot=$(
@@ -66,7 +66,7 @@ if [ ! -d "$module_parent" ]; then
   exit 1
 fi
 
-sudo tar -xzf pendingchanges-17.0.2.8.tgz -C "$module_parent"
+sudo tar -xzf pendingchanges-17.0.2.9.tgz -C "$module_parent"
 sudo chown -R asterisk:asterisk "$module_dir"
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 sudo "$module_dir/bin/install-watcher"
@@ -89,7 +89,7 @@ curl -fsSL https://tomck.github.io/WhatChanged/install.sh | sudo bash
 
 This convenience command trusts the copy of `install.sh` served from the
 project's GitHub Pages site as its bootstrap. It is pinned to the reviewed
-17.0.2.8 release rather than dynamically executing whichever release GitHub
+17.0.2.9 release rather than dynamically executing whichever release GitHub
 currently labels Latest.
 The script requires GnuPG, verifies
 both the signed checksum manifest and the detached archive signature, discovers

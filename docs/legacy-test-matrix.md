@@ -5,10 +5,10 @@ deliberately narrower than a support claim.
 
 | FreePBX target | Candidate | Validated runtime | Current evidence | Still required |
 | --- | --- | --- | --- | --- |
-| 14 | `17.0.2.8` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Exact 2.8 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
-| 15 | `17.0.2.8` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Exact 2.8 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
-| 16 | `17.0.2.8` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Exact 2.8 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
-| 17 | `17.0.2.8` shared archive | FreePBX 17, PHP 8.2 | Exact 2.8 candidate passed full Apache and nginx/PHP-FPM gates: Module Admin, watcher, authenticated fixtures, breakers, Apply Config, redaction, recovery, and final clean state | Continued field feedback |
+| 14 | `17.0.2.9` shared archive | FreePBX 14.0.13.4, Asterisk 15.7.3, PHP 5.6.40 | Exact 2.9 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
+| 15 | `17.0.2.9` shared archive | FreePBX 15.0.17.34, Asterisk 17.9.3, PHP 5.6.40 | Exact 2.9 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
+| 16 | `17.0.2.9` shared archive | FreePBX 16.0.50, Asterisk 20.8.1, PHP 7.4.33 | Exact 2.9 candidate passed Module Admin, watcher, staged-drift, Apply Config, and clean-baseline lifecycle | Maintained-host compatibility feedback |
+| 17 | `17.0.2.9` shared archive | FreePBX 17, PHP 8.2 | Exact 2.9 candidate passed full Apache and nginx/PHP-FPM gates: Module Admin, watcher, authenticated fixtures, breakers, Apply Config, redaction, recovery, and final clean state | Continued field feedback |
 
 The shared portable watcher additionally passes Python 3.6 compilation,
 cross-version PHP sensor tests, archive-layout checks, and service-path checks.

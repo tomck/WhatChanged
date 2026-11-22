@@ -20,8 +20,8 @@ administrator can review the overlap before rerunning the installer.
 
 1. Create a current PBX backup and normal change record.
 2. Download these matching files from the
-   [17.0.2.8 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.8):
-   - `pendingchanges-17.0.2.8.tgz` and `pendingchanges-17.0.2.8.tgz.asc`
+   [17.0.2.9 release](https://github.com/tomck/WhatChanged/releases/tag/pendingchanges-17.0.2.9):
+   - `pendingchanges-17.0.2.9.tgz` and `pendingchanges-17.0.2.9.tgz.asc`
    - `SHA256SUMS` and `SHA256SUMS.asc`
    - `WHAT_CHANGED_SIGNING_KEY.asc`
 3. Obtain the expected primary-key fingerprint through a channel you trust.
@@ -67,8 +67,8 @@ GNUPGHOME="$verification_home" gpg --batch --import WHAT_CHANGED_SIGNING_KEY.asc
 GNUPGHOME="$verification_home" gpg --batch \
   --verify SHA256SUMS.asc SHA256SUMS || exit 1
 GNUPGHOME="$verification_home" gpg --batch \
-  --verify pendingchanges-17.0.2.8.tgz.asc pendingchanges-17.0.2.8.tgz || exit 1
-awk '$2 == "pendingchanges-17.0.2.8.tgz" { print }' SHA256SUMS |
+  --verify pendingchanges-17.0.2.9.tgz.asc pendingchanges-17.0.2.9.tgz || exit 1
+awk '$2 == "pendingchanges-17.0.2.9.tgz" { print }' SHA256SUMS |
   sha256sum -c - || exit 1
 ```
 
@@ -101,7 +101,7 @@ if [ ! -d "$module_parent" ]; then
   exit 1
 fi
 
-sudo tar -xzf pendingchanges-17.0.2.8.tgz -C "$module_parent"
+sudo tar -xzf pendingchanges-17.0.2.9.tgz -C "$module_parent"
 sudo chown -R asterisk:asterisk "$module_dir"
 sudo /var/lib/asterisk/bin/fwconsole ma install pendingchanges
 sudo "$module_dir/bin/install-watcher"
@@ -127,7 +127,7 @@ can be installed with:
 curl -fsSL https://tomck.github.io/WhatChanged/install.sh | sudo bash
 ```
 
-The script is pinned to the reviewed 17.0.2.8 release rather than dynamically
+The script is pinned to the reviewed 17.0.2.9 release rather than dynamically
 executing whichever release GitHub currently labels Latest. It downloads the
 archive and verification material, requires GnuPG, and verifies both the
 signed manifest and detached archive signature before installation. If GnuPG
