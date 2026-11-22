@@ -49,6 +49,8 @@ assert {
     'outbound_routes', 'outbound_route_patterns',
     'outbound_route_sequence', 'outbound_route_trunks', 'modules',
     'fax_details',
+    'recordings',
+    'pbxmfa_auth_via_all', 'pbxmfa_auth_via_app',
     'userman_users', 'userman_users_settings',
 }.issubset(watcher.WATCH_TABLES)
 assert watcher.redact_row({'key': 'pjsip_debug', 'api_key': 'secret'}) == {
@@ -58,6 +60,9 @@ assert watcher.redact_row({'keyword': 'RINGTIMER', 'value': '16'})['value'] == '
 assert watcher.redact_row({'keyword': 'API_TOKEN', 'value': 'private'})['value'] == '[redacted]'
 assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
 assert watcher.redact_row({'variable': 'TURN_PASSWORD', 'data': 'private'})['data'] == '[redacted]'
+assert watcher.redact_row({'username': 'alice', 'secretcode': 'private'}) == {
+    'username': 'alice', 'secretcode': '[redacted]'
+}
 assert watcher.redact_row({'name': 'secretary', 'value': 'visible'})['value'] == 'visible'
 for field in ('AMPMGRPASS', 'ASTMGRPASS', 'AMPDBPASS', 'md5_cred', 'CERTKEY', 'SSLPASS'):
     assert watcher.redact_row({field: 'private'})[field] == '[redacted]'
@@ -291,6 +296,33 @@ fax_update = watcher.database_diff(fax_before, fax_after)['fax_details']['update
 assert fax_update['key'] == 'concurrentfax'
 assert fax_update['fields'] == {'value': {'before': '1', 'after': '5'}}
 
+# System Recordings are configuration rows. The audio content itself is not
+# copied into evidence, but create/update/delete metadata must be observable.
+recordings_before = {'recordings': {'keys': ['id'], 'rows': {
+    '4': {'id': 4, 'displayname': 'Greeting', 'filename': 'greeting', 'description': 'Day greeting'},
+}}}
+recordings_after = {'recordings': {'keys': ['id'], 'rows': {
+    '4': {'id': 4, 'displayname': 'Greeting', 'filename': 'greeting', 'description': 'Night greeting'},
+}}}
+recording_update = watcher.database_diff(recordings_before, recordings_after)['recordings']['updated'][0]
+assert recording_update['identity']['displayname'] == 'Greeting'
+assert recording_update['fields'] == {
+    'description': {'before': 'Day greeting', 'after': 'Night greeting'},
+}
+
+# MFA coverage is deliberately limited to durable configuration state. App
+# secrets remain redacted, and OTP/session/device runtime tables are excluded.
+mfa_before = {'pbxmfa_auth_via_app': {'keys': ['id'], 'rows': {
+    '3': {'id': 3, 'username': 'alice', 'secretcode': 'private', 'isUserHasConfiguredApp': 1},
+}}}
+mfa_after = {'pbxmfa_auth_via_app': {'keys': ['id'], 'rows': {
+    '3': {'id': 3, 'username': 'alice', 'secretcode': '', 'isUserHasConfiguredApp': 0},
+}}}
+mfa_update = watcher.database_diff(mfa_before, mfa_after)['pbxmfa_auth_via_app']['updated'][0]
+assert mfa_update['identity']['username'] == 'alice'
+assert mfa_update['fields']['secretcode'] == {'before': '[redacted]', 'after': '[redacted]'}
+assert mfa_update['fields']['isUserHasConfiguredApp'] == {'before': 1, 'after': 0}
+
 # Module activation changes must be named and readable while signature-cache
 # churn remains outside the pending configuration evidence.
 modules_before = {'modules': {'keys': ['modulename'], 'rows': {
@@ -341,6 +373,19 @@ renamed_only = {'userman_users_settings': {'keys': ['uid', 'module', 'key'], 'ro
 }}}
 assert not watcher.database_diff(userman_before, renamed_only)
 assert watcher.redact_row({'module': 'example', 'key': 'api_token', 'val': 'private'})['val'] == '[redacted]'
+
+profile_before = {'userman_users': {'keys': ['id'], 'rows': {
+    '8': {'id': 8, 'username': 'tom', 'timezone': '', 'email': 'old@example.invalid'},
+}}}
+profile_after = {'userman_users': {'keys': ['id'], 'rows': {
+    '8': {'id': 8, 'username': 'tom', 'timezone': 'America/Chicago', 'email': 'new@example.invalid'},
+}}}
+profile_update = watcher.database_diff(profile_before, profile_after)['userman_users']['updated'][0]
+assert profile_update['identity']['username'] == 'tom'
+assert profile_update['fields'] == {
+    'email': {'before': 'old@example.invalid', 'after': 'new@example.invalid'},
+    'timezone': {'before': '', 'after': 'America/Chicago'},
+}
 endpoint_token = {'ext': '7999', 'dpma_token_seq': 'private-endpoint-token'}
 assert watcher.sensitive_field('dpma_token_seq', endpoint_token)
 assert watcher.redact_row(endpoint_token)['dpma_token_seq'] == '[redacted]'
@@ -488,7 +533,7 @@ with tempfile.TemporaryDirectory() as temporary:
     connection = sqlite3.connect(astdb_path)
     connection.execute('CREATE TABLE astdb(key TEXT, value TEXT, PRIMARY KEY(key))')
     connection.executemany('INSERT INTO astdb VALUES (?, ?)', [
-        ('/AMPUSER/100/recording', 'in'),
+        ('/AMPUSER/100/recording/in/external', 'always'),
         ('/AMPUSER/100/voicemail_pin', '1234'),
         ('/unrelated/application', 'do-not-watch'),
     ])
@@ -498,13 +543,18 @@ with tempfile.TemporaryDirectory() as temporary:
     watcher.ASTDB_FAMILIES = ('AMPUSER',)
     watcher.ASTDB_MAX_ROWS = 10
     astdb_before = watcher.astdb_snapshot()
-    assert set(astdb_before['rows']) == {'/AMPUSER/100/recording', '/AMPUSER/100/voicemail_pin'}
+    assert set(astdb_before['rows']) == {
+        '/AMPUSER/100/recording/in/external', '/AMPUSER/100/voicemail_pin'
+    }
     connection = sqlite3.connect(astdb_path)
-    connection.execute("UPDATE astdb SET value = 'out' WHERE key = '/AMPUSER/100/recording'")
+    connection.execute(
+        "UPDATE astdb SET value = 'never' WHERE key = '/AMPUSER/100/recording/in/external'"
+    )
     connection.commit()
     connection.close()
     astdb_changes = watcher.astdb_diff(astdb_before, watcher.astdb_snapshot())['updated']
-    assert astdb_changes[0]['fields']['value'] == {'before': 'in', 'after': 'out'}
+    assert astdb_changes[0]['key'] == '/AMPUSER/100/recording/in/external'
+    assert astdb_changes[0]['fields']['value'] == {'before': 'always', 'after': 'never'}
     astdb_private = watcher.database_diff({'astdb': astdb_before}, {'astdb': watcher.astdb_snapshot()})
     assert watcher.redact_row({'key': '/AMPUSER/100/voicemail_pin', 'value': '1234'})['value'] == '[redacted]'
 

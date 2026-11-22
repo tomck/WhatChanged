@@ -56,8 +56,9 @@ DEFAULT_WATCH_TABLES = (
     # and cover the separate pattern and route-to-trunk records as well.
     'outbound_route_patterns', 'outbound_route_sequence',
     'outbound_route_sequences', 'outbound_route_trunks', 'outbound_routes',
-    'parkinglot', 'pjsip',
+    'parkinglot', 'pbxmfa_auth_via_all', 'pbxmfa_auth_via_app', 'pjsip',
     'queues_config', 'queues_details', 'queues_members', 'ringgroups', 'sip', 'sipsettings', 'kvstore_Sipsettings',
+    'recordings',
     'timeconditions', 'timegroups', 'timegroups_details',
     'trunk_dialpatterns', 'trunks', 'userman_users', 'userman_users_settings', 'users', 'zap',
 )
@@ -124,7 +125,7 @@ NULL_EQUIVALENT_ZERO_COLUMNS = {'outbound_routes': {'time_group_id'}}
 NON_DIFF_COLUMNS = {'userman_users_settings': {'username'}}
 IDENTITY_CONTEXT_FIELDS = (
     'username', 'uid', 'module', 'key', 'modulename', 'extension', 'ext', 'id',
-    'account', 'grpnum', 'device', 'user', 'name', 'description',
+    'account', 'grpnum', 'device', 'user', 'name', 'displayname', 'description',
 )
 CONTENT_HASH_CACHE = {}
 READ_ONLY_COMMANDS = {

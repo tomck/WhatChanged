@@ -13,6 +13,42 @@ namespace {
 
     require $argv[1].'/Pendingchanges.class.php';
 
+    $service = 'FreePBX\\modules\\Pendingchanges\\Service\\PendingChangesService';
+    $reconciled = $service::reconcilePendingState(false, true, true);
+    if (!$reconciled['pending'] || !$reconciled['watcher_lagging']) {
+        throw new RuntimeException('A live FreePBX reload was hidden behind a lagging healthy watcher result');
+    }
+    $reconciled = $service::reconcilePendingState(false, false, true);
+    if ($reconciled['pending'] || $reconciled['watcher_lagging']) {
+        throw new RuntimeException('A clean live and watcher state was misclassified as pending');
+    }
+    $reconciled = $service::reconcilePendingState(true, false, true);
+    if (!$reconciled['pending'] || $reconciled['watcher_lagging']) {
+        throw new RuntimeException('Current watcher pending evidence was discarded');
+    }
+
+    $presenterClass = 'FreePBX\\modules\\Pendingchanges\\Presentation\\ChangePresenter';
+    $presenter = new $presenterClass();
+    if ($presenter->tableLabel('recordings') !== 'System Recordings') {
+        throw new RuntimeException('System Recordings does not have an administrator-facing label');
+    }
+    $recording = $presenter->record('added', 'recordings', array(
+        'id' => 9,
+        'displayname' => 'After hours greeting',
+        'filename' => 'after-hours',
+    ));
+    if ($recording['title'] !== 'Recording: After hours greeting') {
+        throw new RuntimeException('System Recording evidence does not use its display name');
+    }
+    $mfa = $presenter->record('updated', 'pbxmfa_auth_via_app', array(
+        'key' => '4',
+        'identity' => array('username' => 'alice'),
+        'fields' => array('isUserHasConfiguredApp' => array('before' => 1, 'after' => 0)),
+    ));
+    if ($mfa['title'] !== 'MFA user: alice') {
+        throw new RuntimeException('MFA evidence does not name the affected user');
+    }
+
     $class = new ReflectionClass('FreePBX\\modules\\Pendingchanges');
     foreach (['status', 'redactionKeyStatus'] as $method) {
         if (!$class->hasMethod($method)

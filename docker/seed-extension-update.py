@@ -48,7 +48,17 @@ opener.open(base + "/admin/config.php", login).read()
 url = base + "/admin/config.php?display=extensions&extdisplay=7001"
 parser = Form(); parser.feed(opener.open(url).read().decode("utf-8", "replace"))
 if not parser.fields: raise SystemExit("extension edit form was not available")
-parser.fields.update({"display": "extensions", "action": "edit", "extdisplay": "7001", "extension": "7001", "name": "WhatChanged Lab Extension Updated"})
+mode = os.environ.get("FREEPBX_EXTENSION_UPDATE_MODE", "name")
+parser.fields.update({"display": "extensions", "action": "edit", "extdisplay": "7001", "extension": "7001"})
+if mode == "recording":
+    target = os.environ.get("FREEPBX_RECORDING_TARGET", "")
+    if target not in {"always", "never", "dontcare"}:
+        raise SystemExit("FREEPBX_RECORDING_TARGET must be always, never, or dontcare")
+    parser.fields["recording_in_external"] = target
+elif mode == "name":
+    parser.fields["name"] = "WhatChanged Lab Extension Updated"
+else:
+    raise SystemExit("unsupported disposable extension update mode")
 request = urllib.request.Request(url, urllib.parse.urlencode(parser.fields).encode(), headers={"Referer": url})
 try:
     response = opener.open(request).read().decode("utf-8", "replace")
@@ -62,4 +72,7 @@ if "There was an error" in response:
 alerts = re.findall(r"javascript:alert\('([^']+)'\)", response)
 if alerts:
     raise SystemExit("extension edit validation failed: " + "; ".join(alerts[:3]))
-print("Staged disposable extension 7001 name update")
+if mode == "recording":
+    print("Staged disposable extension 7001 external-call recording update")
+else:
+    print("Staged disposable extension 7001 name update")

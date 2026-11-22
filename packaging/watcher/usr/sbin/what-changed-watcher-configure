@@ -92,6 +92,21 @@ update_environment ASTDB_PATH "$astdb_path"
 update_environment STATE_DIR "$state_dir"
 update_environment ATTRIBUTION_LOG "$attribution_log"
 
+# Debian preserves the administrator's environment file across package
+# upgrades. Keep local additions, but merge explicit coverage migrations so a
+# newer watcher does not continue running with an accidentally older scope.
+current_watch_tables=$(sed -n 's/^WATCH_TABLES=//p' "$environment" | tail -n 1)
+for required_watch_table in \
+    incoming endpoint_extensions recordings \
+    pbxmfa_auth_via_all pbxmfa_auth_via_app; do
+  case ",$current_watch_tables," in
+    *,"$required_watch_table",*) ;;
+    ,) current_watch_tables=$required_watch_table ;;
+    *) current_watch_tables="$current_watch_tables,$required_watch_table" ;;
+  esac
+done
+update_environment WATCH_TABLES "$current_watch_tables"
+
 template=$library/what-changed-watcher.service
 if [ ! -f "$template" ]; then
   echo 'Watcher service template is missing.' >&2

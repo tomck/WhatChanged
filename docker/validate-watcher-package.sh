@@ -54,6 +54,10 @@ grep -q '/etc/php/\*/fpm/conf.d' \
   "$stage/usr/sbin/what-changed-watcher-install-sensor"
 grep -q 'administrator request attribution is unavailable' \
   "$stage/usr/sbin/what-changed-watcher-install-sensor"
+for table in incoming endpoint_extensions recordings pbxmfa_auth_via_all pbxmfa_auth_via_app; do
+  grep -q "required_watch_table in" "$stage/usr/sbin/what-changed-watcher-configure"
+  grep -q "$table" "$stage/usr/sbin/what-changed-watcher-configure"
+done
 php -l "$stage/usr/lib/what-changed-watcher/configure-database.php"
 python3 -m py_compile "$stage/usr/lib/what-changed-watcher/watcher.py"
 grep -q 'ExecStart=/usr/bin/python3 /usr/lib/what-changed-watcher/watcher.py' \

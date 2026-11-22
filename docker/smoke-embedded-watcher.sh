@@ -144,13 +144,15 @@ fi
 for layout in debian portable; do
   root="$stage/root-$layout"
   mkdir -p "$root"
-  # Model an upgrade from 0.1.9 on one layout: that release could leave an
-  # explicitly configured table list without `incoming` or Endpoint Manager.
+  # Model an upgrade from an older layout: it can leave an explicitly
+  # configured table list without later coverage migrations.
   # The installer must retain administrator additions while merging newly
   # supported tables, or upgrading the payload would leave coverage disabled.
   if [ "$layout" = portable ]; then
     mkdir -p "$root/etc"
     sed -e 's/,endpoint_extensions//' -e 's/,incoming//' \
+      -e 's/,recordings//' -e 's/,pbxmfa_auth_via_all//' \
+      -e 's/,pbxmfa_auth_via_app//' \
       -e 's/^WATCH_TABLES=/WATCH_TABLES=pc_local_fixture,/' \
       "$module/watcher/what-changed-watcher.env" \
       > "$root/etc/what-changed-watcher.env"
@@ -200,6 +202,12 @@ for layout in debian portable; do
     | grep -Eq '(^|,)incoming(,|$)'
   grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
     | grep -Eq '(^|,)endpoint_extensions(,|$)'
+  grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+    | grep -Eq '(^|,)recordings(,|$)'
+  grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+    | grep -Eq '(^|,)pbxmfa_auth_via_all(,|$)'
+  grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
+    | grep -Eq '(^|,)pbxmfa_auth_via_app(,|$)'
   if [ "$layout" = portable ]; then
     grep '^WATCH_TABLES=' "$root/etc/what-changed-watcher.env" \
       | grep -Eq '(^|[=,])pc_local_fixture(,|$)'

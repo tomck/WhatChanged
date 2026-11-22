@@ -28,13 +28,23 @@ run_fixture() {
 }
 
 apply_clean() {
-  "$ROOT_DIR/docker/reload-freepbx-lab.sh" >/dev/null
-  wait_for "not s['need_reload'] and not s['database_drift'] and not s['astdb_drift'] and not s['file_drift']"
+  before=$(compose exec -T custom-watcher python -c \
+    "import json;print(json.load(open('/var/lib/pendingchanges-watcher/status.json'))['observed_at'])")
+  "$ROOT_DIR/docker/apply-freepbx.sh" >/dev/null
+  wait_for "s['observed_at'] > $before and not s['need_reload'] and not s['database_drift'] and not s['astdb_drift'] and not s['file_drift']"
 }
 
 run_fixture cleanup
 apply_clean
 run_fixture create
+apply_clean
+
+run_fixture profile
+wait_for "s['need_reload'] and any(u.get('identity',{}).get('username') == 'whatchanged_alpha_fixture' and u.get('fields',{}).get('timezone',{}).get('after') == 'America/Chicago' and u.get('fields',{}).get('email',{}).get('after') == 'alpha@example.invalid' for u in s['database_drift'].get('userman_users',{}).get('updated',[]))"
+apply_clean
+
+run_fixture profile-update
+wait_for "s['need_reload'] and any(u.get('identity',{}).get('username') == 'whatchanged_alpha_fixture' and u.get('fields',{}).get('timezone') == {'before': 'America/Chicago', 'after': 'UTC'} and u.get('fields',{}).get('email') == {'before': 'alpha@example.invalid', 'after': 'updated@example.invalid'} for u in s['database_drift'].get('userman_users',{}).get('updated',[]))"
 apply_clean
 
 run_fixture assign
@@ -49,4 +59,4 @@ run_fixture cleanup
 wait_for "s['need_reload'] and bool(s['database_drift'].get('userman_users',{}).get('removed')) and bool(s['database_drift'].get('userman_users_settings',{}).get('removed'))"
 apply_clean
 
-echo 'User Management UCP assignment lifecycle passed'
+echo 'User Management profile and UCP assignment lifecycle passed'

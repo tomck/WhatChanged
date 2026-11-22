@@ -1,3 +1,3 @@
 # Shared by the checkout and the standalone signing bundle.
-module_version=17.0.2.8
-watcher_version=0.1.12
+module_version=17.0.2.9
+watcher_version=0.1.13

@@ -10,7 +10,7 @@ github_root="https://github.com/$repo"
 # Pin the reviewed release explicitly so this bootstrap never changes its
 # payload merely because GitHub's Latest metadata changed. Release preparation
 # updates this value only after the exact signed-archive gates pass.
-module_version=${WHAT_CHANGED_VERSION:-17.0.2.8}
+module_version=${WHAT_CHANGED_VERSION:-17.0.2.9}
 installer_url=${WHAT_CHANGED_INSTALLER_URL:-https://tomck.github.io/WhatChanged/install.sh}
 
 say() { printf '%s\n' "$*"; }

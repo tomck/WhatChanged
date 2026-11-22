@@ -106,6 +106,9 @@ class ChangePresenter
             'incoming' => 'Inbound Routes',
             'freepbx_settings' => 'FreePBX settings',
             'modules' => 'FreePBX modules',
+            'pbxmfa_auth_via_all' => 'User MFA policy',
+            'pbxmfa_auth_via_app' => 'User MFA authenticator',
+            'recordings' => 'System Recordings',
             'userman_users' => 'User Management users',
             'userman_users_settings' => 'User Management / UCP settings',
         );
@@ -260,6 +263,20 @@ class ChangePresenter
             }
         }
 
+        if ($table === 'recordings') {
+            $name = (string) (isset($row['displayname']) ? $row['displayname'] : '');
+            if ($name !== '') {
+                return 'Recording: ' . $name;
+            }
+        }
+
+        if ($table === 'pbxmfa_auth_via_all' || $table === 'pbxmfa_auth_via_app') {
+            $username = (string) (isset($row['username']) ? $row['username'] : '');
+            if ($username !== '') {
+                return 'MFA user: ' . $username;
+            }
+        }
+
         if ($table === 'userman_users_settings') {
             $user = (string) (isset($row['username'])
                 ? $row['username']
@@ -350,6 +367,26 @@ class ChangePresenter
                 'type' => 'Module type',
                 'status' => 'Module status',
             ),
+            'recordings' => array(
+                'displayname' => 'Recording name',
+                'filename' => 'Recording files',
+                'description' => 'Description',
+                'fcode' => 'Feature code enabled',
+                'fcode_lang' => 'Feature code language',
+            ),
+            'pbxmfa_auth_via_all' => array(
+                'username' => 'User name',
+                'usermail' => 'User email',
+                'extension' => 'Extension',
+                'isUserHasSelectedDefaultMFA' => 'Default MFA selected',
+                'defaultmfatype' => 'Default MFA method',
+            ),
+            'pbxmfa_auth_via_app' => array(
+                'username' => 'User name',
+                'usermail' => 'User email',
+                'isUserHasConfiguredApp' => 'Authenticator app configured',
+                'secretcode' => 'Authenticator secret',
+            ),
         );
         if (isset($labels[$table][$field])) {
             return $labels[$table][$field];
@@ -372,6 +409,19 @@ class ChangePresenter
                 'name' => 'The human-readable module name.',
                 'version' => 'The module version registered with FreePBX.',
                 'enabled' => 'Whether FreePBX currently considers the module enabled.',
+            ),
+            'recordings' => array(
+                'displayname' => 'The administrator-facing name of this system recording.',
+                'filename' => 'The audio files FreePBX associates with this recording.',
+                'fcode' => 'Whether a feature code can replace this recording by telephone.',
+            ),
+            'pbxmfa_auth_via_all' => array(
+                'defaultmfatype' => 'The user\'s selected default multi-factor authentication method.',
+                'isUserHasSelectedDefaultMFA' => 'Whether the user has selected a default MFA method.',
+            ),
+            'pbxmfa_auth_via_app' => array(
+                'isUserHasConfiguredApp' => 'Whether the user has configured an authenticator application.',
+                'secretcode' => 'The authenticator secret is always redacted from evidence.',
             ),
         );
 

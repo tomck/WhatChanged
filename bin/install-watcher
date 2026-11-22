@@ -391,10 +391,12 @@ replace_environment_setting STATE_DIR "$state_dir" "$environment"
 replace_environment_setting ATTRIBUTION_LOG "$attribution_log" "$environment"
 
 # Preserve every local customization while adding newly supported tables to an
-# existing watcher environment. `incoming` repairs the 0.1.9 packaging gap;
-# `endpoint_extensions` covers the commercial Endpoint Manager extension map.
+# existing watcher environment. These entries are explicit coverage migrations:
+# old environments must not silently retain the old payload's narrower scope.
 current_watch_tables=$(sed -n 's/^WATCH_TABLES=//p' "$environment" | tail -n 1)
-for required_watch_table in incoming endpoint_extensions; do
+for required_watch_table in \
+    incoming endpoint_extensions recordings \
+    pbxmfa_auth_via_all pbxmfa_auth_via_app; do
   case ",$current_watch_tables," in
     *,"$required_watch_table",*) ;;
     ,) current_watch_tables=$required_watch_table ;;

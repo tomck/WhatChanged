@@ -154,9 +154,27 @@ The observer's own `pendingchanges` module record is excluded as module-owned
 state; other module enable/disable/version records remain covered.
 
 User Management coverage includes the bounded `userman_users` and
-`userman_users_settings` tables. The latter is joined to the username for a
-readable local report; secret-looking setting values are redacted, and the
-public feedback export retains only source/count/field-name metadata.
+`userman_users_settings` tables. This includes profile fields such as email
+and timezone, plus per-user UCP settings. The settings table is joined to the
+username for a readable local report; secret-looking values are redacted, and
+the public feedback export retains only source/count/field-name metadata.
+
+System Recordings coverage includes the `recordings` metadata table, so added,
+renamed, updated, and deleted recording definitions are observable. The
+watcher does not ingest audio content. Replacing an audio file outside the
+normal FreePBX workflow without changing its database metadata may therefore
+appear only as generated/out-of-band file drift or remain outside coverage.
+
+Extension call-recording policy stored below the `AMPUSER` AstDB family is
+covered, including the external-call recording key used by the extension
+form. This observes the staged policy value; it does not inspect call audio.
+
+When the commercial MFA module is installed, durable policy and authenticator
+configuration in `pbxmfa_auth_via_all` and `pbxmfa_auth_via_app` is covered.
+Authenticator secrets are always redacted. OTP delivery, backup codes,
+trusted-device/session state, and other runtime MFA tables are deliberately
+excluded because they are authentication activity rather than staged PBX
+configuration.
 
 Fax Configuration coverage includes the bounded `fax_details` settings table,
 including the concurrent fax channel limit. Fax store/history records are not

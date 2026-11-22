@@ -43,6 +43,18 @@ if (empty($user['id'])) {
     throw new RuntimeException('Disposable User Management fixture does not exist.');
 }
 
+if ($action === 'profile' || $action === 'profile-update') {
+    $profile = $action === 'profile-update'
+        ? array('timezone' => 'UTC', 'email' => 'updated@example.invalid')
+        : array('timezone' => 'America/Chicago', 'email' => 'alpha@example.invalid');
+    if (!$userman->updateUserExtraData((int) $user['id'], $profile)) {
+        throw new RuntimeException('Could not update disposable User Management profile fields.');
+    }
+    needreload();
+    echo 'Staged disposable User Management profile action: '.$action.".\n";
+    exit(0);
+}
+
 $assignments = $action === 'update' ? ['7999', '7998'] : ['7999'];
 $userman->setModuleSettingByID((int) $user['id'], 'ucp|Settings', 'assigned', $assignments);
 needreload();

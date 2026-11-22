@@ -170,6 +170,20 @@ class PendingChangesService
                 : 0;
     }
 
+    public static function reconcilePendingState($watcherPending, $livePending, $watcherCurrent)
+    {
+        $watcherPending = (bool) $watcherPending;
+        $livePending = (bool) $livePending;
+        $watcherCurrent = (bool) $watcherCurrent;
+
+        return array(
+            'pending' => $watcherCurrent
+                ? ($watcherPending || $livePending)
+                : $livePending,
+            'watcher_lagging' => $watcherCurrent && $livePending && !$watcherPending,
+        );
+    }
+
     public function feedback()
     {
         $path = $this->paths->asteriskVariableRoot() . '/pendingchanges-watcher/feedback.jsonl';
@@ -229,10 +243,23 @@ class PendingChangesService
                 'reason' => 'watcher_status_does_not_report_baseline_provenance',
                 'detail' => 'This watcher version cannot prove baseline continuity across service interruptions.',
             );
-        $pending = $current ? $watcher['need_reload'] : $this->needReload();
+        $pendingState = self::reconcilePendingState(
+            $watcher['need_reload'],
+            $this->needReload(),
+            $current
+        );
+        $pending = $pendingState['pending'];
         $message = $watcher['message'];
 
-        if ($health['state'] === 'delayed') {
+        if ($pendingState['watcher_lagging']) {
+            $health['state'] = 'delayed';
+            $health['label'] = 'Catching Up';
+            $health['severity'] = 'warning';
+            $health['detail'] = 'FreePBX already reports pending Apply Config, but the latest completed '
+                . 'watcher observation predates that state. Current drift evidence may be incomplete.';
+            $current = false;
+            $message = 'Reload requested; the watcher is still incorporating the latest FreePBX change.';
+        } elseif ($health['state'] === 'delayed') {
             $message = 'Watcher observation is delayed; current configuration state may be incomplete.';
         } elseif ($health['state'] === 'stale') {
             $message = 'Watcher results are stale. Current configuration state is unknown.';
